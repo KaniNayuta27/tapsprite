@@ -122,6 +122,7 @@
     let lastMqtt = 0;
     let lastBeatLog = 0;
     let mqttOnce = false;
+    let lastPhone = null;
     function addLog(msg) {
       const row = document.createElement("div");
       row.innerHTML = '<span class="t">' + fmt(Date.now()) + "</span>" + escapeHtml(msg);
@@ -166,6 +167,7 @@
       mq.on("error", function (e) { addLog("网页 MQTT 错误 " + (e && e.message ? e.message : e)); });
       mq.on("message", function (topic, payload) {
         lastMqtt = Date.now();
+        lastPhone = data;
         let data = {};
         try { data = JSON.parse(payload.toString()); } catch (e) {
           addLog("手机消息不是 JSON: " + payload.toString().slice(0, 80));
@@ -236,12 +238,14 @@
         errEl.textContent = (data && data.error) || "房间连不上";
         return;
       }
+      const mqttFresh = lastMqtt && (Date.now() - lastMqtt < 10000) && lastPhone;
+      const st = mqttFresh ? lastPhone : data;
       metaEl.innerHTML = "";
-      const phoneOn = (lastMqtt && Date.now() - lastMqtt < 8000) || (data.phoneSeenAt && (Date.now() - data.phoneSeenAt < 20000));
+      const phoneOn = !!mqttFresh || (data.phoneSeenAt && (Date.now() - data.phoneSeenAt < 20000));
       metaEl.appendChild(pill(phoneOn ? "手机在线" : "等待手机", phoneOn));
-      metaEl.appendChild(pill(data.running ? "运行中" : "待命", !!data.running));
-      metaEl.appendChild(pill(data.a11y ? "无障碍已开" : "无障碍未开", !!data.a11y));
-      metaEl.appendChild(pill(data.step || "—", false));
+      metaEl.appendChild(pill(st.running ? "运行中" : "待命", !!st.running));
+      metaEl.appendChild(pill(st.a11y ? "无障碍已开" : "无障碍未开", !!st.a11y));
+      metaEl.appendChild(pill(st.step || "—", false));
       if (data.script && !scriptEl.dataset.touched) scriptEl.value = data.script;
       const lines = data.lines || [];
       for (const line of lines) {
