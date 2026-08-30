@@ -60,6 +60,8 @@
     .gate { max-width: 420px; margin: 48px auto; text-align: center; }
     .hint { color: var(--muted); font-size: 13px; line-height: 1.5; margin-top: 10px; }
     .hidden { display: none; }
+    .snips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .snips button { font-size: 12px; font-weight: 500; padding: 8px 10px; min-height: 36px; }
   </style>
 </head>
 <body>
@@ -84,6 +86,7 @@
           <h2>脚本</h2>
           <div class="meta" id="meta"></div>
           <textarea id="script" spellcheck="false"></textarea>
+          <div class="snips" id="snips"></div>
           <div class="row">
             <button class="primary" id="send">发送到手机</button>
             <button class="ghost" id="sendRun">发送并运行</button>
@@ -102,6 +105,18 @@
   </div>
   <script>
     const DEFAULT_SCRIPT = 'KeyPress "Home"\nDelay 1000\nTap 167,775\nDelay 2000\nKeyPress "Back"\nDelay 2000\nToast "脚本结束"\nDelay 1000\n';
+    const SNIPS = [
+      { n: "8步测试", s: DEFAULT_SCRIPT },
+      { n: "自检", s: "SelfTest\n" },
+      { n: "取色器", s: "PickColor\n" },
+      { n: "屏幕", s: "GetScreen\n" },
+      { n: "取色", s: "GetPixelColor 100,200\n" },
+      { n: "找色", s: "FindColor 0,0,1080,2400,\"FFFFFF\",0,0\n" },
+      { n: "多点色", s: "FindMultiColor 0,0,1080,2400,\"CC7B00\",\"20|31|CC7B00\",0,1\n" },
+      { n: "滑动", s: "Swipe 800,1200,200,1200,250\n" },
+      { n: "提示", s: "Tip 电脑下发的提示\n" },
+      { n: "配置", s: "ReadUIConfig \"多选框1\"\n" }
+    ];
     const gateEl = document.getElementById("gate");
     const appEl = document.getElementById("app");
     const roomInput = document.getElementById("roomInput");
@@ -213,6 +228,19 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action })
+      });
+    }
+    const snips = document.getElementById("snips");
+    if (snips) {
+      SNIPS.forEach((item) => {
+        const b = document.createElement("button");
+        b.className = "ghost";
+        b.textContent = item.n;
+        b.onclick = () => {
+          scriptEl.value = item.s;
+          scriptEl.dataset.touched = "1";
+        };
+        snips.appendChild(b);
       });
     }
     document.getElementById("join").onclick = () => enter(roomInput.value);
