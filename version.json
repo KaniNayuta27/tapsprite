@@ -1,6 +1,6 @@
 {
   "versionCode": 12,
   "versionName": "0.7.1",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/releases/download/v0.7.1/tapsprite.apk",
+  "apk": "https://tapsprite.pages.dev/update/apk",
   "notes": "内置检查更新。脚本仍可电脑热更新；新命令/修内核点这一下即可换包。"
 }
