@@ -1,6 +1,6 @@
 {
-  "versionCode": 22,
-  "versionName": "0.8.1",
+  "versionCode": 23,
+  "versionName": "0.8.2",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
-  "notes": "网页状态不再闪。脚本解析失败会改走 Lua / 跳过坏行。"
+  "notes": "检测连接不再掐 MQTT。日志改成整页滑动。"
 }

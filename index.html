@@ -160,6 +160,9 @@
         });
         addLog(mqttOnce ? "MQTT 重连成功" : "网页 MQTT 已连接");
         mqttOnce = true;
+        setTimeout(function () {
+          if (!lastMqtt) addLog("5 秒还没有手机心跳。手机保持 App 开着，不要点检测连接。");
+        }, 5000);
       });
       mq.on("reconnect", function () { addLog("网页 MQTT 重连中…"); });
       mq.on("offline", function () { addLog("网页 MQTT 离线"); });
