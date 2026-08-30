@@ -1,6 +1,6 @@
 {
-  "versionCode": 19,
-  "versionName": "0.7.8",
+  "versionCode": 20,
+  "versionName": "0.7.9",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
-  "notes": "App 首页显示 MQTT 连接过程。点「检测连接」看 HTTPS/TCP/MQTT 哪一步不通。"
+  "notes": "修好 MQTT 语言包。日志框可以单独往上滑。"
 }
