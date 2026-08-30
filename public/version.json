@@ -1,6 +1,6 @@
 {
-  "versionCode": 20,
-  "versionName": "0.7.9",
+  "versionCode": 21,
+  "versionName": "0.8.0",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
-  "notes": "修好 MQTT 语言包。日志框可以单独往上滑。"
+  "notes": "不用 Paho 了，自己发 MQTT。网页日志会写心跳和下发。"
 }

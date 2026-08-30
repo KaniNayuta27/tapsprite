@@ -120,17 +120,22 @@
     let timer = 0;
     let mq = null;
     let lastMqtt = 0;
+    let lastBeatLog = 0;
+    let mqttOnce = false;
     function addLog(msg) {
       const row = document.createElement("div");
       row.innerHTML = '<span class="t">' + fmt(Date.now()) + "</span>" + escapeHtml(msg);
       logEl.appendChild(row);
+      while (logEl.childNodes.length > 200) logEl.removeChild(logEl.firstChild);
       logEl.scrollTop = logEl.scrollHeight;
     }
     function mqttPub(obj) {
       if (mq && mq.connected) {
         mq.publish("tapsprite/live/pc", JSON.stringify(obj), { qos: 1 });
+        addLog("已下发 → 手机  " + (obj.type || (obj.script ? "script" : JSON.stringify(obj).slice(0, 40))));
         return true;
       }
+      addLog("网页 MQTT 还没连上，改走 HTTP");
       return false;
     }
     function mqttJoin() {
@@ -141,26 +146,40 @@
       if (mq) {
         try { mq.end(true); } catch (e) {}
       }
+      addLog("网页正在连 wss://broker.emqx.io:8084/mqtt");
       mq = mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
         clientId: "ts-pc-" + Math.random().toString(16).slice(2, 10),
         reconnectPeriod: 2000,
         connectTimeout: 8000
       });
       mq.on("connect", function () {
-        mq.subscribe("tapsprite/live/phone");
-        addLog("MQTT 通道已打开");
+        mq.subscribe("tapsprite/live/phone", function (err) {
+          if (err) addLog("订阅失败 " + err.message);
+          else addLog("已订阅 tapsprite/live/phone ，等手机心跳");
+        });
+        addLog(mqttOnce ? "MQTT 重连成功" : "网页 MQTT 已连接");
+        mqttOnce = true;
       });
-      mq.on("reconnect", function () { /* quiet */ });
-      mq.on("error", function (e) { addLog("MQTT " + (e && e.message ? e.message : e)); });
-      mq.on("message", function (_t, payload) {
+      mq.on("reconnect", function () { addLog("网页 MQTT 重连中…"); });
+      mq.on("offline", function () { addLog("网页 MQTT 离线"); });
+      mq.on("close", function () { addLog("网页 MQTT 关闭"); });
+      mq.on("error", function (e) { addLog("网页 MQTT 错误 " + (e && e.message ? e.message : e)); });
+      mq.on("message", function (topic, payload) {
         lastMqtt = Date.now();
         let data = {};
-        try { data = JSON.parse(payload.toString()); } catch (e) { return; }
+        try { data = JSON.parse(payload.toString()); } catch (e) {
+          addLog("手机消息不是 JSON: " + payload.toString().slice(0, 80));
+          return;
+        }
         metaEl.innerHTML = "";
         metaEl.appendChild(pill("手机在线", true));
         metaEl.appendChild(pill(data.running ? "运行中" : "待命", !!data.running));
         metaEl.appendChild(pill(data.a11y ? "无障碍已开" : "无障碍未开", !!data.a11y));
         metaEl.appendChild(pill(data.step || "—", false));
+        if (Date.now() - lastBeatLog > 4000) {
+          lastBeatLog = Date.now();
+          addLog("手机心跳  loaded=" + data.loaded + " a11y=" + data.a11y + " step=" + (data.step || ""));
+        }
       });
     }
 
