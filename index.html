@@ -66,21 +66,11 @@
 </head>
 <body>
   <div class="wrap">
-    <div id="gate" class="gate card">
-      <div class="kicker">TAPSPRITE</div>
-      <h1>输入房间码</h1>
-      <p class="lede" style="margin-left:auto;margin-right:auto">手机 App 打开后会显示 6 位房间码。模拟器和真机都行，不需要同一 Wi-Fi。</p>
-      <input id="roomInput" maxlength="8" placeholder="ABC123" autocomplete="off" spellcheck="false" />
-      <div class="row" style="justify-content:center">
-        <button class="primary" id="join">进入控制台</button>
-      </div>
-      <p class="hint">电脑打开这个网页，把手机上的码填进来就能下发脚本、看实时日志。</p>
-    </div>
-
-    <div id="app" class="hidden">
+    <div id="gate" class="hidden"></div>
+    <div id="app">
       <div class="kicker">TAPSPRITE CONSOLE</div>
       <h1>触控精灵</h1>
-      <p class="lede">房间 <span id="roomLabel"></span> · 电脑下发脚本，手机执行。点按仍在那台设备上完成。</p>
+      <p class="lede">电脑打开这个网页就能下发。手机 App 开着即可，不用填房间码。</p>
       <div class="grid">
         <section class="card">
           <h2>脚本</h2>
@@ -92,7 +82,6 @@
             <button class="ghost" id="sendRun">发送并运行</button>
             <button class="ghost" id="start">开始</button>
             <button class="ghost" id="stop">停止</button>
-            <button class="ghost" id="leave">换房间</button>
           </div>
           <div class="err" id="err"></div>
         </section>
@@ -139,7 +128,7 @@
     }
     function mqttPub(obj) {
       if (mq && mq.connected) {
-        mq.publish("tapsprite/" + room + "/pc", JSON.stringify(obj), { qos: 1 });
+        mq.publish("tapsprite/live/pc", JSON.stringify(obj), { qos: 1 });
         return true;
       }
       return false;
@@ -153,12 +142,12 @@
         try { mq.end(true); } catch (e) {}
       }
       mq = mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
-        clientId: "ts-pc-" + room + "-" + Math.random().toString(16).slice(2, 8),
+        clientId: "ts-pc-" + Math.random().toString(16).slice(2, 10),
         reconnectPeriod: 2000,
         connectTimeout: 8000
       });
       mq.on("connect", function () {
-        mq.subscribe("tapsprite/" + room + "/phone");
+        mq.subscribe("tapsprite/live/phone");
         addLog("MQTT 通道已打开");
       });
       mq.on("reconnect", function () { /* quiet */ });
@@ -211,9 +200,6 @@
       }
       location.hash = room;
       localStorage.setItem("tapsprite.room", room);
-      document.getElementById("roomLabel").textContent = room;
-      gateEl.classList.add("hidden");
-      appEl.classList.remove("hidden");
       after = 0;
       seen.clear();
       logEl.innerHTML = "";
@@ -223,14 +209,7 @@
       if (timer) clearInterval(timer);
       timer = setInterval(poll, 700);
     }
-    function leave() {
-      if (timer) clearInterval(timer);
-      timer = 0;
-      location.hash = "";
-      appEl.classList.add("hidden");
-      gateEl.classList.remove("hidden");
-      roomInput.focus();
-    }
+    function leave() {}
     async function poll() {
       if (!room) return;
       const { ok, data } = await getJSON("/api/room/" + room + "?after=" + after);
@@ -302,20 +281,12 @@
         snips.appendChild(b);
       });
     }
-    document.getElementById("join").onclick = () => enter(roomInput.value);
-    roomInput.addEventListener("keydown", (e) => { if (e.key === "Enter") enter(roomInput.value); });
     document.getElementById("send").onclick = () => send(false);
     document.getElementById("sendRun").onclick = () => send(true);
     document.getElementById("start").onclick = () => control("start");
     document.getElementById("stop").onclick = () => control("stop");
-    document.getElementById("leave").onclick = leave;
     scriptEl.addEventListener("input", () => { scriptEl.dataset.touched = "1"; });
-
-    const fromHash = norm(location.hash.replace("#", ""));
-    const fromStore = norm(localStorage.getItem("tapsprite.room") || "");
-    if (fromHash.length >= 4) enter(fromHash);
-    else if (fromStore.length >= 4) roomInput.value = fromStore;
-    roomInput.focus();
+    enter("LIVE");
   </script>
 </body>
 </html>

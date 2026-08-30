@@ -1,6 +1,6 @@
 {
-  "versionCode": 17,
-  "versionName": "0.7.6",
+  "versionCode": 18,
+  "versionName": "0.7.7",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
-  "notes": "取消房间码。电脑 exe / 浏览器走 127.0.0.1:18765。悬浮窗开始失败会弹出原因。"
+  "notes": "网页不再要房间码。打开 tapsprite.pages.dev 就能下发。手机走 MQTT SSL。"
 }
