@@ -90,6 +90,16 @@
           <div class="log" id="log"></div>
         </section>
       </div>
+      <section class="card" style="margin-top:16px">
+        <h2>抓抓</h2>
+        <p class="lede" style="margin:0 0 12px">点「截图」拉当前手机画面。鼠标移动显示手机坐标和颜色。App 里先开截屏权限。</p>
+        <div class="row" style="margin-top:0">
+          <button class="primary" id="shot">截图</button>
+        </div>
+        <div id="grabHud" class="pill" style="margin-top:10px">坐标 —</div>
+        <canvas id="grab" style="width:100%;margin-top:12px;border-radius:12px;background:#0b0d0c;cursor:crosshair"></canvas>
+      </section>
+      </div>
     </div>
   </div>
   <script src="/mqtt.min.js"></script>
@@ -179,7 +189,11 @@
           return;
         }
         if (data.probe) {
-          addLog("网页自测收到，网页订阅正常。问题在手机→网页。");
+          addLog("网页自测收到，网页订阅正常。");
+          return;
+        }
+        if (data.type === "shot" && data.jpeg) {
+          showShot(data);
           return;
         }
         lastMqtt = Date.now();
@@ -189,10 +203,11 @@
         metaEl.appendChild(pill(data.running ? "运行中" : "待命", !!data.running));
         metaEl.appendChild(pill(data.a11y ? "无障碍已开" : "无障碍未开", !!data.a11y));
         metaEl.appendChild(pill(data.step || "—", false));
-        if (Date.now() - lastBeatLog > 4000) {
-          lastBeatLog = Date.now();
-          addLog("手机心跳  loaded=" + data.loaded + " a11y=" + data.a11y + " step=" + (data.step || ""));
-        }
+        // 心跳日志暂时关掉
+        // if (Date.now() - lastBeatLog > 4000) {
+        //   lastBeatLog = Date.now();
+        //   addLog("手机心跳  loaded=" + data.loaded + " a11y=" + data.a11y + " step=" + (data.step || ""));
+        // }
       });
     }
 
@@ -319,6 +334,46 @@
     document.getElementById("sendRun").onclick = () => send(true);
     document.getElementById("start").onclick = () => control("start");
     document.getElementById("stop").onclick = () => control("stop");
+    const shotBtn = document.getElementById("shot");
+    if (shotBtn) shotBtn.onclick = () => {
+      mqttPub({ type: "shot" });
+      addLog("请求截图");
+    };
+    const grab = document.getElementById("grab");
+    const grabHud = document.getElementById("grabHud");
+    let grabImg = null, grabW = 0, grabH = 0;
+    function showShot(data) {
+      grabW = Number(data.w) || 0;
+      grabH = Number(data.h) || 0;
+      const img = new Image();
+      img.onload = function () {
+        grabImg = img;
+        const maxW = Math.min(960, grab.parentElement ? grab.parentElement.clientWidth - 36 : 720);
+        const scale = maxW / img.width;
+        grab.width = img.width;
+        grab.height = img.height;
+        grab.style.width = Math.round(img.width * scale) + "px";
+        grab.style.height = Math.round(img.height * scale) + "px";
+        const ctx = grab.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        addLog("截图 " + grabW + "x" + grabH);
+      };
+      img.src = "data:image/jpeg;base64," + data.jpeg;
+    }
+    if (grab) {
+      grab.addEventListener("mousemove", function (e) {
+        if (!grab.width) return;
+        const r = grab.getBoundingClientRect();
+        const x = Math.max(0, Math.min(grab.width - 1, Math.round((e.clientX - r.left) / r.width * grab.width)));
+        const y = Math.max(0, Math.min(grab.height - 1, Math.round((e.clientY - r.top) / r.height * grab.height)));
+        const ctx = grab.getContext("2d");
+        const p = ctx.getImageData(x, y, 1, 1).data;
+        const px = grabW ? Math.round(x / grab.width * grabW) : x;
+        const py = grabH ? Math.round(y / grab.height * grabH) : y;
+        const hex = ((1 << 24) + (p[0] << 16) + (p[1] << 8) + p[2]).toString(16).slice(1).toUpperCase();
+        grabHud.textContent = px + "," + py + "  " + hex + "  RGB(" + p[0] + "," + p[1] + "," + p[2] + ")";
+      });
+    }
     scriptEl.addEventListener("input", () => { scriptEl.dataset.touched = "1"; });
     enter("LIVE");
   </script>

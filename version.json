@@ -1,6 +1,6 @@
 {
-  "versionCode": 24,
-  "versionName": "0.8.3",
+  "versionCode": 25,
+  "versionName": "0.9.0",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
-  "notes": "手机改走和网页同一条 wss://broker.emqx.io:8084/mqtt"
+  "notes": "脚本独立页。悬浮窗半圆吸附 + UIConfig 启动。电脑抓抓取色。检测/心跳日志先关掉。"
 }
