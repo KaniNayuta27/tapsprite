@@ -96,9 +96,12 @@
         <div class="row" style="margin-top:0">
           <button class="primary" id="shot">截图</button>
         </div>
-        <div id="grabHud" class="pill" style="margin-top:10px">坐标 —</div>
         <canvas id="grab" style="width:100%;margin-top:12px;border-radius:12px;background:#0b0d0c;cursor:crosshair"></canvas>
       </section>
+      <div id="lens" style="position:fixed;display:none;pointer-events:none;z-index:80">
+        <canvas id="lensCv" width="120" height="120" style="display:block;background:#111;border:1px solid #333"></canvas>
+        <div id="lensTxt" style="margin-top:4px;padding:4px 6px;background:#111;color:#eee;font:12px ui-monospace,monospace;white-space:nowrap"></div>
+      </div>
       </div>
     </div>
   </div>
@@ -340,7 +343,9 @@
       addLog("请求截图");
     };
     const grab = document.getElementById("grab");
-    const grabHud = document.getElementById("grabHud");
+    const lens = document.getElementById("lens");
+    const lensCv = document.getElementById("lensCv");
+    const lensTxt = document.getElementById("lensTxt");
     let grabImg = null, grabW = 0, grabH = 0;
     function showShot(data) {
       grabW = Number(data.w) || 0;
@@ -355,12 +360,17 @@
         grab.style.width = Math.round(img.width * scale) + "px";
         grab.style.height = Math.round(img.height * scale) + "px";
         const ctx = grab.getContext("2d");
+        ctx.imageSmoothingEnabled = false;
         ctx.drawImage(img, 0, 0);
         addLog("截图 " + grabW + "x" + grabH);
       };
-      img.src = "data:image/jpeg;base64," + data.jpeg;
+      const mime = data.mime === "jpeg" ? "image/jpeg" : "image/png";
+      img.src = "data:" + mime + ";base64," + data.jpeg;
     }
     if (grab) {
+      grab.addEventListener("mouseleave", function () {
+        if (lens) lens.style.display = "none";
+      });
       grab.addEventListener("mousemove", function (e) {
         if (!grab.width) return;
         const r = grab.getBoundingClientRect();
@@ -371,7 +381,24 @@
         const px = grabW ? Math.round(x / grab.width * grabW) : x;
         const py = grabH ? Math.round(y / grab.height * grabH) : y;
         const hex = ((1 << 24) + (p[0] << 16) + (p[1] << 8) + p[2]).toString(16).slice(1).toUpperCase();
-        grabHud.textContent = px + "," + py + "  " + hex + "  RGB(" + p[0] + "," + p[1] + "," + p[2] + ")";
+        if (lensCv) {
+          const z = lensCv.getContext("2d");
+          z.imageSmoothingEnabled = false;
+          const mag = 10;
+          z.fillStyle = "#111";
+          z.fillRect(0, 0, 120, 120);
+          z.drawImage(grab, x - 6, y - 6, 12, 12, 0, 0, 120, 120);
+          z.strokeStyle = "#f44";
+          z.strokeRect(55, 55, 10, 10);
+        }
+        if (lensTxt) lensTxt.textContent = px + "," + py + "  " + hex + "  RGB(" + p[0] + "," + p[1] + "," + p[2] + ")";
+        if (lens) {
+          lens.style.display = "block";
+          const left = e.clientX + 18;
+          const top = e.clientY + 18;
+          lens.style.left = Math.min(left, window.innerWidth - 140) + "px";
+          lens.style.top = Math.min(top, window.innerHeight - 160) + "px";
+        }
       });
     }
     scriptEl.addEventListener("input", () => { scriptEl.dataset.touched = "1"; });

@@ -1,6 +1,6 @@
 {
-  "versionCode": 25,
-  "versionName": "0.9.0",
+  "versionCode": 26,
+  "versionName": "0.9.1",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
-  "notes": "脚本独立页。悬浮窗半圆吸附 + UIConfig 启动。电脑抓抓取色。检测/心跳日志先关掉。"
+  "notes": "底栏首页/脚本。抓抓颜色跟鼠标，尽量用原图像素。电脑下发显示在首页。"
 }
