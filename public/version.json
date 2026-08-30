@@ -1,6 +1,6 @@
 {
-  "versionCode": 14,
-  "versionName": "0.7.3",
+  "versionCode": 15,
+  "versionName": "0.7.4",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
-  "notes": "安装包改走 pages.dev，不再经过 GitHub。云端指令同步修复。OCR 模型首次使用时自动下载。"
+  "notes": "更新改到单独页面，带下载进度。首页精简。"
 }
