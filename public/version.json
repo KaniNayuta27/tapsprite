@@ -1,6 +1,6 @@
 {
-  "versionCode": 15,
-  "versionName": "0.7.4",
+  "versionCode": 16,
+  "versionName": "0.7.5",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
-  "notes": "更新改到单独页面，带下载进度。首页精简。"
+  "notes": "改走 MQTT 直连，电脑和手机不再各写各的云端房间。网页应显示「手机在线」。"
 }

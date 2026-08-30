@@ -103,6 +103,7 @@
       </div>
     </div>
   </div>
+  <script src="/mqtt.min.js"></script>
   <script>
     const DEFAULT_SCRIPT = 'KeyPress "Home"\nDelay 1000\nTap 167,775\nDelay 2000\nKeyPress "Back"\nDelay 2000\nToast "脚本结束"\nDelay 1000\n';
     const SNIPS = [
@@ -128,6 +129,51 @@
     let after = 0;
     const seen = new Set();
     let timer = 0;
+    let mq = null;
+    let lastMqtt = 0;
+    function addLog(msg) {
+      const row = document.createElement("div");
+      row.innerHTML = '<span class="t">' + fmt(Date.now()) + "</span>" + escapeHtml(msg);
+      logEl.appendChild(row);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    function mqttPub(obj) {
+      if (mq && mq.connected) {
+        mq.publish("tapsprite/" + room + "/pc", JSON.stringify(obj), { qos: 1 });
+        return true;
+      }
+      return false;
+    }
+    function mqttJoin() {
+      if (typeof mqtt === "undefined") {
+        addLog("MQTT 库未加载，仍走网页接口");
+        return;
+      }
+      if (mq) {
+        try { mq.end(true); } catch (e) {}
+      }
+      mq = mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
+        clientId: "ts-pc-" + room + "-" + Math.random().toString(16).slice(2, 8),
+        reconnectPeriod: 2000,
+        connectTimeout: 8000
+      });
+      mq.on("connect", function () {
+        mq.subscribe("tapsprite/" + room + "/phone");
+        addLog("MQTT 通道已打开");
+      });
+      mq.on("reconnect", function () { /* quiet */ });
+      mq.on("error", function (e) { addLog("MQTT " + (e && e.message ? e.message : e)); });
+      mq.on("message", function (_t, payload) {
+        lastMqtt = Date.now();
+        let data = {};
+        try { data = JSON.parse(payload.toString()); } catch (e) { return; }
+        metaEl.innerHTML = "";
+        metaEl.appendChild(pill("手机在线", true));
+        metaEl.appendChild(pill(data.running ? "运行中" : "待命", !!data.running));
+        metaEl.appendChild(pill(data.a11y ? "无障碍已开" : "无障碍未开", !!data.a11y));
+        metaEl.appendChild(pill(data.step || "—", false));
+      });
+    }
 
     function norm(s) {
       return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
@@ -173,6 +219,7 @@
       logEl.innerHTML = "";
       if (!scriptEl.value) scriptEl.value = DEFAULT_SCRIPT;
       poll();
+      mqttJoin();
       if (timer) clearInterval(timer);
       timer = setInterval(poll, 700);
     }
@@ -192,7 +239,7 @@
         return;
       }
       metaEl.innerHTML = "";
-      const phoneOn = data.phoneSeenAt && (Date.now() - data.phoneSeenAt < 20000);
+      const phoneOn = (lastMqtt && Date.now() - lastMqtt < 8000) || (data.phoneSeenAt && (Date.now() - data.phoneSeenAt < 20000));
       metaEl.appendChild(pill(phoneOn ? "手机在线" : "等待手机", phoneOn));
       metaEl.appendChild(pill(data.running ? "运行中" : "待命", !!data.running));
       metaEl.appendChild(pill(data.a11y ? "无障碍已开" : "无障碍未开", !!data.a11y));
@@ -213,11 +260,19 @@
       errEl.textContent = "";
       errEl.className = "err";
       const body = JSON.stringify({ script: scriptEl.value, run: !!run });
+      const viaMqtt = mqttPub({ type: "script", script: scriptEl.value, run: !!run });
       const { ok, data } = await getJSON("/api/room/" + room + "/script", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body
       });
+      if (viaMqtt) {
+        errEl.className = "err ok";
+        errEl.textContent = run ? "已通过 MQTT 下发并请求运行" : "已通过 MQTT 发送";
+        setTimeout(() => { errEl.textContent = ""; errEl.className = "err"; }, 1800);
+        if (ok) return;
+        return;
+      }
       if (!ok) {
         errEl.textContent = (data && data.error) || "发送失败";
         return;
@@ -227,6 +282,7 @@
       setTimeout(() => { errEl.textContent = ""; errEl.className = "err"; }, 1800);
     }
     async function control(action) {
+      mqttPub({ type: "control", action: action });
       await getJSON("/api/room/" + room + "/control", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
