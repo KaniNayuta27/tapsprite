@@ -192,7 +192,7 @@
         return;
       }
       metaEl.innerHTML = "";
-      const phoneOn = data.phoneSeenAt && (Date.now() - data.phoneSeenAt < 8000);
+      const phoneOn = data.phoneSeenAt && (Date.now() - data.phoneSeenAt < 20000);
       metaEl.appendChild(pill(phoneOn ? "手机在线" : "等待手机", phoneOn));
       metaEl.appendChild(pill(data.running ? "运行中" : "待命", !!data.running));
       metaEl.appendChild(pill(data.a11y ? "无障碍已开" : "无障碍未开", !!data.a11y));

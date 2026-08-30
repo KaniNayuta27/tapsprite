@@ -1,3 +1,11 @@
 name = "tapsprite"
 compatibility_date = "2025-10-01"
 pages_build_output_dir = "public"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "RoomDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomDO"]
