@@ -1,6 +1,6 @@
 {
-  "versionCode": 13,
-  "versionName": "0.7.2",
-  "apk": "https://tapsprite.pages.dev/update/apk",
-  "notes": "修复电脑发指令手机没反应：云端房间同步、App 打开即连、远程开始会自动拉起悬浮窗。"
+  "versionCode": 14,
+  "versionName": "0.7.3",
+  "apk": "https://tapsprite.pages.dev/tapsprite.apk",
+  "notes": "安装包改走 pages.dev，不再经过 GitHub。云端指令同步修复。OCR 模型首次使用时自动下载。"
 }
