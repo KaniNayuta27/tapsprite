@@ -1,6 +1,6 @@
 {
-  "versionCode": 12,
-  "versionName": "0.7.1",
+  "versionCode": 13,
+  "versionName": "0.7.2",
   "apk": "https://tapsprite.pages.dev/update/apk",
-  "notes": "内置检查更新。脚本仍可电脑热更新；新命令/修内核点这一下即可换包。"
+  "notes": "修复电脑发指令手机没反应：云端房间同步、App 打开即连、远程开始会自动拉起悬浮窗。"
 }

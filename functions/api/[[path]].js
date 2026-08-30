@@ -36,27 +36,26 @@ function cacheKey(code) {
 }
 
 async function loadRoom(code) {
-  if (mem.has(code)) return mem.get(code);
+  let cached = null;
   try {
     const hit = await caches.default.match(cacheKey(code));
-    if (hit) {
-      const data = await hit.json();
-      mem.set(code, data);
-      return data;
-    }
+    if (hit) cached = await hit.json();
   } catch (_) {}
-  const fresh = emptyRoom();
-  mem.set(code, fresh);
-  return fresh;
+  const local = mem.get(code);
+  const room = mergeRooms(cached, local) || emptyRoom();
+  mem.set(code, room);
+  return room;
 }
 
 async function saveRoom(code, data) {
   data.updatedAt = Date.now();
-  mem.set(code, data);
+  const current = mem.get(code);
+  const merged = mergeRooms(current, data);
+  mem.set(code, merged);
   try {
     await caches.default.put(
       cacheKey(code),
-      new Response(JSON.stringify(data), {
+      new Response(JSON.stringify(merged), {
         headers: {
           "content-type": "application/json",
           "cache-control": "max-age=86400",
@@ -64,6 +63,38 @@ async function saveRoom(code, data) {
       }),
     );
   } catch (_) {}
+}
+
+function mergeRooms(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  const aT = Number(a.updatedAt) || 0;
+  const bT = Number(b.updatedAt) || 0;
+  const newer = aT >= bT ? a : b;
+  const older = newer === a ? b : a;
+  const logs = [];
+  const seenLog = new Set();
+  const allLogs = [].concat(older.logs || [], newer.logs || []);
+  for (const l of allLogs) {
+    const seq = Number(l && l.seq) || 0;
+    if (!seq || seenLog.has(seq)) continue;
+    seenLog.add(seq);
+    logs.push(l);
+  }
+  logs.sort((x, y) => (x.seq || 0) - (y.seq || 0));
+  const pending = Array.isArray(newer.pending) ? newer.pending.slice() : [];
+  return {
+    logs,
+    seq: Math.max(Number(a.seq) || 0, Number(b.seq) || 0, logs.length ? logs[logs.length - 1].seq : 0),
+    script: newer.script || older.script || DEFAULT_SCRIPT,
+    pending,
+    running: !!newer.running,
+    loaded: !!(newer.loaded || older.loaded),
+    step: newer.step || older.step || "待命",
+    a11y: aT >= bT ? !!a.a11y : !!b.a11y || !!a.a11y,
+    phoneSeenAt: Math.max(Number(a.phoneSeenAt) || 0, Number(b.phoneSeenAt) || 0),
+    updatedAt: Math.max(aT, bT),
+  };
 }
 
 function linesAfter(room, after) {
