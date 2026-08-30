@@ -1,6 +1,6 @@
 {
-  "versionCode": 23,
-  "versionName": "0.8.2",
+  "versionCode": 24,
+  "versionName": "0.8.3",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
-  "notes": "检测连接不再掐 MQTT。日志改成整页滑动。"
+  "notes": "手机改走和网页同一条 wss://broker.emqx.io:8084/mqtt"
 }
