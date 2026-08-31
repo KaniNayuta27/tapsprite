@@ -1,6 +1,6 @@
 {
-  "versionCode": 26,
-  "versionName": "0.9.1",
+  "versionCode": 27,
+  "versionName": "0.9.2",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
-  "notes": "底栏首页/脚本。抓抓颜色跟鼠标，尽量用原图像素。电脑下发显示在首页。"
+  "notes": "颜色改成按键精灵同款 BGR。FindColor / 抓抓一致。"
 }
