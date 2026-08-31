@@ -96,7 +96,7 @@
         <div class="row" style="margin-top:0">
           <button class="primary" id="shot">截图</button>
         </div>
-        <canvas id="grab" style="width:100%;margin-top:12px;border-radius:12px;background:#0b0d0c;cursor:crosshair"></canvas>
+        <canvas id="grab" style="margin-top:12px;border-radius:0;background:#0b0d0c;cursor:crosshair;image-rendering:pixelated;max-width:100%"></canvas>
       </section>
       <div id="lens" style="position:fixed;display:none;pointer-events:none;z-index:80">
         <canvas id="lensCv" width="120" height="120" style="display:block;background:#111;border:1px solid #333"></canvas>
@@ -347,25 +347,40 @@
     const lensCv = document.getElementById("lensCv");
     const lensTxt = document.getElementById("lensTxt");
     let grabImg = null, grabW = 0, grabH = 0;
+    let shotBuf = { seq: 0, n: 0, parts: [] };
     function showShot(data) {
+      const seq = Number(data.seq) || 1;
+      const i = Number(data.i) || 0;
+      const n = Number(data.n) || 1;
+      if (shotBuf.seq !== seq) {
+        shotBuf = { seq: seq, n: n, parts: new Array(n) };
+      }
+      shotBuf.parts[i] = data.jpeg || "";
+      let got = 0;
+      for (let k = 0; k < shotBuf.n; k++) if (shotBuf.parts[k]) got++;
+      if (got < shotBuf.n) {
+        addLog("截图 " + got + "/" + shotBuf.n);
+        return;
+      }
       grabW = Number(data.w) || 0;
       grabH = Number(data.h) || 0;
+      const b64 = shotBuf.parts.join("");
       const img = new Image();
       img.onload = function () {
         grabImg = img;
-        const maxW = Math.min(960, grab.parentElement ? grab.parentElement.clientWidth - 36 : 720);
-        const scale = maxW / img.width;
         grab.width = img.width;
         grab.height = img.height;
-        grab.style.width = Math.round(img.width * scale) + "px";
-        grab.style.height = Math.round(img.height * scale) + "px";
+        grab.style.width = img.width + "px";
+        grab.style.height = img.height + "px";
+        grab.style.maxWidth = "100%";
+        grab.style.height = "auto";
         const ctx = grab.getContext("2d");
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(img, 0, 0);
-        addLog("截图 " + grabW + "x" + grabH);
+        addLog("截图 1:1 " + grabW + "x" + grabH);
       };
       const mime = data.mime === "jpeg" ? "image/jpeg" : "image/png";
-      img.src = "data:" + mime + ";base64," + data.jpeg;
+      img.src = "data:" + mime + ";base64," + b64;
     }
     if (grab) {
       grab.addEventListener("mouseleave", function () {

@@ -1,6 +1,6 @@
 {
-  "versionCode": 27,
-  "versionName": "0.9.2",
+  "versionCode": 28,
+  "versionName": "0.9.3",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
-  "notes": "颜色改成按键精灵同款 BGR。FindColor / 抓抓一致。"
+  "notes": "抓抓 1:1 原图，走 screencap，不再缩小压缩。"
 }
