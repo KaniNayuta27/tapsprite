@@ -1,7 +1,7 @@
 {
-  "versionCode": 28,
-  "versionName": "0.9.3",
+  "versionCode": 29,
+  "versionName": "0.9.5",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
   "exe": "https://tapsprite.pages.dev/tapsprite.exe",
-  "notes": "电脑客户端：Fluent 控制台 + 抓抓（原图像素、滚轮缩放、10格记录）"
+  "notes": "抓抓全分辨率；截图走 JSON 避免迅雷；窗口 1600x1000"
 }
