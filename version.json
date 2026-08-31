@@ -2,5 +2,6 @@
   "versionCode": 28,
   "versionName": "0.9.3",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
-  "notes": "抓抓 1:1 原图，走 screencap，不再缩小压缩。"
+  "exe": "https://tapsprite.pages.dev/tapsprite.exe",
+  "notes": "电脑客户端：Fluent 控制台 + 抓抓（原图像素、滚轮缩放、10格记录）"
 }
