@@ -1,9 +1,9 @@
 {
-  "versionCode": 69,
-  "versionName": "0.9.45",
-  "apk": "https://tapsprite.pages.dev/tapsprite0-9-45.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-41.exe",
-  "notes": "截屏权限即时同步；连点开启不再闪退。",
-  "apk_ver": "0.9.45",
-  "exe_ver": "1.1.41"
+  "versionCode": 70,
+  "versionName": "0.9.46",
+  "apk": "https://tapsprite.pages.dev/tapsprite0-9-46.apk",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-42.exe",
+  "notes": "无权限每次截屏都提示3秒；握手带截屏状态。",
+  "apk_ver": "0.9.46",
+  "exe_ver": "1.1.42"
 }
