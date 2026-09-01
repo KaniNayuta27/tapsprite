@@ -130,6 +130,79 @@ async function handleRoom(request, storage) {
   return json({ error: "not found" }, 404);
 }
 
+const PRESENCE_URL = "https://tapsprite.internal/presence-v1";
+
+async function loadPresence() {
+  try {
+    const hit = await caches.default.match(PRESENCE_URL);
+    if (hit) {
+      const data = await hit.json();
+      if (data && data.devices && typeof data.devices === "object") {
+        globalThis.__tsDevs = data.devices;
+        return data.devices;
+      }
+    }
+  } catch (e) {}
+  return globalThis.__tsDevs || {};
+}
+
+async function savePresence(devices) {
+  globalThis.__tsDevs = devices;
+  try {
+    await caches.default.put(
+      PRESENCE_URL,
+      new Response(JSON.stringify({ devices }), {
+        headers: {
+          "content-type": "application/json",
+          "cache-control": "max-age=120",
+        },
+      })
+    );
+  } catch (e) {}
+}
+
+async function handlePresence(request) {
+  if (request.method === "GET") {
+    const devices = await loadPresence();
+    const now = Date.now();
+    const out = [];
+    for (const id of Object.keys(devices)) {
+      const d = devices[id];
+      if (!d || d.online === false) continue;
+      if (now - (Number(d.seen) || 0) > 15000) continue;
+      out.push({
+        id,
+        name: d.name || id,
+        a11y: !!d.a11y,
+        emu: !!d.emu,
+        seen: d.seen || 0,
+      });
+    }
+    return json({ ok: true, devices: out });
+  }
+  if (request.method === "POST") {
+    const body = await readBody(request);
+    const id = String(body.id || "").trim();
+    if (!id || id === "旧版") return json({ ok: false, error: "缺少 id" }, 400);
+    const devices = await loadPresence();
+    if (body.online === false) {
+      delete devices[id];
+    } else {
+      devices[id] = {
+        id,
+        name: String(body.name || id).slice(0, 40),
+        a11y: !!body.a11y,
+        emu: !!body.emu,
+        online: true,
+        seen: Date.now(),
+      };
+    }
+    await savePresence(devices);
+    return json({ ok: true });
+  }
+  return json({ error: "method" }, 405);
+}
+
 export class RoomDO {
   constructor(state, env) {
     this.state = state;
@@ -166,6 +239,9 @@ export async function onRequest(context) {
   }
   if (parts[1] === "health") {
     return json({ ok: true, do: !!(env && env.ROOMS) });
+  }
+  if (parts[1] === "presence") {
+    return handlePresence(request);
   }
   if (parts[1] !== "room" || !parts[2]) {
     return json({ error: "缺少房间码" }, 400);
