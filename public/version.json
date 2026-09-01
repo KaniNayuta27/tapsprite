@@ -1,9 +1,9 @@
 {
-  "versionCode": 63,
-  "versionName": "0.9.39",
-  "apk": "https://tapsprite.pages.dev/tapsprite0-9-39.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-36.exe",
-  "notes": "每次开关立刻发出，间隔跟点击一样。",
-  "apk_ver": "0.9.39",
-  "exe_ver": "1.1.36"
+  "versionCode": 64,
+  "versionName": "0.9.40",
+  "apk": "https://tapsprite.pages.dev/tapsprite0-9-40.apk",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-37.exe",
+  "notes": "已选设备后不再出现请选择；exe重启后自动重连。",
+  "apk_ver": "0.9.40",
+  "exe_ver": "1.1.37"
 }
