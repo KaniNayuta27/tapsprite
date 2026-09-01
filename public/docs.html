@@ -9,6 +9,7 @@
   --bg: #f3f0fa; --card: #fff; --fg: #1a1430; --muted: #746d8c; --accent: #6d5ef5; --soft: #efeaff; --line: rgba(26,20,48,.08);
   --font: "Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
   --mono: Consolas,"Cascadia Mono","Microsoft YaHei UI",monospace;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
@@ -22,7 +23,17 @@ body:not(.in) aside, body:not(.in) main { visibility: hidden; }
 .box h1 { margin: 0 0 6px; font-size: 22px; }
 .box p { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
 .box input { width: 100%; padding: 12px 14px; border: 1px solid #e4dff2; border-radius: 12px; font: 16px inherit; outline: none; }
-.box button { margin-top: 12px; width: 100%; padding: 12px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font: 650 15px inherit; cursor: pointer; }
+.box button { margin-top: 12px; width: 100%; padding: 12px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font: 650 15px inherit; cursor: pointer;
+  transition: transform 160ms var(--ease-out); }
+.box button:active { transform: scale(0.97); }
+.cat {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  border: 0; background: transparent; cursor: pointer; text-align: left;
+  font: 650 15px/1.35 var(--font); color: var(--fg);
+  padding: 14px 10px 6px; letter-spacing: 0;
+  transition: transform 160ms var(--ease-out);
+}
+.cat:active { transform: scale(0.97); }
 .err { color: #c45c4a; font-size: 13px; min-height: 1.2em; margin-top: 8px; }
 aside {
   background: #fff; border-right: 1px solid var(--line); overflow: auto; padding: 18px 12px 32px;
@@ -30,12 +41,6 @@ aside {
 aside .brand { display: block; font-weight: 700; padding: 6px 10px 14px; color: var(--fg); text-decoration: none; }
 .search { width: 100%; border: 1px solid #e4dff2; border-radius: 10px; padding: 8px 10px; font: 13px inherit; margin-bottom: 12px; outline: none; }
 .search:focus { border-color: var(--accent); }
-.cat {
-  display: flex; align-items: center; gap: 6px; width: 100%;
-  border: 0; background: transparent; cursor: pointer; text-align: left;
-  font: 650 15px/1.35 var(--font); color: var(--fg);
-  padding: 14px 10px 6px; letter-spacing: 0;
-}
 .cat:hover { color: var(--accent); }
 .cat .arr { font-size: 11px; color: var(--muted); width: 12px; }
 .group.hide { display: none; }
