@@ -2,8 +2,8 @@
   "versionCode": 70,
   "versionName": "0.9.46",
   "apk": "https://tapsprite.pages.dev/tapsprite0-9-46.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-43.exe",
-  "notes": "日志满200条后挤掉旧的继续刷。",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-44.exe",
+  "notes": "命令名补全；日志只留一个时间。",
   "apk_ver": "0.9.46",
-  "exe_ver": "1.1.43"
+  "exe_ver": "1.1.44"
 }
