@@ -2,7 +2,7 @@
   "versionCode": 57,
   "versionName": "0.9.33",
   "apk": "https://tapsprite.pages.dev/tapsprite0-9-33.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite.exe",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-31.exe",
   "notes": "全部走局域网，不再使用 MQTT / Pages 联机。",
   "apk_ver": "0.9.33",
   "exe_ver": "1.1.31"
