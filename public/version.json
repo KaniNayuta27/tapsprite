@@ -2,8 +2,8 @@
   "versionCode": 70,
   "versionName": "0.9.46",
   "apk": "https://tapsprite.pages.dev/tapsprite0-9-46.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-42.exe",
-  "notes": "无权限每次截屏都提示3秒；握手带截屏状态。",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-43.exe",
+  "notes": "日志满200条后挤掉旧的继续刷。",
   "apk_ver": "0.9.46",
-  "exe_ver": "1.1.42"
+  "exe_ver": "1.1.43"
 }
