@@ -1,9 +1,9 @@
 {
-  "versionCode": 61,
-  "versionName": "0.9.37",
-  "apk": "https://tapsprite.pages.dev/tapsprite0-9-37.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-35.exe",
-  "notes": "下线后不再被迟到握手拉回来。",
-  "apk_ver": "0.9.37",
-  "exe_ver": "1.1.35"
+  "versionCode": 62,
+  "versionName": "0.9.38",
+  "apk": "https://tapsprite.pages.dev/tapsprite0-9-38.apk",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-36.exe",
+  "notes": "开关序号后到为准，不用轮询。",
+  "apk_ver": "0.9.38",
+  "exe_ver": "1.1.36"
 }
