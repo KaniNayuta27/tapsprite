@@ -2,8 +2,8 @@
   "versionCode": 71,
   "versionName": "0.9.47",
   "apk": "https://tapsprite.pages.dev/tapsprite0-9-47.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-49.exe",
-  "notes": "深色 Monaco；空格确认补全；折叠图标。",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-50.exe",
+  "notes": "补全带括号；回车纠正命令大小写；左侧工具栏。",
   "apk_ver": "0.9.47",
-  "exe_ver": "1.1.49"
+  "exe_ver": "1.1.50"
 }
