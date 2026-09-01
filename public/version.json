@@ -4,6 +4,6 @@
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
   "exe": "https://tapsprite.pages.dev/tapsprite.exe",
   "notes": "抓抓全分辨率；截图走 JSON 避免迅雷；窗口 1600x1000",
-  "apk_ver": "0.9.24",
-  "exe_ver": "1.1.18"
+  "apk_ver": "0.9.25",
+  "exe_ver": "1.1.19"
 }
