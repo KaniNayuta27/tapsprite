@@ -1,9 +1,9 @@
 {
-  "versionCode": 58,
-  "versionName": "0.9.34",
-  "apk": "https://tapsprite.pages.dev/tapsprite0-9-34.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-32.exe",
-  "notes": "全部走局域网，不再使用 MQTT / Pages 联机。",
-  "apk_ver": "0.9.34",
-  "exe_ver": "1.1.32"
+  "versionCode": 59,
+  "versionName": "0.9.35",
+  "apk": "https://tapsprite.pages.dev/tapsprite0-9-35.apk",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-33.exe",
+  "notes": "手机主动取指令，不再反向连模拟器。",
+  "apk_ver": "0.9.35",
+  "exe_ver": "1.1.33"
 }
