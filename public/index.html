@@ -4,8 +4,6 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>触控精灵</title>
-<script src="/auth.js"></script>
-<script>tsAuth.require()</script>
 <style>
 :root {
   --bg: #f3f0fa; --card: #fff; --fg: #1a1430; --muted: #746d8c; --accent: #6d5ef5; --soft: #efeaff;
@@ -13,11 +11,26 @@
   --shadow: 0 0 0 1px rgba(26,20,48,.08), 0 8px 24px rgba(40,30,80,.06);
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 var(--font); }
+html, body { margin: 0; min-height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--font); }
 a { color: var(--accent); text-decoration: none; }
+#gate {
+  position: fixed; inset: 0; z-index: 20; display: grid; place-items: center;
+  background: var(--bg);
+}
+body.in #gate { display: none; }
+#app { display: none; }
+body.in #app { display: block; }
+.box { width: min(360px, 92vw); background: #fff; padding: 28px 24px; border-radius: 20px; box-shadow: var(--shadow); }
+.box h1 { margin: 0 0 6px; font-size: 22px; }
+.box p { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+.box input { width: 100%; padding: 12px 14px; border: 1px solid #e4dff2; border-radius: 12px; font: 16px inherit; outline: none; }
+.box input:focus { border-color: var(--accent); }
+.box button { margin-top: 12px; width: 100%; padding: 12px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font: 650 15px inherit; cursor: pointer; }
+.err { color: #c45c4a; font-size: 13px; min-height: 1.2em; margin-top: 8px; }
 .wrap { max-width: 860px; margin: 0 auto; padding: 36px 20px 80px; }
 .kicker { font-size: 11px; letter-spacing: .16em; color: var(--muted); font-weight: 650; }
-h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 650; letter-spacing: -.03em; margin: 8px 0 10px; }
+h1.t { font-size: clamp(28px, 5vw, 40px); font-weight: 650; letter-spacing: -.03em; margin: 8px 0 10px; }
 .lede { color: var(--muted); max-width: 38em; margin: 0 0 28px; }
 .dl { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 700px) { .dl { grid-template-columns: 1fr; } }
@@ -34,9 +47,19 @@ ol li { margin: 8px 0; }
 </style>
 </head>
 <body>
+<div id="gate">
+  <form class="box" id="f">
+    <h1>触控精灵</h1>
+    <p>输入密码后查看下载和文档。</p>
+    <input id="p" type="password" autofocus placeholder="密码" autocomplete="current-password"/>
+    <button type="submit">进入</button>
+    <div class="err" id="e"></div>
+  </form>
+</div>
+<div id="app">
 <div class="wrap">
   <div class="kicker">TAPSPRITE</div>
-  <h1>触控精灵</h1>
+  <h1 class="t">触控精灵</h1>
   <p class="lede">电脑客户端下发脚本和截图。这个网页只提供安装包和命令文档。</p>
   <div class="dl">
     <div class="card">
@@ -62,7 +85,10 @@ ol li { margin: 8px 0; }
     <p style="margin:16px 0 0"><a class="btn" href="/docs.html">命令文档</a></p>
   </div>
 </div>
+</div>
+<script src="/auth.js"></script>
 <script>
+tsAuth.bind("f", "p", "e");
 fetch("/version.json").then(r => r.json()).then(v => {
   document.getElementById("exeVer").textContent = "当前 " + (v.exe_ver || "");
   document.getElementById("apkVer").textContent = "当前 " + (v.apk_ver || "");

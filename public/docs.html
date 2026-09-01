@@ -4,8 +4,6 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>触控精灵 · 文档</title>
-<script src="/auth.js"></script>
-<script>tsAuth.require()</script>
 <style>
 :root {
   --bg: #f3f0fa; --card: #fff; --fg: #1a1430; --muted: #746d8c; --accent: #6d5ef5; --soft: #efeaff; --line: rgba(26,20,48,.08);
@@ -15,6 +13,17 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--font); display: grid; grid-template-columns: 260px 1fr; }
+#gate {
+  position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: var(--bg);
+}
+body.in #gate { display: none; }
+body:not(.in) aside, body:not(.in) main { visibility: hidden; }
+.box { width: min(360px, 92vw); background: #fff; padding: 28px 24px; border-radius: 20px; box-shadow: 0 8px 24px rgba(40,30,80,.06); }
+.box h1 { margin: 0 0 6px; font-size: 22px; }
+.box p { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+.box input { width: 100%; padding: 12px 14px; border: 1px solid #e4dff2; border-radius: 12px; font: 16px inherit; outline: none; }
+.box button { margin-top: 12px; width: 100%; padding: 12px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font: 650 15px inherit; cursor: pointer; }
+.err { color: #c45c4a; font-size: 13px; min-height: 1.2em; margin-top: 8px; }
 aside {
   background: #fff; border-right: 1px solid var(--line); overflow: auto; padding: 18px 12px 32px;
 }
@@ -49,6 +58,15 @@ h3 { font-size: 13px; color: var(--muted); font-weight: 650; margin: 20px 0 8px;
 </style>
 </head>
 <body>
+<div id="gate">
+  <form class="box" id="f">
+    <h1>触控精灵</h1>
+    <p>输入密码后查看文档。</p>
+    <input id="p" type="password" autofocus placeholder="密码" autocomplete="current-password"/>
+    <button type="submit">进入</button>
+    <div class="err" id="e"></div>
+  </form>
+</div>
 <aside>
   <a class="brand" href="/">← 触控精灵</a>
   <input class="search" id="q" placeholder="搜索命令"/>
@@ -98,5 +116,7 @@ q.addEventListener("input", () => {
 });
 show((location.hash || "").replace(/^#\//, "") || "intro");
 </script>
+<script src="/auth.js"></script>
+<script>tsAuth.bind("f", "p", "e");</script>
 </body>
 </html>
