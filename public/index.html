@@ -3,173 +3,69 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>触控精灵 · 下载与手册</title>
+<title>触控精灵</title>
+<script src="/auth.js"></script>
+<script>tsAuth.require()</script>
 <style>
 :root {
-  --bg: #f3f0fa;
-  --card: #fff;
-  --fg: #1a1430;
-  --muted: #746d8c;
-  --accent: #6d5ef5;
-  --soft: #efeaff;
-  --ok: #2f9e6b;
-  --line: rgba(26,20,48,.08);
+  --bg: #f3f0fa; --card: #fff; --fg: #1a1430; --muted: #746d8c; --accent: #6d5ef5; --soft: #efeaff;
   --font: "Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
-  --mono: Consolas,"Cascadia Mono","Microsoft YaHei UI",monospace;
-  --shadow: 0 0 0 1px var(--line), 0 8px 24px rgba(40,30,80,.06);
+  --shadow: 0 0 0 1px rgba(26,20,48,.08), 0 8px 24px rgba(40,30,80,.06);
 }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 var(--font); }
 a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-.wrap { max-width: 920px; margin: 0 auto; padding: 28px 20px 80px; }
-nav { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 28px; }
-nav .brand { font-weight: 700; margin-right: auto; letter-spacing: -.02em; }
-nav a.t { color: var(--muted); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 999px; }
-nav a.t:hover { background: var(--soft); text-decoration: none; color: var(--fg); }
+.wrap { max-width: 860px; margin: 0 auto; padding: 36px 20px 80px; }
 .kicker { font-size: 11px; letter-spacing: .16em; color: var(--muted); font-weight: 650; }
 h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 650; letter-spacing: -.03em; margin: 8px 0 10px; }
-.lede { color: var(--muted); max-width: 40em; margin: 0 0 28px; }
-.dl { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 36px; }
+.lede { color: var(--muted); max-width: 38em; margin: 0 0 28px; }
+.dl { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 @media (max-width: 700px) { .dl { grid-template-columns: 1fr; } }
 .card { background: var(--card); border-radius: 20px; padding: 20px 22px; box-shadow: var(--shadow); }
 .card h2 { margin: 0 0 6px; font-size: 18px; }
 .card p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
 .ver { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
-.btn {
-  display: inline-block; background: var(--accent); color: #fff; font-weight: 650;
-  padding: 11px 16px; border-radius: 12px; font-size: 14px;
-}
-.btn:hover { text-decoration: none; filter: brightness(1.05); }
+.btn { display: inline-block; background: var(--accent); color: #fff; font-weight: 650; padding: 11px 16px; border-radius: 12px; font-size: 14px; }
 .btn.ghost { background: var(--soft); color: var(--fg); }
-ol.steps { margin: 0; padding-left: 20px; color: var(--fg); }
-ol.steps li { margin: 8px 0; }
-section { margin: 28px 0; }
-section > h2 { font-size: 22px; margin: 0 0 12px; }
-pre, code { font-family: var(--mono); }
-pre {
-  background: #1a1430; color: #d8d3ee; padding: 14px 16px; border-radius: 14px;
-  overflow: auto; font-size: 13px; line-height: 1.5;
-}
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { color: var(--muted); font-size: 12px; font-weight: 650; }
-code.k { background: var(--soft); padding: 1px 6px; border-radius: 6px; font-size: 13px; }
-.note { color: var(--muted); font-size: 13px; }
-footer { margin-top: 40px; color: var(--muted); font-size: 13px; }
+.btn:hover { text-decoration: none; }
+ol { margin: 0; padding-left: 20px; }
+ol li { margin: 8px 0; }
+.row { margin-top: 22px; }
 </style>
 </head>
 <body>
 <div class="wrap">
-<nav>
-  <div class="brand">触控精灵</div>
-  <a class="t" href="#download">下载</a>
-  <a class="t" href="#start">开始</a>
-  <a class="t" href="#cmd">命令</a>
-  <a class="t" href="#lua">Lua</a>
-</nav>
-
-<div class="kicker">TAPSPRITE</div>
-<h1>下载与手册</h1>
-<p class="lede">这不是控制台。脚本、截图、取色都在电脑客户端里。这个网页只放安装包和命令说明。</p>
-
-<div class="dl" id="download">
-  <div class="card">
-    <h2>电脑客户端</h2>
-    <p>Windows。下发脚本、抓抓取色、截图。</p>
-    <div class="ver" id="exeVer">exe</div>
-    <a class="btn" href="/tapsprite.exe">下载 tapsprite.exe</a>
+  <div class="kicker">TAPSPRITE</div>
+  <h1>触控精灵</h1>
+  <p class="lede">电脑客户端下发脚本和截图。这个网页只提供安装包和命令文档。</p>
+  <div class="dl">
+    <div class="card">
+      <h2>电脑客户端</h2>
+      <p>Windows。下发、抓抓、截图。</p>
+      <div class="ver" id="exeVer"></div>
+      <a class="btn" href="/tapsprite.exe">下载 tapsprite.exe</a>
+    </div>
+    <div class="card">
+      <h2>手机 App</h2>
+      <p>Android / 模拟器。打开无障碍。</p>
+      <div class="ver" id="apkVer"></div>
+      <a class="btn ghost" href="/tapsprite.apk">下载 tapsprite.apk</a>
+    </div>
   </div>
-  <div class="card">
-    <h2>手机 App</h2>
-    <p>Android / 模拟器。开无障碍后就能被电脑控制。</p>
-    <div class="ver" id="apkVer">apk</div>
-    <a class="btn ghost" href="/tapsprite.apk">下载 tapsprite.apk</a>
-  </div>
-</div>
-
-<section id="start">
-  <h2>怎么用</h2>
-  <div class="card">
-    <ol class="steps">
-      <li>电脑打开 <code class="k">tapsprite.exe</code>（SmartScreen 点「仍要运行」）。</li>
-      <li>手机或模拟器安装 App，打开后开无障碍。</li>
-      <li>电脑左侧选出设备。无障碍已开后就可以下发脚本、截图。</li>
-      <li>抓抓页截当前屏幕，取色、记坐标。颜色是手机屏幕的 BGR 十六进制，不要加 <code class="k">#</code>。</li>
+  <div class="card row">
+    <h2>开始</h2>
+    <ol>
+      <li>打开 exe。SmartScreen 点「仍要运行」。</li>
+      <li>安装 App，打开无障碍。</li>
+      <li>电脑左侧选出设备后下发脚本或截图。</li>
     </ol>
-    <p class="note" style="margin:14px 0 0">坐标原点：屏幕左上角，向右 x、向下 y。脚本分辨率按你写的来，现在常用 1080×2400。</p>
+    <p style="margin:16px 0 0"><a class="btn" href="/docs.html">命令文档</a></p>
   </div>
-</section>
-
-<section id="cmd">
-  <h2>命令</h2>
-  <p class="note">按行和 Lua 都能跑。一行一条，<code class="k">//</code> 后面是注释。</p>
-<pre>KeyPress "Home"
-Delay 1000
-Tap 167,775
-Delay 2000
-KeyPress "Back"</pre>
-
-  <div class="card" style="margin-top:16px;overflow:auto">
-  <table>
-    <tr><th>命令</th><th>说明</th></tr>
-    <tr><td><code class="k">Tap(x, y)</code></td><td>点一下</td></tr>
-    <tr><td><code class="k">Tap2(x, y)</code></td><td>连点两次</td></tr>
-    <tr><td><code class="k">RandomTap(x, y, r)</code></td><td>半径内随机点</td></tr>
-    <tr><td><code class="k">LongClick(x, y)</code> / <code class="k">Touch(x, y)</code></td><td>长按</td></tr>
-    <tr><td><code class="k">Swipe(x1,y1,x2,y2,ms)</code></td><td>滑动，默认 300ms</td></tr>
-    <tr><td><code class="k">KeyPress("Back")</code></td><td>Home / Back / Recents / Notifications / Power / VolumeUp / VolumeDown / Screenshot</td></tr>
-    <tr><td><code class="k">InputText("字")</code></td><td>当前输入框填字</td></tr>
-    <tr><td><code class="k">ClickText("确定")</code></td><td>按无障碍节点文本点</td></tr>
-    <tr><td><code class="k">Delay(ms)</code> / <code class="k">Sleep(ms)</code></td><td>等待</td></tr>
-    <tr><td><code class="k">TracePrint("msg")</code></td><td>打到电脑日志</td></tr>
-    <tr><td><code class="k">Tip("msg")</code></td><td>手机底部提示 + 日志，不弹窗</td></tr>
-    <tr><td><code class="k">ExitScript()</code></td><td>结束</td></tr>
-    <tr><td><code class="k">GetPixelColor(x, y)</code></td><td>返回 <code class="k">CC7B00</code></td></tr>
-    <tr><td><code class="k">FindColor(x1,y1,x2,y2,color,sim,dir)</code></td><td>Lua 返回 x,y，失败 -1,-1</td></tr>
-    <tr><td><code class="k">CmpColor(x,y,color,sim)</code></td><td>该点是否匹配</td></tr>
-    <tr><td><code class="k">WaitColor(..., timeoutMs, sim)</code></td><td>等到出现或超时</td></tr>
-    <tr><td><code class="k">KeepScreen(true/false)</code></td><td>冻结画面再连续找色</td></tr>
-    <tr><td><code class="k">OcrText(x1,y1,x2,y2)</code></td><td>区域内识字</td></tr>
-    <tr><td><code class="k">GetScreenX()</code> <code class="k">GetScreenY()</code></td><td>宽高</td></tr>
-    <tr><td><code class="k">TickCount()</code></td><td>开机毫秒</td></tr>
-    <tr><td><code class="k">KeepAwake(true)</code></td><td>尽量保持亮屏</td></tr>
-    <tr><td><code class="k">GetClip()</code> <code class="k">SetClip("字")</code></td><td>剪贴板</td></tr>
-    <tr><td><code class="k">RunApp("包名")</code></td><td>启动应用</td></tr>
-  </table>
-  <p class="note" style="margin-top:12px">颜色 6 位十六进制，可带容差 <code class="k">CC7B00-030303</code>。sim：0/1 精确，0.9 约 10%，≥2 当通道差。</p>
-  </div>
-</section>
-
-<section id="lua">
-  <h2>Lua</h2>
-  <p class="note">引擎是 Lua 5.2。整除请用 <code class="k">math.floor(w / 2)</code>，不要写 <code class="k">//</code>。</p>
-<pre>local w = GetScreenX()
-local h = GetScreenY()
-TracePrint("屏幕 " .. w .. "x" .. h)
-
-for i = 1, 5 do
-  RandomTap(math.floor(w / 2), math.floor(h / 2), 30)
-  Delay(400 + math.random(200))
-end
-
-local x, y = FindColor(0, 0, w, h, "CC7B00", 0, 0)
-if x > -1 then
-  Tap(x, y)
-else
-  Tip("没找到")
-end</pre>
-</section>
-
-<footer>
-  完整命令表见 <a href="/GUIDE.md">GUIDE.md</a>。电脑客户端连不上时点刷新即可，不用打开这个网页。
-</footer>
 </div>
 <script>
 fetch("/version.json").then(r => r.json()).then(v => {
   document.getElementById("exeVer").textContent = "当前 " + (v.exe_ver || "");
-  document.getElementById("apkVer").textContent = "当前 " + (v.apk_ver || v.versionName || "");
+  document.getElementById("apkVer").textContent = "当前 " + (v.apk_ver || "");
 }).catch(() => {});
 </script>
 </body>
