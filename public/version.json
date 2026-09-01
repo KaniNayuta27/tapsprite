@@ -2,8 +2,8 @@
   "versionCode": 71,
   "versionName": "0.9.47",
   "apk": "https://tapsprite.pages.dev/tapsprite0-9-47.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-46.exe",
-  "notes": "回车自动补 then/end 和空格。",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-47.exe",
+  "notes": "编辑器行号、保存/查找/替换/语法检测。",
   "apk_ver": "0.9.47",
-  "exe_ver": "1.1.46"
+  "exe_ver": "1.1.47"
 }
