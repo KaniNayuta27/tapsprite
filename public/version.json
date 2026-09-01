@@ -1,9 +1,9 @@
 {
-  "versionCode": 70,
-  "versionName": "0.9.46",
-  "apk": "https://tapsprite.pages.dev/tapsprite0-9-46.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-44.exe",
-  "notes": "命令名补全；日志只留一个时间。",
-  "apk_ver": "0.9.46",
-  "exe_ver": "1.1.44"
+  "versionCode": 71,
+  "versionName": "0.9.47",
+  "apk": "https://tapsprite.pages.dev/tapsprite0-9-47.apk",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-45.exe",
+  "notes": "全部走 Lua；编辑器高亮/悬停/两空格缩进。",
+  "apk_ver": "0.9.47",
+  "exe_ver": "1.1.45"
 }

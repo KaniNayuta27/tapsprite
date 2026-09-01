@@ -1,15 +1,15 @@
 window.TS_DOCS = [
   { id: "intro", cat: "入门", name: "概述", sig: "",
-    desc: "坐标原点是屏幕左上角，向右 x、向下 y，单位像素。颜色是 6 位十六进制，不要加 #。可带容差，例如 CC7B00-030303。按行命令和 Lua 都能跑。电脑用 tapsprite.exe，不要把网页当控制台。",
+    desc: "坐标原点是屏幕左上角，向右 x、向下 y，单位像素。颜色是 6 位十六进制，不要加 #。可带容差，例如 CC7B00-030303。脚本一律按 Lua 跑。旧的按键精灵一行（Tap 167,775 和 // 注释）会自动转成 Lua。电脑用 tapsprite.exe。",
     params: [],
-    example: "KeyPress \"Home\"\nDelay 1000\nTap 167,775" },
+    example: "KeyPress(\"Home\")\nDelay(1000)\nTap(167, 775)" },
   { id: "lua", cat: "入门", name: "Lua 基础", sig: "Lua 5.2",
     desc: "变量、运算、循环、函数都能用。运算：+ - * / % ^ 以及 == ~= < > <= >= 和 and or not。字符串用 .. 连接。整除不要写 //，请用 math.floor(w / 2)。常用 math.floor、math.random、string.sub、string.find、string.format、table.insert、#t、ipairs、pairs。",
     params: [],
     example: "local x = 100 + 20 * 3\nlocal name = \"触控\" .. \"精灵\"\nif x > 150 then\n  TracePrint(\"x=\" .. x)\nend\n\nfor i = 1, 3 do\n  Tap(540, 1600)\n  Delay(200)\nend" },
 
   { id: "Tap", cat: "点击 / 滑动 / 按键", name: "Tap", sig: "Tap(x, y)",
-    desc: "在屏幕坐标点一下。按行写法：Tap 167,775",
+    desc: "在屏幕坐标点一下。",
     params: [["x","number","横坐标"],["y","number","纵坐标"]],
     example: "Tap(167, 775)" },
   { id: "Tap2", cat: "点击 / 滑动 / 按键", name: "Tap2", sig: "Tap2(x, y)",
