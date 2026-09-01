@@ -186,8 +186,24 @@ async function handlePresence(request) {
     if (!id || id === "旧版") return json({ ok: false, error: "缺少 id" }, 400);
     const devices = await loadPresence();
     if (body.online === false) {
-      delete devices[id];
+      const gen = Number(body.gen) || Date.now();
+      const prev = devices[id];
+      if (prev && Number(prev.gen) > gen) {
+        return json({ ok: true, ignored: true });
+      }
+      devices[id] = {
+        id,
+        name: prev && prev.name ? prev.name : String(body.name || id).slice(0, 40),
+        online: false,
+        seen: Date.now(),
+        gen,
+      };
     } else {
+      const gen = Number(body.gen) || Date.now();
+      const prev = devices[id];
+      if (prev && Number(prev.gen) > gen) {
+        return json({ ok: true, ignored: true });
+      }
       devices[id] = {
         id,
         name: String(body.name || id).slice(0, 40),
@@ -195,6 +211,7 @@ async function handlePresence(request) {
         emu: !!body.emu,
         online: true,
         seen: Date.now(),
+        gen,
       };
     }
     await savePresence(devices);
