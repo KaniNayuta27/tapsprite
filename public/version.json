@@ -1,9 +1,9 @@
 {
-  "versionCode": 29,
-  "versionName": "0.9.5",
+  "versionCode": 49,
+  "versionName": "0.9.25",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
   "exe": "https://tapsprite.pages.dev/tapsprite.exe",
-  "notes": "抓抓全分辨率；截图走 JSON 避免迅雷；窗口 1600x1000",
+  "notes": "网页改为下载和手册，不再当控制台。",
   "apk_ver": "0.9.25",
   "exe_ver": "1.1.19"
 }

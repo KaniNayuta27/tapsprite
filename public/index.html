@@ -1,422 +1,176 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>触控精灵 · 电脑控制台</title>
-  <style>
-    :root {
-      --bg: #0b0d0c;
-      --elevated: #141816;
-      --fg: #eef2ef;
-      --muted: #8b948e;
-      --accent: #c5d4cc;
-      --danger: #c45c4a;
-      --border: color-mix(in srgb, #eef2ef 14%, transparent);
-      --radius-md: 12px;
-      --radius-xl: 20px;
-    }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; background: var(--bg); color: var(--fg);
-      font-family: "Segoe UI", "Noto Sans SC", system-ui, sans-serif; }
-    body { min-height: 100vh; }
-    .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 20px 64px; }
-    .kicker { font-size: 11px; letter-spacing: 0.16em; color: var(--muted); font-weight: 500; }
-    h1 { font-size: clamp(28px, 4vw, 40px); font-weight: 600; letter-spacing: -0.03em; margin: 8px 0 6px; }
-    .lede { color: var(--muted); line-height: 1.55; max-width: 42em; margin: 0 0 28px; }
-    .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-    @media (min-width: 900px) { .grid { grid-template-columns: 1.05fr 0.95fr; } }
-    .card { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 18px; }
-    .card h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
-    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-    .pill { font-size: 12px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
-    .pill.on { color: var(--bg); background: var(--accent); border-color: transparent; }
-    textarea, input {
-      width: 100%; border-radius: var(--radius-md);
-      background: var(--bg); color: var(--accent); border: 1px solid var(--border);
-      font-family: ui-monospace, "Cascadia Code", "SF Mono", monospace;
-      font-size: 15px; line-height: 1.55; padding: 12px 14px; outline: none;
-    }
-    textarea { min-height: 220px; resize: vertical; font-size: 13px; }
-    textarea:focus, input:focus { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
-    input { letter-spacing: 0.28em; text-transform: uppercase; text-align: center; font-size: 22px; }
-    .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    button {
-      font-family: inherit; font-weight: 600; font-size: 14px; border: 0; cursor: pointer;
-      border-radius: var(--radius-md); padding: 12px 16px; min-height: 44px;
-    }
-    button.primary { background: var(--fg); color: var(--bg); }
-    button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--border); }
-    button:active { transform: scale(0.98); }
-    button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-    .log {
-      height: 340px; overflow: auto; background: var(--bg); border-radius: var(--radius-md);
-      border: 1px solid var(--border); padding: 12px 14px;
-      font-family: ui-monospace, "SF Mono", monospace; font-size: 12.5px; line-height: 1.6;
-    }
-    .log .t { color: var(--muted); margin-right: 8px; }
-    .err { color: var(--danger); font-size: 13px; min-height: 1.2em; margin-top: 8px; }
-    .ok { color: var(--accent); }
-    .gate { max-width: 420px; margin: 48px auto; text-align: center; }
-    .hint { color: var(--muted); font-size: 13px; line-height: 1.5; margin-top: 10px; }
-    .hidden { display: none; }
-    .snips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-    .snips button { font-size: 12px; font-weight: 500; padding: 8px 10px; min-height: 36px; }
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>触控精灵 · 下载与手册</title>
+<style>
+:root {
+  --bg: #f3f0fa;
+  --card: #fff;
+  --fg: #1a1430;
+  --muted: #746d8c;
+  --accent: #6d5ef5;
+  --soft: #efeaff;
+  --ok: #2f9e6b;
+  --line: rgba(26,20,48,.08);
+  --font: "Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  --mono: Consolas,"Cascadia Mono","Microsoft YaHei UI",monospace;
+  --shadow: 0 0 0 1px var(--line), 0 8px 24px rgba(40,30,80,.06);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 var(--font); }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { max-width: 920px; margin: 0 auto; padding: 28px 20px 80px; }
+nav { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 28px; }
+nav .brand { font-weight: 700; margin-right: auto; letter-spacing: -.02em; }
+nav a.t { color: var(--muted); font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 999px; }
+nav a.t:hover { background: var(--soft); text-decoration: none; color: var(--fg); }
+.kicker { font-size: 11px; letter-spacing: .16em; color: var(--muted); font-weight: 650; }
+h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 650; letter-spacing: -.03em; margin: 8px 0 10px; }
+.lede { color: var(--muted); max-width: 40em; margin: 0 0 28px; }
+.dl { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 36px; }
+@media (max-width: 700px) { .dl { grid-template-columns: 1fr; } }
+.card { background: var(--card); border-radius: 20px; padding: 20px 22px; box-shadow: var(--shadow); }
+.card h2 { margin: 0 0 6px; font-size: 18px; }
+.card p { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+.ver { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+.btn {
+  display: inline-block; background: var(--accent); color: #fff; font-weight: 650;
+  padding: 11px 16px; border-radius: 12px; font-size: 14px;
+}
+.btn:hover { text-decoration: none; filter: brightness(1.05); }
+.btn.ghost { background: var(--soft); color: var(--fg); }
+ol.steps { margin: 0; padding-left: 20px; color: var(--fg); }
+ol.steps li { margin: 8px 0; }
+section { margin: 28px 0; }
+section > h2 { font-size: 22px; margin: 0 0 12px; }
+pre, code { font-family: var(--mono); }
+pre {
+  background: #1a1430; color: #d8d3ee; padding: 14px 16px; border-radius: 14px;
+  overflow: auto; font-size: 13px; line-height: 1.5;
+}
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-size: 12px; font-weight: 650; }
+code.k { background: var(--soft); padding: 1px 6px; border-radius: 6px; font-size: 13px; }
+.note { color: var(--muted); font-size: 13px; }
+footer { margin-top: 40px; color: var(--muted); font-size: 13px; }
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <div id="gate" class="hidden"></div>
-    <div id="app">
-      <div class="kicker">TAPSPRITE CONSOLE</div>
-      <h1>触控精灵</h1>
-      <p class="lede">电脑打开这个网页就能下发。手机 App 开着即可，不用填房间码。</p>
-      <div class="grid">
-        <section class="card">
-          <h2>脚本</h2>
-          <div class="meta" id="meta"></div>
-          <textarea id="script" spellcheck="false"></textarea>
-          <div class="snips" id="snips"></div>
-          <div class="row">
-            <button class="primary" id="send">发送到手机</button>
-            <button class="ghost" id="sendRun">发送并运行</button>
-            <button class="ghost" id="start">开始</button>
-            <button class="ghost" id="stop">停止</button>
-          </div>
-          <div class="err" id="err"></div>
-        </section>
-        <section class="card">
-          <h2>实时日志</h2>
-          <div class="log" id="log"></div>
-        </section>
-      </div>
-      <section class="card" style="margin-top:16px">
-        <h2>抓抓</h2>
-        <p class="lede" style="margin:0 0 12px">点「截图」拉当前手机画面。鼠标移动显示手机坐标和颜色。App 里先开截屏权限。</p>
-        <div class="row" style="margin-top:0">
-          <button class="primary" id="shot">截图</button>
-        </div>
-        <canvas id="grab" style="margin-top:12px;border-radius:0;background:#0b0d0c;cursor:crosshair;image-rendering:pixelated;max-width:100%"></canvas>
-      </section>
-      <div id="lens" style="position:fixed;display:none;pointer-events:none;z-index:80">
-        <canvas id="lensCv" width="120" height="120" style="display:block;background:#111;border:1px solid #333"></canvas>
-        <div id="lensTxt" style="margin-top:4px;padding:4px 6px;background:#111;color:#eee;font:12px ui-monospace,monospace;white-space:nowrap"></div>
-      </div>
-      </div>
-    </div>
-  </div>
-  <script src="/mqtt.min.js"></script>
-  <script>
-    const DEFAULT_SCRIPT = 'KeyPress "Home"\nDelay 1000\nTap 167,775\nDelay 2000\nKeyPress "Back"\nDelay 2000\nToast "脚本结束"\nDelay 1000\n';
-    const SNIPS = [
-      { n: "8步测试", s: DEFAULT_SCRIPT },
-      { n: "自检", s: "SelfTest\n" },
-      { n: "取色器", s: "PickColor\n" },
-      { n: "屏幕", s: "GetScreen\n" },
-      { n: "取色", s: "GetPixelColor 100,200\n" },
-      { n: "找色", s: "FindColor 0,0,1080,2400,\"FFFFFF\",0,0\n" },
-      { n: "多点色", s: "FindMultiColor 0,0,1080,2400,\"CC7B00\",\"20|31|CC7B00\",0,1\n" },
-      { n: "滑动", s: "Swipe 800,1200,200,1200,250\n" },
-      { n: "提示", s: "Tip 电脑下发的提示\n" },
-      { n: "配置", s: "ReadUIConfig \"多选框1\"\n" }
-    ];
-    const gateEl = document.getElementById("gate");
-    const appEl = document.getElementById("app");
-    const roomInput = document.getElementById("roomInput");
-    const scriptEl = document.getElementById("script");
-    const logEl = document.getElementById("log");
-    const errEl = document.getElementById("err");
-    const metaEl = document.getElementById("meta");
-    let room = "";
-    let after = 0;
-    const seen = new Set();
-    let timer = 0;
-    let mq = null;
-    let lastMqtt = 0;
-    let lastBeatLog = 0;
-    let mqttOnce = false;
-    let lastPhone = null;
-    function addLog(msg) {
-      const row = document.createElement("div");
-      row.innerHTML = '<span class="t">' + fmt(Date.now()) + "</span>" + escapeHtml(msg);
-      logEl.appendChild(row);
-      while (logEl.childNodes.length > 200) logEl.removeChild(logEl.firstChild);
-      logEl.scrollTop = logEl.scrollHeight;
-    }
-    function mqttPub(obj) {
-      if (mq && mq.connected) {
-        mq.publish("tapsprite/live/pc", JSON.stringify(obj), { qos: 1 });
-        addLog("已下发 → 手机  " + (obj.type || (obj.script ? "script" : JSON.stringify(obj).slice(0, 40))));
-        return true;
-      }
-      addLog("网页 MQTT 还没连上，改走 HTTP");
-      return false;
-    }
-    function mqttJoin() {
-      if (typeof mqtt === "undefined") {
-        addLog("MQTT 库未加载，仍走网页接口");
-        return;
-      }
-      if (mq) {
-        try { mq.end(true); } catch (e) {}
-      }
-      addLog("网页正在连 wss://broker.emqx.io:8084/mqtt");
-      mq = mqtt.connect("wss://broker.emqx.io:8084/mqtt", {
-        clientId: "ts-pc-" + Math.random().toString(16).slice(2, 10),
-        reconnectPeriod: 2000,
-        connectTimeout: 8000
-      });
-      mq.on("connect", function () {
-        mq.subscribe("tapsprite/live/phone", function (err) {
-          if (err) addLog("订阅失败 " + err.message);
-          else {
-            addLog("已订阅 tapsprite/live/phone ，等手机心跳");
-            mq.publish("tapsprite/live/phone", JSON.stringify({ probe: true, from: "web" }), { qos: 0 });
-            addLog("网页自测已发。若下一行出现「网页自测收到」，说明网页通道正常。");
-          }
-        });
-        addLog(mqttOnce ? "MQTT 重连成功" : "网页 MQTT 已连接");
-        mqttOnce = true;
-        setTimeout(function () {
-          if (!lastMqtt) addLog("5 秒还没有手机心跳。手机保持 App 开着，不要点检测连接。");
-        }, 5000);
-      });
-      mq.on("reconnect", function () { addLog("网页 MQTT 重连中…"); });
-      mq.on("offline", function () { addLog("网页 MQTT 离线"); });
-      mq.on("close", function () { addLog("网页 MQTT 关闭"); });
-      mq.on("error", function (e) { addLog("网页 MQTT 错误 " + (e && e.message ? e.message : e)); });
-      mq.on("message", function (topic, payload) {
-        let data = {};
-        try { data = JSON.parse(payload.toString()); } catch (e) {
-          addLog("消息不是 JSON: " + payload.toString().slice(0, 80));
-          return;
-        }
-        if (data.probe) {
-          addLog("网页自测收到，网页订阅正常。");
-          return;
-        }
-        if (data.type === "shot" && data.jpeg) {
-          showShot(data);
-          return;
-        }
-        lastMqtt = Date.now();
-        lastPhone = data;
-        metaEl.innerHTML = "";
-        metaEl.appendChild(pill("手机在线", true));
-        metaEl.appendChild(pill(data.running ? "运行中" : "待命", !!data.running));
-        metaEl.appendChild(pill(data.a11y ? "无障碍已开" : "无障碍未开", !!data.a11y));
-        metaEl.appendChild(pill(data.step || "—", false));
-        // 心跳日志暂时关掉
-        // if (Date.now() - lastBeatLog > 4000) {
-        //   lastBeatLog = Date.now();
-        //   addLog("手机心跳  loaded=" + data.loaded + " a11y=" + data.a11y + " step=" + (data.step || ""));
-        // }
-      });
-    }
+<div class="wrap">
+<nav>
+  <div class="brand">触控精灵</div>
+  <a class="t" href="#download">下载</a>
+  <a class="t" href="#start">开始</a>
+  <a class="t" href="#cmd">命令</a>
+  <a class="t" href="#lua">Lua</a>
+</nav>
 
-    function norm(s) {
-      return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
-    }
-    function pill(text, on) {
-      const s = document.createElement("span");
-      s.className = "pill" + (on ? " on" : "");
-      s.textContent = text;
-      return s;
-    }
-    function pad(n) { return String(n).padStart(2, "0"); }
-    function fmt(t) {
-      const d = new Date(t);
-      return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
-    }
-    function escapeHtml(s) {
-      return String(s)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
-    }
-    async function getJSON(url, opt) {
-      const r = await fetch(url, opt);
-      const t = await r.text();
-      try { return { ok: r.ok, status: r.status, data: JSON.parse(t) }; }
-      catch { return { ok: r.ok, status: r.status, data: { error: t } }; }
-    }
-    function enter(code) {
-      room = norm(code);
-      if (room.length < 4) {
-        alert("房间码至少 4 位");
-        return;
-      }
-      location.hash = room;
-      localStorage.setItem("tapsprite.room", room);
-      after = 0;
-      seen.clear();
-      logEl.innerHTML = "";
-      if (!scriptEl.value) scriptEl.value = DEFAULT_SCRIPT;
-      poll();
-      mqttJoin();
-      if (timer) clearInterval(timer);
-      timer = setInterval(poll, 700);
-    }
-    function leave() {}
-    async function poll() {
-      if (!room) return;
-      const { ok, data } = await getJSON("/api/room/" + room + "?after=" + after);
-      if (!ok) {
-        errEl.textContent = (data && data.error) || "房间连不上";
-        return;
-      }
-      const mqttFresh = lastMqtt && (Date.now() - lastMqtt < 10000) && lastPhone;
-      const st = mqttFresh ? lastPhone : data;
-      metaEl.innerHTML = "";
-      const phoneOn = !!mqttFresh || (data.phoneSeenAt && (Date.now() - data.phoneSeenAt < 20000));
-      metaEl.appendChild(pill(phoneOn ? "手机在线" : "等待手机", phoneOn));
-      metaEl.appendChild(pill(st.running ? "运行中" : "待命", !!st.running));
-      metaEl.appendChild(pill(st.a11y ? "无障碍已开" : "无障碍未开", !!st.a11y));
-      metaEl.appendChild(pill(st.step || "—", false));
-      if (data.script && !scriptEl.dataset.touched) scriptEl.value = data.script;
-      const lines = data.lines || [];
-      for (const line of lines) {
-        if (seen.has(line.seq)) continue;
-        seen.add(line.seq);
-        after = Math.max(after, line.seq);
-        const row = document.createElement("div");
-        row.innerHTML = '<span class="t">' + fmt(line.t) + "</span>" + escapeHtml(line.msg);
-        logEl.appendChild(row);
-      }
-      if (lines.length) logEl.scrollTop = logEl.scrollHeight;
-    }
-    async function send(run) {
-      errEl.textContent = "";
-      errEl.className = "err";
-      const body = JSON.stringify({ script: scriptEl.value, run: !!run });
-      const viaMqtt = mqttPub({ type: "script", script: scriptEl.value, run: !!run });
-      const { ok, data } = await getJSON("/api/room/" + room + "/script", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body
-      });
-      if (viaMqtt) {
-        errEl.className = "err ok";
-        errEl.textContent = run ? "已通过 MQTT 下发并请求运行" : "已通过 MQTT 发送";
-        setTimeout(() => { errEl.textContent = ""; errEl.className = "err"; }, 1800);
-        if (ok) return;
-        return;
-      }
-      if (!ok) {
-        errEl.textContent = (data && data.error) || "发送失败";
-        return;
-      }
-      errEl.className = "err ok";
-      errEl.textContent = run ? "已下发并请求运行" : "已发送到房间，等手机拉取";
-      setTimeout(() => { errEl.textContent = ""; errEl.className = "err"; }, 1800);
-    }
-    async function control(action) {
-      mqttPub({ type: "control", action: action });
-      await getJSON("/api/room/" + room + "/control", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action })
-      });
-    }
-    const snips = document.getElementById("snips");
-    if (snips) {
-      SNIPS.forEach((item) => {
-        const b = document.createElement("button");
-        b.className = "ghost";
-        b.textContent = item.n;
-        b.onclick = () => {
-          scriptEl.value = item.s;
-          scriptEl.dataset.touched = "1";
-        };
-        snips.appendChild(b);
-      });
-    }
-    document.getElementById("send").onclick = () => send(false);
-    document.getElementById("sendRun").onclick = () => send(true);
-    document.getElementById("start").onclick = () => control("start");
-    document.getElementById("stop").onclick = () => control("stop");
-    const shotBtn = document.getElementById("shot");
-    if (shotBtn) shotBtn.onclick = () => {
-      mqttPub({ type: "shot" });
-      addLog("请求截图");
-    };
-    const grab = document.getElementById("grab");
-    const lens = document.getElementById("lens");
-    const lensCv = document.getElementById("lensCv");
-    const lensTxt = document.getElementById("lensTxt");
-    let grabImg = null, grabW = 0, grabH = 0;
-    let shotBuf = { seq: 0, n: 0, parts: [] };
-    function showShot(data) {
-      const seq = Number(data.seq) || 1;
-      const i = Number(data.i) || 0;
-      const n = Number(data.n) || 1;
-      if (shotBuf.seq !== seq) {
-        shotBuf = { seq: seq, n: n, parts: new Array(n) };
-      }
-      shotBuf.parts[i] = data.jpeg || "";
-      let got = 0;
-      for (let k = 0; k < shotBuf.n; k++) if (shotBuf.parts[k]) got++;
-      if (got < shotBuf.n) {
-        addLog("截图 " + got + "/" + shotBuf.n);
-        return;
-      }
-      grabW = Number(data.w) || 0;
-      grabH = Number(data.h) || 0;
-      const b64 = shotBuf.parts.join("");
-      const img = new Image();
-      img.onload = function () {
-        grabImg = img;
-        grab.width = img.width;
-        grab.height = img.height;
-        grab.style.width = img.width + "px";
-        grab.style.height = img.height + "px";
-        grab.style.maxWidth = "100%";
-        grab.style.height = "auto";
-        const ctx = grab.getContext("2d");
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(img, 0, 0);
-        addLog("截图 1:1 " + grabW + "x" + grabH);
-      };
-      const mime = data.mime === "jpeg" ? "image/jpeg" : "image/png";
-      img.src = "data:" + mime + ";base64," + b64;
-    }
-    if (grab) {
-      grab.addEventListener("mouseleave", function () {
-        if (lens) lens.style.display = "none";
-      });
-      grab.addEventListener("mousemove", function (e) {
-        if (!grab.width) return;
-        const r = grab.getBoundingClientRect();
-        const x = Math.max(0, Math.min(grab.width - 1, Math.round((e.clientX - r.left) / r.width * grab.width)));
-        const y = Math.max(0, Math.min(grab.height - 1, Math.round((e.clientY - r.top) / r.height * grab.height)));
-        const ctx = grab.getContext("2d");
-        const p = ctx.getImageData(x, y, 1, 1).data;
-        const px = grabW ? Math.round(x / grab.width * grabW) : x;
-        const py = grabH ? Math.round(y / grab.height * grabH) : y;
-        const hex = ((p[2] << 16) | (p[1] << 8) | p[0]).toString(16).toUpperCase().padStart(6, "0");
-        if (lensCv) {
-          const z = lensCv.getContext("2d");
-          z.imageSmoothingEnabled = false;
-          z.fillStyle = "#2a2a2a";
-          z.fillRect(0, 0, 120, 120);
-          z.drawImage(grab, x - 6, y - 6, 13, 13, 0, 0, 120, 120);
-          z.fillStyle = "#f33";
-          z.fillRect(58, 58, 4, 4);
-        }
-        if (lensTxt) lensTxt.textContent = px + "," + py + "  " + hex + "\nRGB(" + p[0] + "," + p[1] + "," + p[2] + ")";
-        if (lens) {
-          lens.style.display = "block";
-          const left = e.clientX + 18;
-          const top = e.clientY + 18;
-          lens.style.left = Math.min(left, window.innerWidth - 140) + "px";
-          lens.style.top = Math.min(top, window.innerHeight - 160) + "px";
-        }
-      });
-    }
-    scriptEl.addEventListener("input", () => { scriptEl.dataset.touched = "1"; });
-    enter("LIVE");
-  </script>
+<div class="kicker">TAPSPRITE</div>
+<h1>下载与手册</h1>
+<p class="lede">这不是控制台。脚本、截图、取色都在电脑客户端里。这个网页只放安装包和命令说明。</p>
+
+<div class="dl" id="download">
+  <div class="card">
+    <h2>电脑客户端</h2>
+    <p>Windows。下发脚本、抓抓取色、截图。</p>
+    <div class="ver" id="exeVer">exe</div>
+    <a class="btn" href="/tapsprite.exe">下载 tapsprite.exe</a>
+  </div>
+  <div class="card">
+    <h2>手机 App</h2>
+    <p>Android / 模拟器。开无障碍后就能被电脑控制。</p>
+    <div class="ver" id="apkVer">apk</div>
+    <a class="btn ghost" href="/tapsprite.apk">下载 tapsprite.apk</a>
+  </div>
+</div>
+
+<section id="start">
+  <h2>怎么用</h2>
+  <div class="card">
+    <ol class="steps">
+      <li>电脑打开 <code class="k">tapsprite.exe</code>（SmartScreen 点「仍要运行」）。</li>
+      <li>手机或模拟器安装 App，打开后开无障碍。</li>
+      <li>电脑左侧选出设备。无障碍已开后就可以下发脚本、截图。</li>
+      <li>抓抓页截当前屏幕，取色、记坐标。颜色是手机屏幕的 BGR 十六进制，不要加 <code class="k">#</code>。</li>
+    </ol>
+    <p class="note" style="margin:14px 0 0">坐标原点：屏幕左上角，向右 x、向下 y。脚本分辨率按你写的来，现在常用 1080×2400。</p>
+  </div>
+</section>
+
+<section id="cmd">
+  <h2>命令</h2>
+  <p class="note">按行和 Lua 都能跑。一行一条，<code class="k">//</code> 后面是注释。</p>
+<pre>KeyPress "Home"
+Delay 1000
+Tap 167,775
+Delay 2000
+KeyPress "Back"</pre>
+
+  <div class="card" style="margin-top:16px;overflow:auto">
+  <table>
+    <tr><th>命令</th><th>说明</th></tr>
+    <tr><td><code class="k">Tap(x, y)</code></td><td>点一下</td></tr>
+    <tr><td><code class="k">Tap2(x, y)</code></td><td>连点两次</td></tr>
+    <tr><td><code class="k">RandomTap(x, y, r)</code></td><td>半径内随机点</td></tr>
+    <tr><td><code class="k">LongClick(x, y)</code> / <code class="k">Touch(x, y)</code></td><td>长按</td></tr>
+    <tr><td><code class="k">Swipe(x1,y1,x2,y2,ms)</code></td><td>滑动，默认 300ms</td></tr>
+    <tr><td><code class="k">KeyPress("Back")</code></td><td>Home / Back / Recents / Notifications / Power / VolumeUp / VolumeDown / Screenshot</td></tr>
+    <tr><td><code class="k">InputText("字")</code></td><td>当前输入框填字</td></tr>
+    <tr><td><code class="k">ClickText("确定")</code></td><td>按无障碍节点文本点</td></tr>
+    <tr><td><code class="k">Delay(ms)</code> / <code class="k">Sleep(ms)</code></td><td>等待</td></tr>
+    <tr><td><code class="k">TracePrint("msg")</code></td><td>打到电脑日志</td></tr>
+    <tr><td><code class="k">Tip("msg")</code></td><td>手机底部提示 + 日志，不弹窗</td></tr>
+    <tr><td><code class="k">ExitScript()</code></td><td>结束</td></tr>
+    <tr><td><code class="k">GetPixelColor(x, y)</code></td><td>返回 <code class="k">CC7B00</code></td></tr>
+    <tr><td><code class="k">FindColor(x1,y1,x2,y2,color,sim,dir)</code></td><td>Lua 返回 x,y，失败 -1,-1</td></tr>
+    <tr><td><code class="k">CmpColor(x,y,color,sim)</code></td><td>该点是否匹配</td></tr>
+    <tr><td><code class="k">WaitColor(..., timeoutMs, sim)</code></td><td>等到出现或超时</td></tr>
+    <tr><td><code class="k">KeepScreen(true/false)</code></td><td>冻结画面再连续找色</td></tr>
+    <tr><td><code class="k">OcrText(x1,y1,x2,y2)</code></td><td>区域内识字</td></tr>
+    <tr><td><code class="k">GetScreenX()</code> <code class="k">GetScreenY()</code></td><td>宽高</td></tr>
+    <tr><td><code class="k">TickCount()</code></td><td>开机毫秒</td></tr>
+    <tr><td><code class="k">KeepAwake(true)</code></td><td>尽量保持亮屏</td></tr>
+    <tr><td><code class="k">GetClip()</code> <code class="k">SetClip("字")</code></td><td>剪贴板</td></tr>
+    <tr><td><code class="k">RunApp("包名")</code></td><td>启动应用</td></tr>
+  </table>
+  <p class="note" style="margin-top:12px">颜色 6 位十六进制，可带容差 <code class="k">CC7B00-030303</code>。sim：0/1 精确，0.9 约 10%，≥2 当通道差。</p>
+  </div>
+</section>
+
+<section id="lua">
+  <h2>Lua</h2>
+  <p class="note">引擎是 Lua 5.2。整除请用 <code class="k">math.floor(w / 2)</code>，不要写 <code class="k">//</code>。</p>
+<pre>local w = GetScreenX()
+local h = GetScreenY()
+TracePrint("屏幕 " .. w .. "x" .. h)
+
+for i = 1, 5 do
+  RandomTap(math.floor(w / 2), math.floor(h / 2), 30)
+  Delay(400 + math.random(200))
+end
+
+local x, y = FindColor(0, 0, w, h, "CC7B00", 0, 0)
+if x > -1 then
+  Tap(x, y)
+else
+  Tip("没找到")
+end</pre>
+</section>
+
+<footer>
+  完整命令表见 <a href="/GUIDE.md">GUIDE.md</a>。电脑客户端连不上时点刷新即可，不用打开这个网页。
+</footer>
+</div>
+<script>
+fetch("/version.json").then(r => r.json()).then(v => {
+  document.getElementById("exeVer").textContent = "当前 " + (v.exe_ver || "");
+  document.getElementById("apkVer").textContent = "当前 " + (v.apk_ver || v.versionName || "");
+}).catch(() => {});
+</script>
 </body>
 </html>
