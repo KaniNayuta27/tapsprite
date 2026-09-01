@@ -30,7 +30,15 @@ aside {
 aside .brand { display: block; font-weight: 700; padding: 6px 10px 14px; color: var(--fg); text-decoration: none; }
 .search { width: 100%; border: 1px solid #e4dff2; border-radius: 10px; padding: 8px 10px; font: 13px inherit; margin-bottom: 12px; outline: none; }
 .search:focus { border-color: var(--accent); }
-.cat { font-size: 11px; letter-spacing: .08em; color: var(--muted); font-weight: 650; padding: 12px 10px 4px; }
+.cat {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  border: 0; background: transparent; cursor: pointer; text-align: left;
+  font: 650 15px/1.35 var(--font); color: var(--fg);
+  padding: 14px 10px 6px; letter-spacing: 0;
+}
+.cat:hover { color: var(--accent); }
+.cat .arr { font-size: 11px; color: var(--muted); width: 12px; }
+.group.hide { display: none; }
 aside a.item {
   display: block; padding: 7px 10px; border-radius: 8px; color: var(--fg); text-decoration: none; font-size: 13.5px;
 }
@@ -78,6 +86,7 @@ h3 { font-size: 13px; color: var(--muted); font-weight: 650; margin: 20px 0 8px;
 const nav = document.getElementById("nav");
 const main = document.getElementById("main");
 const q = document.getElementById("q");
+const closed = {};
 function filtered() {
   const s = q.value.trim().toLowerCase();
   if (!s) return TS_DOCS;
@@ -85,17 +94,35 @@ function filtered() {
 }
 function renderNav(id) {
   const list = filtered();
+  const searching = q.value.trim().length > 0;
   let html = "";
   let last = "";
   list.forEach(d => {
-    if (d.cat !== last) { html += "<div class='cat'>" + d.cat + "</div>"; last = d.cat; }
+    if (d.cat !== last) {
+      if (last) html += "</div>";
+      const off = !searching && closed[d.cat];
+      html += "<button type='button' class='cat" + (off ? " off" : "") + "' data-cat='" + d.cat + "'>" +
+        "<span class='arr'>" + (off ? "▸" : "▾") + "</span>" + d.cat + "</button>";
+      html += "<div class='group" + (off ? " hide" : "") + "'>";
+      last = d.cat;
+    }
     html += "<a class='item" + (d.id === id ? " on" : "") + "' href='#/" + d.id + "'>" + d.name + "</a>";
   });
+  if (last) html += "</div>";
   nav.innerHTML = html || "<div class='cat'>没有匹配</div>";
 }
+nav.addEventListener("click", (e) => {
+  const b = e.target.closest(".cat");
+  if (!b || !b.dataset.cat) return;
+  e.preventDefault();
+  const c = b.dataset.cat;
+  closed[c] = !closed[c];
+  renderNav((location.hash || "").replace(/^#\//, ""));
+});
 function show(id) {
   const d = TS_DOCS.find(x => x.id === id) || TS_DOCS[0];
   history.replaceState(null, "", "#/" + d.id);
+  if (d.cat) closed[d.cat] = false;
   renderNav(d.id);
   let params = "";
   if (d.params && d.params.length) {
