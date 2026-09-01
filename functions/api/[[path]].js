@@ -239,23 +239,6 @@ async function handlePresence(request) {
   return json({ error: "method" }, 405);
 }
 
-export class PresenceDO {
-  constructor(state, env) {
-    this.state = state;
-  }
-  async fetch(request) {
-    return handlePresenceDO(request, this.state.storage);
-  }
-}
-
-async function handlePresenceDO(request, storage) {
-  const saved = (await storage.get("devices")) || {};
-  globalThis.__tsDevs = saved;
-  const resp = await handlePresence(request);
-  await storage.put("devices", globalThis.__tsDevs || {});
-  return resp;
-}
-
 export class RoomDO {
   constructor(state, env) {
     this.state = state;
@@ -294,10 +277,6 @@ export async function onRequest(context) {
     return json({ ok: true, do: !!(env && env.ROOMS) });
   }
   if (parts[1] === "presence") {
-    if (env && env.PRESENCE) {
-      const id = env.PRESENCE.idFromName("all");
-      return env.PRESENCE.get(id).fetch(request);
-    }
     return handlePresence(request);
   }
   if (parts[1] !== "room" || !parts[2]) {

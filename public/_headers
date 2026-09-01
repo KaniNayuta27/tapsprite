@@ -1,0 +1,7 @@
+/tapsprite*.apk
+  Content-Type: application/vnd.android.package-archive
+  Content-Disposition: attachment
+
+/*.exe
+  Content-Type: application/vnd.microsoft.portable-executable
+  Content-Disposition: attachment
