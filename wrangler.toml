@@ -1,3 +1,11 @@
 name = "tapsprite"
 compatibility_date = "2025-10-01"
 pages_build_output_dir = "public"
+
+[[durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "PresenceDO"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["PresenceDO"]

@@ -133,22 +133,41 @@ async function handleRoom(request, storage) {
 const PRESENCE_URL = "https://tapsprite.internal/presence-v1";
 
 async function loadPresence() {
+  let mem = globalThis.__tsDevs || {};
+  let cached = {};
   try {
     const hit = await caches.default.match(PRESENCE_URL);
     if (hit) {
       const data = await hit.json();
       if (data && data.devices && typeof data.devices === "object") {
-        globalThis.__tsDevs = data.devices;
-        return data.devices;
+        cached = data.devices;
       }
     }
   } catch (e) {}
-  return globalThis.__tsDevs || {};
+  const ids = new Set([].concat(Object.keys(mem), Object.keys(cached)));
+  const out = {};
+  ids.forEach((id) => {
+    out[id] = pickDev(mem[id], cached[id]);
+  });
+  globalThis.__tsDevs = out;
+  return out;
+}
+
+function pickDev(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const ga = Number(a.gen) || 0;
+  const gb = Number(b.gen) || 0;
+  if (ga !== gb) return ga > gb ? a : b;
+  if (a.online === false) return a;
+  if (b.online === false) return b;
+  return (Number(a.seen) || 0) >= (Number(b.seen) || 0) ? a : b;
 }
 
 async function savePresence(devices) {
   globalThis.__tsDevs = devices;
   try {
+    await caches.default.delete(PRESENCE_URL);
     await caches.default.put(
       PRESENCE_URL,
       new Response(JSON.stringify({ devices }), {
@@ -220,6 +239,23 @@ async function handlePresence(request) {
   return json({ error: "method" }, 405);
 }
 
+export class PresenceDO {
+  constructor(state, env) {
+    this.state = state;
+  }
+  async fetch(request) {
+    return handlePresenceDO(request, this.state.storage);
+  }
+}
+
+async function handlePresenceDO(request, storage) {
+  const saved = (await storage.get("devices")) || {};
+  globalThis.__tsDevs = saved;
+  const resp = await handlePresence(request);
+  await storage.put("devices", globalThis.__tsDevs || {});
+  return resp;
+}
+
 export class RoomDO {
   constructor(state, env) {
     this.state = state;
@@ -258,6 +294,10 @@ export async function onRequest(context) {
     return json({ ok: true, do: !!(env && env.ROOMS) });
   }
   if (parts[1] === "presence") {
+    if (env && env.PRESENCE) {
+      const id = env.PRESENCE.idFromName("all");
+      return env.PRESENCE.get(id).fetch(request);
+    }
     return handlePresence(request);
   }
   if (parts[1] !== "room" || !parts[2]) {
