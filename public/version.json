@@ -2,8 +2,8 @@
   "versionCode": 71,
   "versionName": "0.9.47",
   "apk": "https://tapsprite.pages.dev/tapsprite0-9-47.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-47.exe",
-  "notes": "编辑器行号、保存/查找/替换/语法检测。",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-48.exe",
+  "notes": "Monaco 编辑器：折叠、查找、行号。",
   "apk_ver": "0.9.47",
-  "exe_ver": "1.1.47"
+  "exe_ver": "1.1.48"
 }
