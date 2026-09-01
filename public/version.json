@@ -1,9 +1,9 @@
 {
-  "versionCode": 62,
-  "versionName": "0.9.38",
-  "apk": "https://tapsprite.pages.dev/tapsprite0-9-38.apk",
+  "versionCode": 63,
+  "versionName": "0.9.39",
+  "apk": "https://tapsprite.pages.dev/tapsprite0-9-39.apk",
   "exe": "https://tapsprite.pages.dev/tapsprite1-1-36.exe",
-  "notes": "开关序号后到为准，不用轮询。",
-  "apk_ver": "0.9.38",
+  "notes": "每次开关立刻发出，间隔跟点击一样。",
+  "apk_ver": "0.9.39",
   "exe_ver": "1.1.36"
 }
