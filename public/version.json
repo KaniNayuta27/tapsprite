@@ -1,9 +1,9 @@
 {
-  "versionCode": 59,
-  "versionName": "0.9.35",
-  "apk": "https://tapsprite.pages.dev/tapsprite0-9-35.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-33.exe",
-  "notes": "手机主动取指令，不再反向连模拟器。",
-  "apk_ver": "0.9.35",
-  "exe_ver": "1.1.33"
+  "versionCode": 60,
+  "versionName": "0.9.36",
+  "apk": "https://tapsprite.pages.dev/tapsprite0-9-36.apk",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-34.exe",
+  "notes": "刷新会清掉已关掉的模拟器。",
+  "apk_ver": "0.9.36",
+  "exe_ver": "1.1.34"
 }
