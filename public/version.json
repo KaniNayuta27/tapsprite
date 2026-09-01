@@ -1,9 +1,9 @@
 {
-  "versionCode": 64,
-  "versionName": "0.9.40",
-  "apk": "https://tapsprite.pages.dev/tapsprite0-9-40.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-37.exe",
-  "notes": "已选设备后不再出现请选择；exe重启后自动重连。",
-  "apk_ver": "0.9.40",
-  "exe_ver": "1.1.37"
+  "versionCode": 65,
+  "versionName": "0.9.41",
+  "apk": "https://tapsprite.pages.dev/tapsprite0-9-41.apk",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-38.exe",
+  "notes": "刷新不再误删在线设备，去掉迟到握手刷屏。",
+  "apk_ver": "0.9.41",
+  "exe_ver": "1.1.38"
 }
