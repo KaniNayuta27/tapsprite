@@ -66,13 +66,13 @@ ol li { margin: 8px 0; }
       <h2>电脑客户端</h2>
       <p>Windows。下发、抓抓、截图。</p>
       <div class="ver" id="exeVer"></div>
-      <a class="btn" href="/tapsprite.exe">下载 tapsprite.exe</a>
+      <a class="btn" href="/tapsprite.exe" id="exeDl">下载 tapsprite.exe</a>
     </div>
     <div class="card">
       <h2>手机 App</h2>
       <p>Android / 模拟器。打开无障碍。</p>
       <div class="ver" id="apkVer"></div>
-      <a class="btn ghost" href="/tapsprite.apk">下载 tapsprite.apk</a>
+      <a class="btn ghost" href="/tapsprite0-9-31.apk" id="apkDl">下载 tapsprite0-9-31.apk</a>
     </div>
   </div>
   <div class="card row">
@@ -92,6 +92,18 @@ tsAuth.bind("f", "p", "e");
 fetch("/version.json").then(r => r.json()).then(v => {
   document.getElementById("exeVer").textContent = "当前 " + (v.exe_ver || "");
   document.getElementById("apkVer").textContent = "当前 " + (v.apk_ver || "");
+  if (v.exe) {
+    var p = v.exe.split("/").pop();
+    var a = document.getElementById("exeDl");
+    a.href = "/" + p;
+    a.textContent = "下载 " + p;
+  }
+  if (v.apk) {
+    var p = v.apk.split("/").pop();
+    var a = document.getElementById("apkDl");
+    a.href = "/" + p;
+    a.textContent = "下载 " + p;
+  }
 }).catch(() => {});
 </script>
 </body>
