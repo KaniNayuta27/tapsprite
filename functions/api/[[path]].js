@@ -154,7 +154,7 @@ async function savePresence(devices) {
       new Response(JSON.stringify({ devices }), {
         headers: {
           "content-type": "application/json",
-          "cache-control": "max-age=120",
+          "cache-control": "max-age=3",
         },
       })
     );
@@ -169,7 +169,7 @@ async function handlePresence(request) {
     for (const id of Object.keys(devices)) {
       const d = devices[id];
       if (!d || d.online === false) continue;
-      if (now - (Number(d.seen) || 0) > 15000) continue;
+      if (now - (Number(d.seen) || 0) > 8000) continue;
       out.push({
         id,
         name: d.name || id,
