@@ -1,9 +1,9 @@
 {
-  "versionCode": 73,
-  "versionName": "0.9.49",
-  "apk": "https://tapsprite.pages.dev/tapsprite0-9-49.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-53.exe",
-  "notes": "握手写进日志；刷新不再误踢在线手机。",
-  "apk_ver": "0.9.49",
-  "exe_ver": "1.1.53"
+  "versionCode": 74,
+  "versionName": "0.9.50",
+  "apk": "https://tapsprite.pages.dev/tapsprite0-9-50.apk",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-54.exe",
+  "notes": "真机扫网段找电脑；防火墙放行 UDP；握手打日志。",
+  "apk_ver": "0.9.50",
+  "exe_ver": "1.1.54"
 }
