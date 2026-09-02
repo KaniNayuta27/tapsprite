@@ -1,9 +1,9 @@
 {
-  "versionCode": 82,
-  "versionName": "0.9.58",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/main/public/tapsprite0-9-58.apk",
+  "versionCode": 83,
+  "versionName": "0.9.59",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/main/public/tapsprite0-9-59.apk",
   "exe": "https://github.com/KaniNayuta27/tapsprite/raw/main/public/tapsprite1-1-62.exe",
-  "notes": "去掉联机状态行，连接按钮与已开启对齐。",
-  "apk_ver": "0.9.58",
+  "notes": "下发脚本立刻刷新界面；ip 挪到电脑联机后面。",
+  "apk_ver": "0.9.59",
   "exe_ver": "1.1.62"
 }
