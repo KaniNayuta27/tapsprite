@@ -1,9 +1,9 @@
 {
-  "versionCode": 74,
-  "versionName": "0.9.50",
-  "apk": "https://tapsprite.pages.dev/tapsprite0-9-50.apk",
+  "versionCode": 75,
+  "versionName": "0.9.51",
+  "apk": "https://tapsprite.pages.dev/tapsprite0-9-51.apk",
   "exe": "https://tapsprite.pages.dev/tapsprite1-1-55.exe",
-  "notes": "修正版本号。",
-  "apk_ver": "0.9.50",
+  "notes": "A11yShot 无障碍截屏。",
+  "apk_ver": "0.9.51",
   "exe_ver": "1.1.55"
 }
