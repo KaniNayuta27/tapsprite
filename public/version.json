@@ -1,9 +1,9 @@
 {
-  "versionCode": 79,
-  "versionName": "0.9.55",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/main/public/tapsprite0-9-55.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/main/public/tapsprite1-1-59.exe",
-  "notes": "显示默认网关对应的本机 IP。扫描增强仍未改。",
-  "apk_ver": "0.9.55",
-  "exe_ver": "1.1.59"
+  "versionCode": 80,
+  "versionName": "0.9.56",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/main/public/tapsprite0-9-56.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/main/public/tapsprite1-1-60.exe",
+  "notes": "自动续扫 + 连上后填电脑 IP + 连接按钮对齐。",
+  "apk_ver": "0.9.56",
+  "exe_ver": "1.1.60"
 }
