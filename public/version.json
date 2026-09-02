@@ -1,9 +1,9 @@
 {
-  "versionCode": 72,
-  "versionName": "0.9.48",
-  "apk": "https://tapsprite.pages.dev/tapsprite0-9-48.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-52.exe",
-  "notes": "TracePrint 输出到电脑日志。",
-  "apk_ver": "0.9.48",
-  "exe_ver": "1.1.52"
+  "versionCode": 73,
+  "versionName": "0.9.49",
+  "apk": "https://tapsprite.pages.dev/tapsprite0-9-49.apk",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-53.exe",
+  "notes": "握手写进日志；刷新不再误踢在线手机。",
+  "apk_ver": "0.9.49",
+  "exe_ver": "1.1.53"
 }
