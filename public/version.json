@@ -2,8 +2,8 @@
   "versionCode": 74,
   "versionName": "0.9.50",
   "apk": "https://tapsprite.pages.dev/tapsprite0-9-50.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-54.exe",
-  "notes": "真机扫网段找电脑；防火墙放行 UDP；握手打日志。",
+  "exe": "https://tapsprite.pages.dev/tapsprite1-1-55.exe",
+  "notes": "修正版本号。",
   "apk_ver": "0.9.50",
-  "exe_ver": "1.1.54"
+  "exe_ver": "1.1.55"
 }
