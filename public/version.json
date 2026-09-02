@@ -1,9 +1,9 @@
 {
-  "versionCode": 75,
-  "versionName": "0.9.51",
-  "apk": "https://tapsprite.pages.dev/tapsprite0-9-51.apk",
-  "exe": "https://tapsprite.pages.dev/tapsprite1-1-55.exe",
-  "notes": "A11yShot 无障碍截屏。",
-  "apk_ver": "0.9.51",
-  "exe_ver": "1.1.55"
+  "versionCode": 76,
+  "versionName": "0.9.52",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/main/public/tapsprite0-9-52.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/main/public/tapsprite1-1-56.exe",
+  "notes": "脚本行号与横向滚动；下发不再转义 >。",
+  "apk_ver": "0.9.52",
+  "exe_ver": "1.1.56"
 }
