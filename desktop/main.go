@@ -28,7 +28,7 @@ var webFS embed.FS
 const (
 	httpPort = 18766
 	udpPort  = 18766
-	version  = "1.1.68"
+	version  = "1.1.69"
 )
 
 type Device struct {
@@ -108,6 +108,7 @@ func main() {
 	mux.HandleFunc("/api/savescript", handleSaveScript)
 	mux.HandleFunc("/api/slot", handleSlot)
 	mux.HandleFunc("/api/undo", handleUndo)
+	mux.HandleFunc("/api/findtest", handleFindTest)
 	mux.HandleFunc("/api/selfupdate", handleSelfUpdate)
 	mux.HandleFunc("/api/updatestatus", handleUpdateStatus)
 	mux.HandleFunc("/api/quit", handleQuit)
@@ -647,6 +648,73 @@ func handleSlot(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = slotsCopy
 	writeJSON(w, map[string]any{"ok": true, "slots": slotsCopy[:]})
+}
+
+
+func handleFindTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodOptions {
+		http.Error(w, "method", 405)
+		return
+	}
+	var body struct {
+		Kind   string  `json:"kind"`
+		L      int     `json:"l"`
+		T      int     `json:"t"`
+		R      int     `json:"r"`
+		B      int     `json:"b"`
+		First  string  `json:"first"`
+		Offset string  `json:"offset"`
+		Dir    int     `json:"dir"`
+		Sim    float64 `json:"sim"`
+		Path   string  `json:"path"`
+		Delta  string  `json:"delta"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "err": "bad json"})
+		return
+	}
+	srv.mu.Lock()
+	pngBytes := append([]byte{}, srv.shotPNG...)
+	srv.mu.Unlock()
+	if len(pngBytes) == 0 {
+		writeJSON(w, map[string]any{"ok": false, "err": "请先截一帧", "x": -1, "y": -1})
+		return
+	}
+	img, err := png.Decode(bytes.NewReader(pngBytes))
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "err": "截图解码失败", "x": -1, "y": -1})
+		return
+	}
+	kind := strings.ToLower(strings.TrimSpace(body.Kind))
+	sim := body.Sim
+	if sim == 0 {
+		sim = 0.9
+	}
+	switch kind {
+	case "multicolor":
+		x, y := findMultiColorInImage(img, body.L, body.T, body.R, body.B, body.First, body.Offset, sim, body.Dir)
+		writeJSON(w, map[string]any{"ok": true, "x": x, "y": y, "result": fmt.Sprintf("%d,%d", x, y)})
+	case "color":
+		x, y := findColorInImage(img, body.L, body.T, body.R, body.B, body.First, sim, body.Dir)
+		writeJSON(w, map[string]any{"ok": true, "x": x, "y": y, "result": fmt.Sprintf("%d,%d", x, y)})
+	case "cmpex":
+		ok := cmpColorExInImage(img, body.First, sim)
+		res := "0"
+		if ok {
+			res = "1"
+		}
+		writeJSON(w, map[string]any{"ok": true, "match": ok, "result": res, "x": -1, "y": -1})
+	case "pic":
+		x, y, msg := findPicInImage(img, body.L, body.T, body.R, body.B, body.Path, sim)
+		out := map[string]any{"ok": msg == "", "x": x, "y": y, "result": fmt.Sprintf("%d,%d", x, y)}
+		if msg != "" {
+			out["ok"] = false
+			out["err"] = msg
+		}
+		writeJSON(w, out)
+	default:
+		writeJSON(w, map[string]any{"ok": false, "err": "未知 kind"})
+	}
 }
 
 func handleUndo(w http.ResponseWriter, r *http.Request) {

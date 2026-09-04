@@ -19,9 +19,9 @@
 - 手机本地控制台 HTTP：**18765**（`ConsoleServer`）
 - 电脑 PC 控制台 HTTP + UDP 发现：**18766**（监听 **`0.0.0.0`**，手机可扫局域网 IP）
 
-## PC 壳：进程内嵌 WebView2（1.1.68）
+## PC 壳：进程内嵌 WebView2（1.1.69）
 
-Rebuild **1.1.68** 使用 [`github.com/jchv/go-webview2`](https://github.com/jchv/go-webview2) **进程内嵌** Microsoft Edge WebView2 窗口（Title=`触控精灵 v1.1.68`，1280×800），导航到 `http://127.0.0.1:18766/`，主线程 `Run()` 消息循环。
+Rebuild **1.1.69** 使用 [`github.com/jchv/go-webview2`](https://github.com/jchv/go-webview2) **进程内嵌** Microsoft Edge WebView2 窗口（Title=`触控精灵 v1.1.69`，1280×800），导航到 `http://127.0.0.1:18766/`，主线程 `Run()` 消息循环。
 
 **硬禁止**（已删除）：`chrome.exe` / `msedge.exe` / `--app=` / `openBrowser` / `rundll32` 开页，以及「已用应用模式打开 …」这类日志。
 
@@ -56,10 +56,10 @@ cd desktop
 go test ./...
 go build -o dist/tapsprite .
 # Windows 成品（本机 Linux 可交叉）：
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-H windowsgui -s -w" -o dist/tapsprite1-1-68.exe .
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-H windowsgui -s -w" -o dist/tapsprite1-1-69.exe .
 ```
 
-产物：`desktop/dist/tapsprite1-1-68.exe`（**不会**覆盖 `public/` 下历史 exe）。
+产物：`desktop/dist/tapsprite1-1-69.exe`（**不会**覆盖 `public/` 下历史 exe）。
 
 ### 联机要点
 
@@ -94,7 +94,7 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-H windowsgui -s -w" 
 
 ## 测试步骤
 
-1. PC 运行 `tapsprite1-1-68.exe` → 应弹出 **内嵌 WebView2 独立窗**（不是 Chrome/Edge `--app=`，也不是普通浏览器标签）。
+1. PC 运行 `tapsprite1-1-69.exe` → 应弹出 **内嵌 WebView2 独立窗**（不是 Chrome/Edge `--app=`，也不是普通浏览器标签）。
 2. 若首次启动，确认已装 WebView2 Runtime；确认 Windows 防火墙允许 18766；侧栏状态栏会显示本机局域网 IP。
 3. 手机装 `android/dist/tapsprite0-9-62.apk`，开无障碍等权限，打开「电脑联机」（可手动填 PC IP）。
 4. 设备出现在 PC 下拉框后，下发脚本 / 点截图，确认画面刷新。
