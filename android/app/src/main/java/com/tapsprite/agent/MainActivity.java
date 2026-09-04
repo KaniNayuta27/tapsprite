@@ -32,6 +32,8 @@ import java.util.List;
 public class MainActivity extends Activity {
     private static final int REQ_CAPTURE = 91;
     private static MainActivity live;
+    static volatile boolean pendingCapturePrompt;
+    static volatile boolean pendingShotAfterCapture;
     private TextView a11yStatus;
     private Switch awakeSwitch;
     private boolean captureAsking;
@@ -82,6 +84,29 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Bring App to front and pop the system MediaProjection dialog (抓抓 / LAN shot). */
+    static void askCaptureForShot() {
+        pendingShotAfterCapture = true;
+        pendingCapturePrompt = true;
+        final android.content.Context ctx = App.ctx;
+        if (ctx == null) {
+            return;
+        }
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Intent i = new Intent(ctx, MainActivity.class);
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    i.putExtra("request_capture", true);
+                    ctx.startActivity(i);
+                } catch (Exception e) {
+                    AppState.log("无法弹出截屏授权：" + e.getMessage());
+                }
+            }
+        });
+    }
+
     @Override // android.app.Activity
     protected void onCreate(Bundle bundle) {
         super.onCreate(bundle);
@@ -92,15 +117,37 @@ public class MainActivity extends Activity {
     }
 
     @Override // android.app.Activity
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        consumeCapturePrompt();
+    }
+
+    @Override // android.app.Activity
     protected void onResume() {
         super.onResume();
         live = this;
         refresh();
+        consumeCapturePrompt();
         if (AppState.debugToPc) {
             AppState.ensureServer();
         }
         this.tick.removeCallbacks(this.tickRun);
         this.tick.postDelayed(this.tickRun, 400L);
+    }
+
+    void consumeCapturePrompt() {
+        Intent it = getIntent();
+        boolean extra = it != null && it.getBooleanExtra("request_capture", false);
+        if (extra) {
+            it.removeExtra("request_capture");
+        }
+        if (pendingCapturePrompt || extra) {
+            pendingCapturePrompt = false;
+            if (!CaptureService.ready) {
+                requestCapture();
+            }
+        }
     }
 
     @Override // android.app.Activity
@@ -914,7 +961,26 @@ public class MainActivity extends Activity {
             }
             AppState.log("已授权截屏");
             Toast.makeText(this, "截屏已开，找色可用", 0).show();
+            if (pendingShotAfterCapture) {
+                final Handler h = new Handler(Looper.getMainLooper());
+                h.postDelayed(new Runnable() {
+                    int tries;
+                    @Override
+                    public void run() {
+                        if (CaptureService.ready) {
+                            pendingShotAfterCapture = false;
+                            LanLink.sendShot();
+                        } else if (tries++ < 20) {
+                            h.postDelayed(this, 200L);
+                        } else {
+                            pendingShotAfterCapture = false;
+                            AppState.log("截屏授权后仍未就绪");
+                        }
+                    }
+                }, 400L);
+            }
         } else {
+            pendingShotAfterCapture = false;
             AppState.log("未授权截屏，找色会失败");
             Toast.makeText(this, "没有截屏权限，FindColor 会失败", 1).show();
         }

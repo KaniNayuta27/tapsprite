@@ -28,7 +28,9 @@ var webFS embed.FS
 const (
 	httpPort = 18766
 	udpPort  = 18766
-	version  = "1.1.73"
+	version  = "1.1.74"
+	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
+	deviceLiveFor = 8 * time.Second
 )
 
 type Device struct {
@@ -291,20 +293,31 @@ func handleBye(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true})
 }
 
+func deviceLiveLocked(d *Device) bool {
+	return d != nil && time.Since(d.Seen) < deviceLiveFor
+}
+
 func handleStatus(w http.ResponseWriter, r *http.Request) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	devs := []map[string]any{}
+	now := time.Now()
 	for _, d := range srv.devices {
+		if now.Sub(d.Seen) >= deviceLiveFor {
+			continue
+		}
 		devs = append(devs, map[string]any{
 			"id": d.ID, "name": d.Name, "emu": d.Emu, "sel": d.ID == srv.selected,
-			"a11y": d.A11y, "cap": d.Cap,
+			"a11y": d.A11y, "cap": d.Cap, "online": true,
 		})
 	}
 	slots := exportSlotsLocked()
 	ip := ""
-	if d := srv.devices[srv.selected]; d != nil {
-		ip = d.Host
+	var a11y any
+	sel := srv.devices[srv.selected]
+	if deviceLiveLocked(sel) {
+		ip = sel.Host
+		a11y = sel.A11y
 	}
 	lanIP := srv.lanIP
 	writeJSON(w, map[string]any{
@@ -312,6 +325,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		"sub":      srv.sub,
 		"lanIP":    lanIP,
 		"ip":       ip,
+		"a11y":     a11y,
 		"devices":  devs,
 		"selected": srv.selected,
 		"newLogs":  append([]string{}, srv.logs...),
@@ -338,13 +352,35 @@ func handleDevice(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true})
 }
 
+func parseBoolQuery(v string) (bool, bool) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes":
+		return true, true
+	case "0", "false", "no":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
 func handlePull(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
+	a11y, a11yOK := parseBoolQuery(r.URL.Query().Get("a11y"))
+	capv, capOK := parseBoolQuery(r.URL.Query().Get("cap"))
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
 	if id == "" || srv.devices[id] == nil {
 		writeJSON(w, map[string]any{"hello": true})
 		return
+	}
+	d := srv.devices[id]
+	d.Seen = time.Now()
+	d.Online = true
+	if a11yOK {
+		d.A11y = a11y
+	}
+	if capOK {
+		d.Cap = capv
 	}
 	q := srv.queues[id]
 	if len(q) == 0 {
@@ -426,12 +462,26 @@ func handleControl(w http.ResponseWriter, r *http.Request) {
 func handleShot(w http.ResponseWriter, r *http.Request) {
 	srv.mu.Lock()
 	id := srv.selected
+	d := srv.devices[id]
+	live := deviceLiveLocked(d)
+	capOK := live && d.Cap
 	srv.mu.Unlock()
-	if id == "" {
-		writeJSON(w, map[string]any{"notice": "没有已联机设备", "noticeAt": time.Now().UnixMilli()})
+	if id == "" || !live {
+		at := time.Now().UnixMilli()
+		writeJSON(w, map[string]any{"notice": "没有已联机设备", "noticeAt": at})
 		return
 	}
 	enqueue(id, map[string]any{"type": "control", "action": "shot"})
+	if !capOK {
+		msg := "未开截屏权限"
+		at := time.Now().UnixMilli()
+		srv.mu.Lock()
+		srv.notice = msg
+		srv.noticeAt = at
+		srv.mu.Unlock()
+		writeJSON(w, map[string]any{"ok": true, "noperm": true, "notice": msg, "noticeAt": at})
+		return
+	}
 	writeJSON(w, map[string]any{"ok": true})
 }
 

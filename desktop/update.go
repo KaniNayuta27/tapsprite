@@ -63,7 +63,12 @@ func getUpdate() updateStatus {
 	return updState
 }
 
-func downloadsDir() string {
+var (
+	downloadsDirFn   = defaultDownloadsDir
+	executablePathFn = os.Executable
+)
+
+func defaultDownloadsDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
 		home = "."
@@ -71,6 +76,10 @@ func downloadsDir() string {
 	dir := filepath.Join(home, "Downloads")
 	_ = os.MkdirAll(dir, 0o755)
 	return dir
+}
+
+func downloadsDir() string {
+	return downloadsDirFn()
 }
 
 func httpClient() *http.Client {
@@ -399,6 +408,7 @@ func handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
 			writeDesktopLog(msg)
 			return
 		}
+		cleanupOldDownloads("exe", dest)
 		time.Sleep(400 * time.Millisecond)
 		quitWebView()
 		os.Exit(0)
@@ -563,7 +573,7 @@ func handleFetchApk(w http.ResponseWriter, r *http.Request) {
 		got, total = apkState.Got, apkState.Total
 		apkMu.Unlock()
 		setUpdate("idle", 100, got, total, "APK 下载完成")
-		go cleanupOldDownloads("apk", dest)
+		cleanupOldDownloads("apk", dest)
 	}()
 }
 
@@ -637,77 +647,117 @@ func handleApkFile(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", fi.Size()))
 	}
 	_, _ = io.Copy(w, f)
+	go cleanupOldDownloads("apk", path)
 }
 
-// cleanupOldDownloads keeps only the newest tapsprite*.{exe|apk} (or keepPath), deletes older matches.
+// cleanupOldDownloads keeps only the newest tapsprite*.{exe|apk} (or keepPath).
+// The running exe is never deleted, but it is still treated as a keep candidate
+// so other old packages in Downloads are removed.
 func cleanupOldDownloads(kind, keepPath string) {
 	dir := downloadsDir()
-	pat := "tapsprite*.exe"
+	ext := ".exe"
 	if kind == "apk" {
-		pat = "tapsprite*.apk"
+		ext = ".apk"
 	}
-	matches, err := filepath.Glob(filepath.Join(dir, pat))
+	entries, err := os.ReadDir(dir)
 	if err != nil {
+		writeDesktopLog("cleanup: 无法读取 " + dir + ": " + err.Error())
 		return
 	}
-	selfPath := ""
-	if exe, e := os.Executable(); e == nil {
-		selfPath, _ = filepath.Abs(exe)
+	keepAbs := ""
+	if strings.TrimSpace(keepPath) != "" {
+		keepAbs, _ = filepath.Abs(keepPath)
 	}
-	keepAbs, _ := filepath.Abs(keepPath)
+	selfAbs := ""
+	if kind == "exe" {
+		if exe, e := executablePathFn(); e == nil {
+			selfAbs, _ = filepath.Abs(exe)
+		}
+	}
 	type item struct {
 		path string
+		abs  string
 		mod  time.Time
 	}
 	var list []item
-	for _, m := range matches {
-		abs, _ := filepath.Abs(m)
-		// never delete currently running exe
-		if selfPath != "" && strings.EqualFold(abs, selfPath) {
+	for _, e := range entries {
+		if e.IsDir() {
 			continue
 		}
-		fi, err := os.Stat(m)
-		if err != nil || fi.IsDir() {
+		name := e.Name()
+		low := strings.ToLower(name)
+		if !strings.HasPrefix(low, "tapsprite") || !strings.HasSuffix(low, ext) {
 			continue
 		}
-		list = append(list, item{path: m, mod: fi.ModTime()})
+		p := filepath.Join(dir, name)
+		abs, _ := filepath.Abs(p)
+		info, ierr := e.Info()
+		if ierr != nil {
+			continue
+		}
+		list = append(list, item{path: p, abs: abs, mod: info.ModTime()})
 	}
 	if len(list) == 0 {
 		return
 	}
-	// pick newest by ModTime; prefer keepPath if set
-	best := list[0]
-	for _, it := range list[1:] {
-		if it.mod.After(best.mod) {
-			best = it
+	inList := func(abs string) bool {
+		if abs == "" {
+			return false
 		}
-	}
-	if keepAbs != "" {
 		for _, it := range list {
-			abs, _ := filepath.Abs(it.path)
-			if strings.EqualFold(abs, keepAbs) {
-				best = it
-				break
+			if strings.EqualFold(it.abs, abs) {
+				return true
 			}
 		}
+		return false
 	}
-	bestAbs, _ := filepath.Abs(best.path)
+	keep := map[string]bool{}
+	if inList(keepAbs) {
+		keep[strings.ToLower(keepAbs)] = true
+	}
+	if inList(selfAbs) {
+		keep[strings.ToLower(selfAbs)] = true
+	}
+	if len(keep) == 0 {
+		best := list[0]
+		for _, it := range list[1:] {
+			if it.mod.After(best.mod) {
+				best = it
+			}
+		}
+		keep[strings.ToLower(best.abs)] = true
+	}
 	for _, it := range list {
-		abs, _ := filepath.Abs(it.path)
-		if strings.EqualFold(abs, bestAbs) {
+		if keep[strings.ToLower(it.abs)] {
 			continue
 		}
-		_ = os.Remove(it.path)
+		removeDownloadBestEffort(it.path)
 	}
+}
+
+func removeDownloadBestEffort(path string) {
+	var err error
+	for i := 0; i < 5; i++ {
+		err = os.Remove(path)
+		if err == nil || os.IsNotExist(err) {
+			writeDesktopLog("cleanup: 已删除旧包 " + filepath.Base(path))
+			return
+		}
+		time.Sleep(time.Duration(250*(i+1)) * time.Millisecond)
+	}
+	writeDesktopLog("cleanup: 未能删除 " + filepath.Base(path) + ": " + err.Error())
 }
 
 func scheduleStartupCleanup() {
 	go func() {
-		time.Sleep(4 * time.Second)
 		self := ""
-		if exe, err := os.Executable(); err == nil {
+		if exe, err := executablePathFn(); err == nil {
 			self, _ = filepath.Abs(exe)
 		}
+		time.Sleep(4 * time.Second)
+		cleanupOldDownloads("exe", self)
+		// Second pass: previous exe may still have been locked on first try.
+		time.Sleep(8 * time.Second)
 		cleanupOldDownloads("exe", self)
 	}()
 }

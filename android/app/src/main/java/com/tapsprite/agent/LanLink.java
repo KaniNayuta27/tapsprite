@@ -18,6 +18,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -126,9 +127,37 @@ public final class LanLink {
     }
 
     static void onCaptureChanged() {
-        if (AppState.debugToPc) {
-            reannounce();
+        pushHello();
+    }
+
+    static void onA11yChanged() {
+        pushHello();
+    }
+
+    /** Lightweight /api/hello so PC a11y/cap flips without a full rediscovery scan. */
+    static void pushHello() {
+        if (!AppState.debugToPc) {
+            return;
         }
+        final String host = pcHost.length() > 0 ? pcHost : lastHost;
+        if (host == null || host.length() == 0) {
+            hello();
+            return;
+        }
+        final long j = gen.get();
+        if (j <= 0) {
+            hello();
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                byte[] body = payload(true, j);
+                if (post(host, "/api/hello", body)) {
+                    onHelloOk(host, j);
+                }
+            }
+        }, "tapsprite-hello-push").start();
     }
 
     /* JADX INFO: Access modifiers changed from: private */
@@ -542,7 +571,7 @@ public final class LanLink {
                             if (str == null || str.length() == 0) {
                                 LanLink.sleepQuiet(400);
                             } else {
-                                String str2 = LanLink.get(str, "/api/pull?id=" + (AppState.deviceId == null ? "" : AppState.deviceId));
+                                String str2 = LanLink.get(str, LanLink.pullPath());
                                 if (str2 == null) {
                                     AppState.log("电脑暂时连不上，重新握手");
                                     LanLink.reannounce();
@@ -898,6 +927,17 @@ public final class LanLink {
         }
     }
 
+    static String pullPath() {
+        String id = AppState.deviceId == null ? "" : AppState.deviceId;
+        try {
+            id = URLEncoder.encode(id, "UTF-8");
+        } catch (Exception e) {
+        }
+        return "/api/pull?id=" + id
+                + "&a11y=" + (AppState.auto != null ? "1" : "0")
+                + "&cap=" + (CaptureService.ready ? "1" : "0");
+    }
+
     static void sendShot() {
         new Thread(new Runnable() { // from class: com.tapsprite.agent.LanLink.8
             @Override // java.lang.Runnable
@@ -905,8 +945,9 @@ public final class LanLink {
                 int i;
                 byte[] bArr;
                 if (!CaptureService.ready) {
-                    AppState.log("截屏权限未开");
-                    LanLink.notifyPc("当前设备未开截屏权限。请在 App 首页点开启，并确认系统弹窗。");
+                    AppState.log("截屏权限未开，弹出系统授权");
+                    LanLink.notifyPc("未开截屏权限");
+                    MainActivity.askCaptureForShot();
                     return;
                 }
                 AppState.log("开始截图…");

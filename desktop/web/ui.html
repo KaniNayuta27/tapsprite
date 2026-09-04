@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.69</title>
+<title>触控精灵 v1.1.74</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -63,8 +63,18 @@ aside {
 .stat {
   background: #f7f5ff; border-radius: var(--radius-lg); padding: 14px 16px;
   font-size: 12px; color: var(--muted);
+  flex: none;
 }
 .stat b { display: block; color: var(--fg); font-size: 13px; font-weight: 650; margin-bottom: 4px; }
+.stat-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.stat-line #stSub { min-width: 0; }
+#stA11y { font-weight: 650; }
+#stA11y.on { color: var(--ok); }
+#stA11y.off { color: #b42318; }
+.btn.mini {
+  height: 28px; line-height: 28px; font-size: 11px; padding: 0 12px; min-width: 0;
+  margin-top: 10px;
+}
 .devbox { margin: 0 0 14px; }
 .devbox label { display: block; font-size: 11px; color: var(--muted); font-weight: 650; letter-spacing: .12em; margin-bottom: 6px; }
 .devrow { display: flex; gap: 8px; align-items: center; }
@@ -179,6 +189,11 @@ textarea {
 .stage {
   background: #111018; overflow: auto; height: calc(100vh - 196px);
   position: relative; cursor: crosshair; border-radius: 0; user-select: none;
+}
+.shot-hint {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  z-index: 3; pointer-events: none; padding: 12px 16px; border-radius: 12px;
+  background: #3a1730; color: #ffe8ea; font: 650 13px var(--font); white-space: nowrap;
 }
 #shot { image-rendering: pixelated; transform-origin: 0 0; display: block; -webkit-user-drag: none; user-select: none; pointer-events: none; }
 .slots { display: flex; flex-direction: column; gap: 8px; }
@@ -306,7 +321,7 @@ textarea {
 </head>
 <body>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.69</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.74</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -320,7 +335,14 @@ textarea {
       </button>
     </div>
   </div>
-  <div class="stat"><b id="stTitle">正在连接</b><span id="stSub">MQTT</span></div>
+  <div class="stat">
+    <b id="stTitle">正在连接</b>
+    <div class="stat-line">
+      <span id="stSub"></span>
+      <span id="stA11y"></span>
+    </div>
+    <button type="button" class="btn ghost mini" id="upd">检查更新</button>
+  </div>
 </aside>
 <main>
   <section id="page-home">
@@ -346,7 +368,6 @@ textarea {
         <button class="btn ghost" id="sendRun">发送并运行</button>
         <button class="btn ghost" id="start">开始</button>
         <button class="btn ghost" id="stop">停止</button>
-        <button class="btn ghost" id="upd">检查更新</button>
       </div>
       <div class="log" id="log" tabindex="0"></div>
     </div>
@@ -364,7 +385,7 @@ textarea {
       <button class="btn ghost" id="saveAsBtn" style="display:none">自定义位置</button>
     </div>
     <div class="stage-wrap">
-      <div class="stage" id="stage"><img id="shot" alt=""/><div class="cropbox" id="cropbox">
+      <div class="stage" id="stage"><div id="shotHint" class="shot-hint" hidden>未开截屏权限</div><img id="shot" alt=""/><div class="cropbox" id="cropbox">
         <i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i>
         <i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i>
       </div><div class="selbox" id="selbox"></div></div>
@@ -486,6 +507,7 @@ function api(path, body) {
 function toast(msg, kind) {
   const el = document.getElementById("toast");
   if (!el || !msg) return;
+  toast._last = msg;
   el.textContent = msg;
   el.className = kind || "warn";
   el.classList.add("on");
@@ -547,13 +569,20 @@ document.getElementById("upd").onclick = async () => {
     showUpdateBar({ phase: "error", percent: 0, msg: "检查失败 " + (e && e.message ? e.message : e) });
   }
 };
+function showShotPermHint(on) {
+  const el = document.getElementById("shotHint");
+  if (!el) return;
+  el.hidden = !on;
+}
 document.getElementById("shotBtn").onclick = async () => {
   expectingShot = true;
+  showShotPermHint(false);
   const r = await api("/api/shot", {});
-  if (r && r.notice) {
+  if (r && (r.noperm || r.notice)) {
     expectingShot = false;
-    toast(r.notice);
+    toast(r.notice || "未开截屏权限");
     if (r.noticeAt) window._noticeAt = r.noticeAt;
+    if (r.noperm) showShotPermHint(true);
   }
 };
 document.getElementById("saveBtn").onclick = async () => {
@@ -634,6 +663,7 @@ document.getElementById("rotR").onclick = () => api("/api/rotate", { dir: "cw" }
 async function refreshShot(keepZoom) {
   const s = await fetch("/api/frame").then(r => r.json());
   if (!s.b64) return;
+  showShotPermHint(false);
   shot.src = "data:image/png;base64," + s.b64;
   if (!keepZoom) {
     zoom = 1;
@@ -987,10 +1017,28 @@ async function tick() {
   try {
   const s = await fetch("/api/status").then(r => r.json()).catch(() => ({}));
   document.getElementById("stTitle").textContent = s.status || document.getElementById("stTitle").textContent;
-  if (s.ip) {
-    document.getElementById("stSub").textContent = "ip: " + s.ip;
+  if (s.version) {
+    const sm = document.querySelector(".brand small");
+    if (sm) sm.textContent = "TAPSPRITE PC · v" + s.version;
+    document.title = "触控精灵 v" + s.version;
+  }
+  if (s.lanIP) {
+    document.getElementById("stSub").textContent = s.lanIP;
   } else {
     document.getElementById("stSub").textContent = s.sub || "";
+  }
+  const a11yEl = document.getElementById("stA11y");
+  if (a11yEl) {
+    if (s.a11y === true) {
+      a11yEl.textContent = "无障碍已开";
+      a11yEl.className = "on";
+    } else if (s.a11y === false) {
+      a11yEl.textContent = "无障碍未开";
+      a11yEl.className = "off";
+    } else {
+      a11yEl.textContent = "";
+      a11yEl.className = "";
+    }
   }
   if (s.newLogs && s.logCount > (window._lc || 0)) {
     const n = s.logCount - (window._lc || 0);
@@ -1016,7 +1064,7 @@ async function tick() {
   renderDevs(s);
   if (s.notice && s.noticeAt && s.noticeAt !== window._noticeAt) {
     window._noticeAt = s.noticeAt;
-    toast(s.notice);
+    if (s.notice !== toast._last) toast(s.notice);
   }
   if (s.update) showUpdateBar(s.update);
   } finally { _tickBusy = false; }

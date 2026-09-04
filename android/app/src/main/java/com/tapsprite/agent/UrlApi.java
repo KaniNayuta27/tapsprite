@@ -133,7 +133,7 @@ public final class UrlApi {
         conn.setReadTimeout(TIMEOUT_MS);
         conn.setInstanceFollowRedirects(true);
         conn.setRequestMethod(method);
-        conn.setRequestProperty("User-Agent", "TapSprite/0.9.60");
+        conn.setRequestProperty("User-Agent", "TapSprite/0.9.65");
         if ("POST".equals(method)) {
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
         }

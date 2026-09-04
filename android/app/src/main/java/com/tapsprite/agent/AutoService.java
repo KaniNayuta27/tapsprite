@@ -38,7 +38,7 @@ public class AutoService extends AccessibilityService {
         super.onServiceConnected();
         AppState.auto = this;
         AppState.log("无障碍服务已连接");
-        LanLink.hello();
+        LanLink.onA11yChanged();
     }
 
     public static boolean reconnect() {
@@ -90,11 +90,21 @@ public class AutoService extends AccessibilityService {
     }
 
     @Override // android.app.Service
+    public boolean onUnbind(android.content.Intent intent) {
+        if (AppState.auto == this) {
+            AppState.auto = null;
+        }
+        LanLink.onA11yChanged();
+        return super.onUnbind(intent);
+    }
+
+    @Override // android.app.Service
     public void onDestroy() {
         if (AppState.auto == this) {
             AppState.auto = null;
         }
         super.onDestroy();
+        LanLink.onA11yChanged();
     }
 
     public void pressKey(String str) {

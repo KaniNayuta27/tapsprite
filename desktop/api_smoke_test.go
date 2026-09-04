@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHelloPullProtocol(t *testing.T) {
@@ -77,3 +78,114 @@ func TestHelloPullProtocol(t *testing.T) {
 		t.Fatalf("must not wrap under cmd: %s", raw)
 	}
 }
+
+func resetSrv() {
+	srv = &Server{
+		devices: map[string]*Device{},
+		queues:  map[string][]json.RawMessage{},
+		status:  "test",
+		sub:     "sub",
+		lanIP:   "192.168.1.10",
+	}
+}
+
+func TestPullUpdatesA11yAndStatus(t *testing.T) {
+	resetSrv()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/hello", handleHello)
+	mux.HandleFunc("/api/pull", handlePull)
+	mux.HandleFunc("/api/status", handleStatus)
+
+	body := `{"id":"dev1","name":"phone","a11y":true,"cap":true,"emu":false,"ips":"192.168.1.2","online":true,"gen":1}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/hello", strings.NewReader(body))
+	req.RemoteAddr = "192.168.1.2:12345"
+	mux.ServeHTTP(rr, req)
+	srv.mu.Lock()
+	srv.lanIP = "192.168.1.10"
+	srv.mu.Unlock()
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	mux.ServeHTTP(rr, req)
+	var st map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st["a11y"] != true {
+		t.Fatalf("want a11y true, got %v (%s)", st["a11y"], rr.Body.Bytes())
+	}
+	if st["lanIP"] != "192.168.1.10" {
+		t.Fatalf("want lanIP 192.168.1.10 got %v", st["lanIP"])
+	}
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/pull?id=dev1&a11y=0&cap=0", nil)
+	mux.ServeHTTP(rr, req)
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	mux.ServeHTTP(rr, req)
+	st = map[string]any{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st["a11y"] != false {
+		t.Fatalf("want a11y false after pull, got %v (%s)", st["a11y"], rr.Body.Bytes())
+	}
+}
+
+func TestStatusA11yEmptyWhenDisconnected(t *testing.T) {
+	resetSrv()
+	srv.devices["dev1"] = &Device{
+		ID: "dev1", Name: "phone", A11y: true, Cap: true, Online: true,
+		Seen: time.Now().Add(-30 * time.Second),
+	}
+	srv.selected = "dev1"
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/status", handleStatus)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	mux.ServeHTTP(rr, req)
+	var st map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st["a11y"] != nil {
+		t.Fatalf("disconnected a11y must be null/empty, got %v", st["a11y"])
+	}
+	devs, _ := st["devices"].([]any)
+	if len(devs) != 0 {
+		t.Fatalf("stale device should not appear, got %v", st["devices"])
+	}
+}
+
+func TestShotNoPermWhenCapOff(t *testing.T) {
+	resetSrv()
+	srv.devices["dev1"] = &Device{
+		ID: "dev1", Name: "phone", A11y: true, Cap: false, Online: true, Seen: time.Now(),
+	}
+	srv.selected = "dev1"
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/shot", handleShot)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/shot", strings.NewReader("{}"))
+	mux.ServeHTTP(rr, req)
+	var out map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out["noperm"] != true {
+		t.Fatalf("want noperm true, got %v (%s)", out["noperm"], rr.Body.Bytes())
+	}
+	if out["notice"] != "未开截屏权限" {
+		t.Fatalf("want no-permission notice, got %v", out["notice"])
+	}
+	srv.mu.Lock()
+	q := srv.queues["dev1"]
+	srv.mu.Unlock()
+	if len(q) != 1 {
+		t.Fatalf("shot must still be enqueued so phone can pop permission UI, got %d", len(q))
+	}
+}
+
