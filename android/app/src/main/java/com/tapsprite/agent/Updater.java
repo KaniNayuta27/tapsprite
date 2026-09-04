@@ -57,6 +57,77 @@ public final class Updater {
         }
     }
 
+    static int compareVer(String a, String b) {
+        a = normalizeVer(a);
+        b = normalizeVer(b);
+        String[] as = a.split("\\.");
+        String[] bs = b.split("\\.");
+        int n = Math.max(as.length, bs.length);
+        for (int i = 0; i < n; i++) {
+            int ai = i < as.length ? parseVerPart(as[i]) : 0;
+            int bi = i < bs.length ? parseVerPart(bs[i]) : 0;
+            if (ai > bi) {
+                return 1;
+            }
+            if (ai < bi) {
+                return -1;
+            }
+        }
+        return 0;
+    }
+
+    private static String normalizeVer(String s) {
+        if (s == null) {
+            return "";
+        }
+        s = s.trim().toLowerCase();
+        if (s.startsWith("v")) {
+            s = s.substring(1);
+        }
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '-' || c == '+' || c == '_') {
+                return s.substring(0, i);
+            }
+        }
+        return s;
+    }
+
+    private static int parseVerPart(String p) {
+        int n = 0;
+        if (p == null) {
+            return 0;
+        }
+        for (int i = 0; i < p.length(); i++) {
+            char c = p.charAt(i);
+            if (c < '0' || c > '9') {
+                break;
+            }
+            n = (n * 10) + (c - '0');
+        }
+        return n;
+    }
+
+    /** True when PC-ready package is newer than this installed App. */
+    public static boolean isNewerThanLocal(int remoteCode, String remoteName) {
+        int localCode = currentCode();
+        String localName = currentName();
+        if (localCode > 0 && remoteCode > 0) {
+            return remoteCode > localCode;
+        }
+        if (remoteName != null && remoteName.length() > 0 && localName != null && localName.length() > 0 && !"?".equals(localName)) {
+            return compareVer(remoteName, localName) > 0;
+        }
+        return remoteCode > localCode;
+    }
+
+    public static JSONObject peekApkStatus() {
+        if (!LanLink.ok() || LanLink.pcAddr().length() == 0) {
+            return new JSONObject();
+        }
+        return getJson(LanLink.pcAddr(), "/api/apkstatus");
+    }
+
     public static void check(final Activity activity, final boolean z, final Listener listener) {
         post(activity, listener, "正在检查更新通道…");
         new Thread(new Runnable() { // from class: com.tapsprite.agent.Updater.1
@@ -367,6 +438,86 @@ public final class Updater {
 
     public static void downloadAndInstall(Activity activity, String str, String str2, Listener listener) {
         downloadViaPc(activity, str, str2, listener);
+    }
+
+    /** Pull the APK already sitting on PC (/api/apkfile) and invoke the system installer. */
+    public static void installReadyFromPc(final Activity activity, final Listener listener) {
+        if (!LanLink.ok() || LanLink.pcAddr().length() == 0) {
+            if (listener != null) {
+                listener.onError("请先打开电脑客户端并联机");
+            }
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
+            if (listener != null) {
+                listener.onError("先允许「安装未知应用」，然后再点下载");
+            }
+            activity.startActivity(new Intent("android.settings.MANAGE_UNKNOWN_APP_SOURCES", Uri.parse("package:" + activity.getPackageName())));
+            return;
+        }
+        if (downloading) {
+            if (listener != null) {
+                listener.onStatus("已经在下载…");
+            }
+            return;
+        }
+        downloading = true;
+        lastGot = 0L;
+        lastTotal = 0L;
+        post(activity, listener, "从电脑取安装包…");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String pcAddr = LanLink.pcAddr();
+                    long started = System.currentTimeMillis();
+                    boolean ready = false;
+                    while (System.currentTimeMillis() - started < 180000) {
+                        JSONObject json = Updater.getJson(pcAddr, "/api/apkstatus");
+                        if (json.optString("err", "").length() > 0) {
+                            throw new Exception(json.optString("err"));
+                        }
+                        long got = json.optLong("got", 0L);
+                        long total = json.optLong("total", 0L);
+                        Updater.lastGot = got;
+                        Updater.lastTotal = total;
+                        Updater.progress(activity, listener, got, total);
+                        if (json.optBoolean("ready", false)) {
+                            ready = true;
+                            break;
+                        }
+                        if (!json.optBoolean("busy", false)) {
+                            throw new Exception("电脑没有已下载的安装包");
+                        }
+                        Updater.post(activity, listener, "电脑下载中 " + Updater.formatSize(got) + (total > 0 ? " / " + Updater.formatSize(total) : ""));
+                        Thread.sleep(400L);
+                    }
+                    if (!ready) {
+                        throw new Exception("电脑下载超时");
+                    }
+                    Updater.post(activity, listener, "从电脑取安装包…");
+                    File file = new File(activity.getFilesDir(), "update.apk");
+                    Updater.downloadLan(pcAddr, "/api/apkfile", file, activity, listener);
+                    Updater.post(activity, listener, "下载完成 " + Updater.formatSize(file.length()) + "，正在调起安装…");
+                    AppState.log("局域网安装包 " + file.length() + " 字节");
+                    Updater.install(activity, file);
+                    Updater.post(activity, listener, "已弹出系统安装框，点「安装」即可。");
+                } catch (Exception e) {
+                    AppState.log("更新失败：" + e.getMessage());
+                    final String message = shortErr(e.getMessage());
+                    activity.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (listener != null) {
+                                listener.onError(message.startsWith("请先") || message.contains("超时") ? message : ("更新失败：" + message));
+                            }
+                        }
+                    });
+                } finally {
+                    Updater.downloading = false;
+                }
+            }
+        }, "tapsprite-lan-ready").start();
     }
 
     /* JADX INFO: Access modifiers changed from: private */

@@ -1,9 +1,9 @@
 {
-  "versionCode": 91,
-  "versionName": "0.9.66",
-  "apk_ver": "0.9.66",
-  "exe_ver": "1.1.76",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-66.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-76.exe",
-  "notes": "去掉控制台底栏提示；PC 增加独立检查 App 更新；1.1.76 / 0.9.66"
+  "versionCode": 92,
+  "versionName": "0.9.67",
+  "apk_ver": "0.9.67",
+  "exe_ver": "1.1.77",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-67.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-77.exe",
+  "notes": "App 打开时若电脑已下好安装包则询问是否更新；PC 自更新通过 --rejoin 把手机 IP 交给新进程主动探测；1.1.77 / 0.9.67"
 }

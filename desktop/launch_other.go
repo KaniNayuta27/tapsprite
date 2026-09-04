@@ -8,13 +8,13 @@ import (
 	"os/exec"
 )
 
-func launchDetached(path string) error {
+func launchDetached(path string, extraArgs ...string) error {
 	if path == "" {
 		return fmt.Errorf("empty path")
 	}
 	if _, err := os.Stat(path); err != nil {
 		return err
 	}
-	cmd := exec.Command(path)
+	cmd := exec.Command(path, extraArgs...)
 	return cmd.Start()
 }

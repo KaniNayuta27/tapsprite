@@ -28,7 +28,8 @@ var webFS embed.FS
 const (
 	httpPort = 18766
 	udpPort  = 18766
-	version  = "1.1.76"
+	phoneUDP = 18765
+	version  = "1.1.77"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 )
@@ -79,7 +80,8 @@ type Server struct {
 	status   string
 	sub      string
 	lanIP    string // single preferred LAN IPv4 for UI (never a Join of all NICs)
-	undoStack [][]byte
+	undoStack   [][]byte
+	rejoinHosts []string
 }
 
 var srv = &Server{
@@ -90,6 +92,7 @@ var srv = &Server{
 }
 
 func main() {
+	rejoin := parseRejoinHosts(os.Args[1:])
 	go listenUDP()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleStatic)
@@ -139,6 +142,9 @@ func main() {
 		}
 	}()
 	waitLocalHTTP(addr)
+	if len(rejoin) > 0 {
+		startRejoinProbes(rejoin)
+	}
 	// WebView2 Run() must own the main thread on Windows.
 	runWebView(uiURL)
 }
@@ -191,13 +197,7 @@ func listenUDP() {
 			ip := addr.IP.String()
 			addLogDedup("udp:"+ip, "UDP 发现手机 "+ip, 45*time.Second)
 			// also probe phone console port
-			go func(ip string) {
-				c, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP(ip), Port: 18765})
-				if err == nil {
-					_, _ = c.Write([]byte("TS?"))
-					_ = c.Close()
-				}
-			}(ip)
+			go probeHostTS(ip)
 		}
 	}
 }
@@ -653,31 +653,161 @@ func rawzToPNG(data []byte, w, h int) ([]byte, error) {
 }
 
 func handleRefresh(w http.ResponseWriter, r *http.Request) {
-	// probe known device IPs via UDP
+	probeHostsTS(knownProbeHosts())
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+func parseRejoinHosts(args []string) []string {
+	var raw []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if strings.HasPrefix(a, "--rejoin=") {
+			raw = append(raw, strings.Split(strings.TrimPrefix(a, "--rejoin="), ",")...)
+			continue
+		}
+		if a == "--rejoin" && i+1 < len(args) {
+			raw = append(raw, strings.Split(args[i+1], ",")...)
+			i++
+		}
+	}
+	return normalizeHosts(raw)
+}
+
+func normalizeHosts(raw []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(raw))
+	for _, h := range raw {
+		h = strings.TrimSpace(h)
+		ip := net.ParseIP(h)
+		if ip == nil {
+			continue
+		}
+		ip4 := ip.To4()
+		if ip4 == nil {
+			continue
+		}
+		s := ip4.String()
+		if s == "0.0.0.0" || ip4.IsLoopback() {
+			continue
+		}
+		if seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
+}
+
+func rememberedPhoneHosts() []string {
 	srv.mu.Lock()
-	hosts := []string{}
+	defer srv.mu.Unlock()
+	var raw []string
 	for _, d := range srv.devices {
-		if d.Host != "" {
-			hosts = append(hosts, d.Host)
+		if d != nil && d.Host != "" {
+			raw = append(raw, d.Host)
+		}
+		if d == nil || d.IPs == "" {
+			continue
 		}
 		for _, ip := range strings.Split(d.IPs, ",") {
-			ip = strings.TrimSpace(ip)
-			if ip != "" {
-				hosts = append(hosts, ip)
-			}
+			raw = append(raw, ip)
+		}
+	}
+	return normalizeHosts(raw)
+}
+
+func knownProbeHosts() []string {
+	srv.mu.Lock()
+	raw := make([]string, 0, 8)
+	raw = append(raw, srv.rejoinHosts...)
+	for _, d := range srv.devices {
+		if d != nil && d.Host != "" {
+			raw = append(raw, d.Host)
+		}
+		if d == nil || d.IPs == "" {
+			continue
+		}
+		for _, ip := range strings.Split(d.IPs, ",") {
+			raw = append(raw, ip)
 		}
 	}
 	srv.mu.Unlock()
-	for _, ip := range hosts {
-		go func(ip string) {
-			c, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP(ip), Port: 18765})
-			if err == nil {
-				_, _ = c.Write([]byte("TS?"))
-				_ = c.Close()
-			}
-		}(ip)
+	return normalizeHosts(raw)
+}
+
+func probeHostTS(ip string) {
+	ip = strings.TrimSpace(ip)
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return
 	}
-	writeJSON(w, map[string]any{"ok": true})
+	c, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: parsed, Port: phoneUDP})
+	if err != nil {
+		return
+	}
+	_, _ = c.Write([]byte("TS?"))
+	_ = c.Close()
+}
+
+func probeHostsTS(hosts []string) {
+	for _, ip := range hosts {
+		go probeHostTS(ip)
+	}
+}
+
+func hostMatchesDevice(d *Device, ip string) bool {
+	if d == nil || ip == "" {
+		return false
+	}
+	if d.Host == ip {
+		return true
+	}
+	for _, p := range strings.Split(d.IPs, ",") {
+		if strings.TrimSpace(p) == ip {
+			return true
+		}
+	}
+	return false
+}
+
+func rejoinHostsConnected(hosts []string) bool {
+	if len(hosts) == 0 {
+		return true
+	}
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	matched := 0
+	for _, want := range hosts {
+		for _, d := range srv.devices {
+			if deviceLiveLocked(d) && hostMatchesDevice(d, want) {
+				matched++
+				break
+			}
+		}
+	}
+	return matched >= len(hosts)
+}
+
+func startRejoinProbes(hosts []string) {
+	hosts = normalizeHosts(hosts)
+	if len(hosts) == 0 {
+		return
+	}
+	srv.mu.Lock()
+	srv.rejoinHosts = hosts
+	srv.mu.Unlock()
+	addLog("rejoin 探测 " + strings.Join(hosts, ", "))
+	go func() {
+		deadline := time.Now().Add(90 * time.Second)
+		for {
+			probeHostsTS(hosts)
+			if rejoinHostsConnected(hosts) || time.Now().After(deadline) {
+				return
+			}
+			time.Sleep(1500 * time.Millisecond)
+		}
+	}()
 }
 
 func handleSave(w http.ResponseWriter, r *http.Request) {

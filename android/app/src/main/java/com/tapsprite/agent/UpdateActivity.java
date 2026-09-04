@@ -28,7 +28,10 @@ public class UpdateActivity extends Activity implements Updater.Listener {
         getWindow().setStatusBarColor(-16052980);
         getWindow().setNavigationBarColor(-16052980);
         setContentView(buildUi());
-        if (getIntent() != null && getIntent().getBooleanExtra("auto", false)) {
+        if (getIntent() != null && getIntent().getBooleanExtra("ready", false)) {
+            this.status.setText("电脑已下好安装包，正在传到手机…");
+            Updater.installReadyFromPc(this, this);
+        } else if (getIntent() != null && getIntent().getBooleanExtra("auto", false)) {
             Updater.check(this, true, this);
         }
     }

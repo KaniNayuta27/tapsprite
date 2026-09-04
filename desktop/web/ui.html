@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.76</title>
+<title>触控精灵 v1.1.77</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -339,7 +339,7 @@ textarea {
 </head>
 <body>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.76</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.77</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -579,6 +579,7 @@ function showUpdateBar(u) {
       clearTimeout(showUpdateBar._t);
       const ms = text.indexOf("已是最新") >= 0 ? 4000 : 6000;
       showUpdateBar._t = setTimeout(() => { bar.className = ""; }, ms);
+      if (text.indexOf("请去 App 里更新") >= 0) toast("请去 App 里更新", "ok");
       return;
     }
     bar.className = "";

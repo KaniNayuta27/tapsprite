@@ -32,14 +32,15 @@ type updateStatus struct {
 }
 
 type apkJob struct {
-	Busy  bool   `json:"busy"`
-	Ready bool   `json:"ready"`
-	Got   int64  `json:"got"`
-	Total int64  `json:"total"`
-	Err   string `json:"err"`
-	Path  string `json:"-"`
-	Name  string `json:"name,omitempty"`
-	Msg   string `json:"msg,omitempty"`
+	Busy    bool   `json:"busy"`
+	Ready   bool   `json:"ready"`
+	Got     int64  `json:"got"`
+	Total   int64  `json:"total"`
+	Err     string `json:"err"`
+	Path    string `json:"-"`
+	Name    string `json:"name,omitempty"`
+	VerCode int    `json:"versionCode,omitempty"`
+	Msg     string `json:"msg,omitempty"`
 }
 
 var (
@@ -375,17 +376,39 @@ func apkFileName(name string) string {
 	return fname
 }
 
-func markApkReady(dest, name string, size int64) {
+func markApkReady(dest, name string, size int64, verCode int) {
 	apkMu.Lock()
 	apkState.Path = dest
 	apkState.Ready = true
 	apkState.Busy = false
 	apkState.Err = ""
 	apkState.Name = name
+	apkState.VerCode = verCode
 	apkState.Got = size
 	apkState.Total = size
 	apkState.Msg = "下载完成"
 	apkMu.Unlock()
+}
+
+func setPCNotice(msg string) {
+	if strings.TrimSpace(msg) == "" {
+		return
+	}
+	srv.mu.Lock()
+	srv.notice = msg
+	srv.noticeAt = time.Now().UnixMilli()
+	srv.mu.Unlock()
+}
+
+func selfUpdateLaunchArgs(hosts []string) []string {
+	if len(hosts) == 0 {
+		return nil
+	}
+	return []string{"--rejoin=" + strings.Join(hosts, ",")}
+}
+
+func launchUpdatedExe(path string) error {
+	return launchDetached(path, selfUpdateLaunchArgs(rememberedPhoneHosts())...)
 }
 
 func handleApkUpdate(w http.ResponseWriter, r *http.Request) {
@@ -458,7 +481,7 @@ func runApkUpdate() {
 	var size int64
 	if fi, e := os.Stat(dest); e == nil && fi.Size() >= 10000 {
 		size = fi.Size()
-		markApkReady(dest, remoteName, size)
+		markApkReady(dest, remoteName, size, remoteCode)
 	} else {
 		setUpdate("downloading", 0, 0, 0, "发现 App "+remoteName+"，开始下载")
 		if err := downloadFile(ch.Apk, dest, func(got, total int64) {
@@ -477,20 +500,15 @@ func runApkUpdate() {
 		if fi, e := os.Stat(dest); e == nil {
 			size = fi.Size()
 		}
-		markApkReady(dest, remoteName, size)
+		markApkReady(dest, remoteName, size, remoteCode)
 		cleanupOldDownloads("apk", dest)
 	}
 
+	setPCNotice("请去 App 里更新")
 	if live {
 		enqueue(id, map[string]any{"type": "control", "action": "update"})
-		if localCode > 0 {
-			setUpdate("idle", 100, size, size, "App "+remoteName+" 已下载，已通知手机安装")
-		} else {
-			setUpdate("idle", 100, size, size, "App "+remoteName+" 已就绪，请在手机点检查更新安装")
-		}
-		return
 	}
-	setUpdate("idle", 100, size, size, "App "+remoteName+" 已下载到 Downloads（未联机手机）")
+	setUpdate("idle", 100, size, size, "App "+remoteName+" 已下载，请去 App 里更新")
 }
 
 func handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
@@ -550,7 +568,7 @@ func handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		setUpdate("launching", 100, 0, 0, "下载完成，正在启动新版本…")
-		if err := launchDetached(dest); err != nil {
+		if err := launchUpdatedExe(dest); err != nil {
 			msg := "启动新版本失败：" + err.Error()
 			setUpdate("error", 100, 0, 0, msg)
 			writeDesktopLog(msg)
@@ -683,7 +701,7 @@ func handleFetchApk(w http.ResponseWriter, r *http.Request) {
 		fname := apkFileName(name)
 		dest := filepath.Join(downloadsDir(), fname)
 		if fi, e := os.Stat(dest); e == nil && fi.Size() >= 10000 {
-			markApkReady(dest, name, fi.Size())
+			markApkReady(dest, name, fi.Size(), 0)
 			setUpdate("idle", 100, fi.Size(), fi.Size(), "APK 下载完成")
 			return
 		}
@@ -696,22 +714,12 @@ func handleFetchApk(w http.ResponseWriter, r *http.Request) {
 			writeDesktopLog("fetchapk: " + shortNetErr(err))
 			return
 		}
-		var got, total int64
-		apkMu.Lock()
-		apkState.Path = dest
-		apkState.Ready = true
-		if apkState.Total == 0 {
-			if fi, e := os.Stat(dest); e == nil {
-				apkState.Got = fi.Size()
-				apkState.Total = fi.Size()
-			}
-		} else {
-			apkState.Got = apkState.Total
+		var size int64
+		if fi, e := os.Stat(dest); e == nil {
+			size = fi.Size()
 		}
-		apkState.Msg = "下载完成"
-		got, total = apkState.Got, apkState.Total
-		apkMu.Unlock()
-		setUpdate("idle", 100, got, total, "APK 下载完成")
+		markApkReady(dest, name, size, 0)
+		setUpdate("idle", 100, size, size, "APK 下载完成")
 		cleanupOldDownloads("apk", dest)
 	}()
 }
@@ -753,14 +761,15 @@ func handleApkStatus(w http.ResponseWriter, r *http.Request) {
 		pct = int(apkState.Got * 100 / apkState.Total)
 	}
 	writeJSON(w, map[string]any{
-		"busy":    apkState.Busy,
-		"ready":   apkState.Ready,
-		"got":     apkState.Got,
-		"total":   apkState.Total,
-		"err":     apkState.Err,
-		"percent": pct,
-		"msg":     apkState.Msg,
-		"name":    apkState.Name,
+		"busy":        apkState.Busy,
+		"ready":       apkState.Ready,
+		"got":         apkState.Got,
+		"total":       apkState.Total,
+		"err":         apkState.Err,
+		"percent":     pct,
+		"msg":         apkState.Msg,
+		"name":        apkState.Name,
+		"versionCode": apkState.VerCode,
 	})
 }
 

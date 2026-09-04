@@ -1,8 +1,10 @@
 package com.tapsprite.agent;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -60,7 +62,18 @@ public class MainActivity extends Activity {
     private TextView tabHome;
     private TextView tabPet;
     private TextView tabScripts;
+    private AlertDialog apkReadyDialog;
+    private boolean apkReadyChecking;
+    private static volatile String apkReadyDeclinedKey = "";
     private final Handler tick = new Handler(Looper.getMainLooper());
+    private final Runnable apkReadyCheckRun = new Runnable() {
+        @Override
+        public void run() {
+            if (!MainActivity.this.isFinishing()) {
+                MainActivity.this.maybePromptReadyApk();
+            }
+        }
+    };
     private final Runnable tickRun = new Runnable() { // from class: com.tapsprite.agent.MainActivity.1
         @Override // java.lang.Runnable
         public void run() {
@@ -84,30 +97,15 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** PC-triggered App update: open 检查更新 and auto download/install via LAN. */
+    /** PC finished downloading an APK: prompt on the open App (do not force 检查更新). */
     static void openUpdateFromPc() {
-        final android.content.Context ctx = App.ctx;
-        if (ctx == null) {
-            return;
-        }
-        AppState.log("电脑要求检查 App 更新");
+        AppState.log("电脑已下载 App 更新");
         new Handler(Looper.getMainLooper()).post(new Runnable() {
             @Override
             public void run() {
-                try {
-                    MainActivity main = live;
-                    if (main != null && !main.isFinishing()) {
-                        Intent i = new Intent(main, UpdateActivity.class);
-                        i.putExtra("auto", true);
-                        main.startActivity(i);
-                        return;
-                    }
-                    Intent i = new Intent(ctx, UpdateActivity.class);
-                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-                    i.putExtra("auto", true);
-                    ctx.startActivity(i);
-                } catch (Exception e) {
-                    AppState.log("无法打开检查更新：" + e.getMessage());
+                MainActivity main = live;
+                if (main != null && !main.isFinishing()) {
+                    main.maybePromptReadyApk();
                 }
             }
         });
@@ -163,6 +161,111 @@ public class MainActivity extends Activity {
         }
         this.tick.removeCallbacks(this.tickRun);
         this.tick.postDelayed(this.tickRun, 400L);
+        scheduleApkReadyCheck();
+    }
+
+    private void scheduleApkReadyCheck() {
+        this.tick.removeCallbacks(this.apkReadyCheckRun);
+        this.tick.postDelayed(this.apkReadyCheckRun, 500L);
+        this.tick.postDelayed(this.apkReadyCheckRun, 2500L);
+    }
+
+    void maybePromptReadyApk() {
+        if (isFinishing() || Updater.downloading || this.apkReadyChecking) {
+            return;
+        }
+        if (this.apkReadyDialog != null && this.apkReadyDialog.isShowing()) {
+            return;
+        }
+        this.apkReadyChecking = true;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                int remoteCode = 0;
+                String remoteName = "";
+                boolean show = false;
+                try {
+                    for (int i = 0; i < 8; i++) {
+                        if (LanLink.ok() && LanLink.pcAddr().length() > 0) {
+                            break;
+                        }
+                        try {
+                            Thread.sleep(350L);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+                    if (LanLink.ok() && LanLink.pcAddr().length() > 0) {
+                        org.json.JSONObject st = Updater.peekApkStatus();
+                        if (st != null && st.optBoolean("ready", false)) {
+                            remoteCode = st.optInt("versionCode", 0);
+                            remoteName = st.optString("name", "");
+                            String key = remoteCode + "/" + remoteName;
+                            if (Updater.isNewerThanLocal(remoteCode, remoteName) && !key.equals(apkReadyDeclinedKey)) {
+                                show = true;
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+                final int code = remoteCode;
+                final String name = remoteName;
+                final boolean shouldShow = show;
+                MainActivity.this.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        MainActivity.this.apkReadyChecking = false;
+                        if (shouldShow) {
+                            MainActivity.this.showReadyApkDialog(code, name);
+                        }
+                    }
+                });
+            }
+        }, "tapsprite-apk-ready").start();
+    }
+
+    void showReadyApkDialog(int remoteCode, String remoteName) {
+        if (isFinishing()) {
+            return;
+        }
+        if (this.apkReadyDialog != null && this.apkReadyDialog.isShowing()) {
+            return;
+        }
+        if (Updater.downloading) {
+            return;
+        }
+        final String key = remoteCode + "/" + (remoteName == null ? "" : remoteName);
+        if (key.equals(apkReadyDeclinedKey)) {
+            return;
+        }
+        String label = remoteName != null && remoteName.length() > 0 ? remoteName : ("#" + remoteCode);
+        AlertDialog.Builder b = new AlertDialog.Builder(this);
+        b.setTitle("发现新版本");
+        b.setMessage("新版本 " + label + " 已下载，是否现在更新？");
+        b.setPositiveButton("现在更新", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                apkReadyDeclinedKey = "";
+                Intent i = new Intent(MainActivity.this, UpdateActivity.class);
+                i.putExtra("ready", true);
+                MainActivity.this.startActivity(i);
+            }
+        });
+        b.setNegativeButton("稍后", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                apkReadyDeclinedKey = key;
+            }
+        });
+        b.setOnCancelListener(new DialogInterface.OnCancelListener() {
+            @Override
+            public void onCancel(DialogInterface dialog) {
+                apkReadyDeclinedKey = key;
+            }
+        });
+        this.apkReadyDialog = b.show();
+        AppState.log("提示更新 " + label);
     }
 
     void consumeCapturePrompt() {

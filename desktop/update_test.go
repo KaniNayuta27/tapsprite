@@ -250,7 +250,7 @@ func TestApkUpdateEnqueuesWhenNewer(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		st := getUpdate()
-		if st.Phase == "idle" && strings.Contains(st.Msg, "已通知手机") {
+		if st.Phase == "idle" && strings.Contains(st.Msg, "请去 App 里更新") {
 			break
 		}
 		if st.Phase == "error" {
@@ -258,8 +258,14 @@ func TestApkUpdateEnqueuesWhenNewer(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if !strings.Contains(getUpdate().Msg, "已通知手机") {
-		t.Fatalf("want notify msg, got %+v", getUpdate())
+	if !strings.Contains(getUpdate().Msg, "请去 App 里更新") {
+		t.Fatalf("want toast msg, got %+v", getUpdate())
+	}
+	srv.mu.Lock()
+	notice := srv.notice
+	srv.mu.Unlock()
+	if notice != "请去 App 里更新" {
+		t.Fatalf("want PC toast 请去 App 里更新, got %q", notice)
 	}
 	dest := filepath.Join(dir, "tapsprite0-9-66.apk")
 	if fi, err := os.Stat(dest); err != nil || fi.Size() < 10000 {
@@ -277,6 +283,13 @@ func TestApkUpdateEnqueuesWhenNewer(t *testing.T) {
 	}
 	if cmd["type"] != "control" || cmd["action"] != "update" {
 		t.Fatalf("want control/update got %v", cmd)
+	}
+	apkMu.Lock()
+	code := apkState.VerCode
+	ready := apkState.Ready
+	apkMu.Unlock()
+	if !ready || code != 91 {
+		t.Fatalf("want ready versionCode 91, got ready=%v code=%d", ready, code)
 	}
 }
 
@@ -308,4 +321,129 @@ func TestFetchApkReusesExistingFile(t *testing.T) {
 	apkMu.Lock()
 	defer apkMu.Unlock()
 	t.Fatalf("want reuse ready file, got busy=%v ready=%v path=%s", apkState.Busy, apkState.Ready, apkState.Path)
+}
+
+func TestParseRejoinHosts(t *testing.T) {
+	got := parseRejoinHosts([]string{"--rejoin=192.168.1.8,10.0.0.2", "other"})
+	if len(got) != 2 || got[0] != "192.168.1.8" || got[1] != "10.0.0.2" {
+		t.Fatalf("got %v", got)
+	}
+	got = parseRejoinHosts([]string{"--rejoin", "192.168.0.5,127.0.0.1,not-an-ip,192.168.0.5"})
+	if len(got) != 1 || got[0] != "192.168.0.5" {
+		t.Fatalf("want skip loopback/dup/junk, got %v", got)
+	}
+	if len(parseRejoinHosts(nil)) != 0 {
+		t.Fatal("empty args")
+	}
+}
+
+func TestRememberedPhoneHosts(t *testing.T) {
+	resetSrv()
+	srv.devices["a"] = &Device{ID: "a", Host: "192.168.1.8", IPs: "192.168.1.8,10.0.0.3"}
+	srv.devices["b"] = &Device{ID: "b", Host: "127.0.0.1", IPs: "not-ip"}
+	got := rememberedPhoneHosts()
+	if len(got) != 2 {
+		t.Fatalf("got %v", got)
+	}
+	seen := map[string]bool{}
+	for _, h := range got {
+		seen[h] = true
+	}
+	if !seen["192.168.1.8"] || !seen["10.0.0.3"] {
+		t.Fatalf("missing hosts %v", got)
+	}
+	if seen["127.0.0.1"] {
+		t.Fatal("loopback must not be rejoined")
+	}
+}
+
+func TestSelfUpdateLaunchArgs(t *testing.T) {
+	if selfUpdateLaunchArgs(nil) != nil {
+		t.Fatal("empty hosts must not add args")
+	}
+	got := selfUpdateLaunchArgs([]string{"192.168.1.8", "10.0.0.2"})
+	if len(got) != 1 || got[0] != "--rejoin=192.168.1.8,10.0.0.2" {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestRejoinHostsConnected(t *testing.T) {
+	resetSrv()
+	if !rejoinHostsConnected(nil) {
+		t.Fatal("empty is connected")
+	}
+	if rejoinHostsConnected([]string{"192.168.1.8"}) {
+		t.Fatal("missing device must not count as connected")
+	}
+	srv.devices["a"] = &Device{ID: "a", Host: "192.168.1.8", IPs: "192.168.1.8", Online: true, Seen: time.Now()}
+	if !rejoinHostsConnected([]string{"192.168.1.8"}) {
+		t.Fatal("live host should match")
+	}
+}
+
+func TestApkStatusIncludesVersionCode(t *testing.T) {
+	resetUpdateState()
+	markApkReady("/tmp/x.apk", "0.9.67", 12000, 92)
+	rr := httptest.NewRecorder()
+	handleApkStatus(rr, httptest.NewRequest(http.MethodGet, "/api/apkstatus", nil))
+	var st map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st["ready"] != true {
+		t.Fatalf("ready %v", st["ready"])
+	}
+	if st["name"] != "0.9.67" {
+		t.Fatalf("name %v", st["name"])
+	}
+	if jsonInt(st["versionCode"]) != 92 {
+		t.Fatalf("versionCode %v", st["versionCode"])
+	}
+}
+
+func TestApkUpdateToastWhenOffline(t *testing.T) {
+	resetSrv()
+	resetUpdateState()
+	dir := t.TempDir()
+	withDownloads(t, dir, filepath.Join(dir, "tapsprite1-1-77.exe"))
+
+	payload := bytes.Repeat([]byte("a"), 12000)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/channel", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"versionCode":92,"versionName":"0.9.67","apk_ver":"0.9.67","apk":"http://%s/app.apk"}`, r.Host)
+	})
+	mux.HandleFunc("/app.apk", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(payload)
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	old := channelURLs
+	channelURLs = []string{ts.URL + "/channel"}
+	t.Cleanup(func() { channelURLs = old })
+
+	rr := httptest.NewRecorder()
+	handleApkUpdate(rr, httptest.NewRequest(http.MethodPost, "/api/apkupdate", strings.NewReader("{}")))
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		st := getUpdate()
+		if st.Phase == "idle" && strings.Contains(st.Msg, "请去 App 里更新") {
+			break
+		}
+		if st.Phase == "error" {
+			t.Fatalf("error: %s", st.Msg)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	srv.mu.Lock()
+	notice := srv.notice
+	qlen := len(srv.queues)
+	srv.mu.Unlock()
+	if notice != "请去 App 里更新" {
+		t.Fatalf("want toast, got %q msg=%+v", notice, getUpdate())
+	}
+	if qlen != 0 {
+		t.Fatalf("offline must not enqueue update cmd, queues=%d", qlen)
+	}
 }
