@@ -19,7 +19,8 @@ import org.json.JSONObject;
 
 /* loaded from: classes.dex */
 public final class Updater {
-    public static final String MANIFEST = "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/dist-channel.json";
+    // 检新已改走 PC /api/channel（手机不再直连 GitHub MANIFEST）
+    // public static final String MANIFEST = "...";
     public static volatile boolean downloading;
     public static volatile long lastGot;
     public static volatile String lastStatus = "";
@@ -62,7 +63,20 @@ public final class Updater {
             @Override // java.lang.Runnable
             public void run() {
                 try {
-                    JSONObject fetchJson = Updater.fetchJson(Updater.MANIFEST);
+                    if (!LanLink.ok() || LanLink.pcAddr().length() == 0) {
+                        throw new Exception("请先打开电脑客户端并联机");
+                    }
+                    JSONObject fetchJson = Updater.getJsonLong(LanLink.pcAddr(), "/api/channel", 3000, 130000);
+                    if (!fetchJson.optBoolean("ok", false) && !fetchJson.has("versionCode")) {
+                        String err = fetchJson.optString("err", "");
+                        if (err.length() == 0) {
+                            err = "请先打开电脑客户端并联机";
+                        }
+                        throw new Exception(shortErr(err));
+                    }
+                    if (fetchJson.has("ok") && !fetchJson.optBoolean("ok", true)) {
+                        throw new Exception(shortErr(fetchJson.optString("err", "网络超时，请开代理或重试")));
+                    }
                     final int optInt = fetchJson.optInt("versionCode", 0);
                     final String optString = fetchJson.optString("versionName", "");
                     final String optString2 = fetchJson.optString("apk", "");
@@ -91,13 +105,13 @@ public final class Updater {
                         }
                     });
                 } catch (Exception e) {
-                    final String message = e.getMessage();
+                    final String message = shortErr(e.getMessage());
                     AppState.log("检查更新失败：" + message);
                     activity.runOnUiThread(new Runnable() { // from class: com.tapsprite.agent.Updater.1.2
                         @Override // java.lang.Runnable
                         public void run() {
                             if (listener != null) {
-                                listener.onError("检查失败：" + message);
+                                listener.onError(message);
                             }
                         }
                     });
@@ -106,10 +120,29 @@ public final class Updater {
         }, "tapsprite-update-check").start();
     }
 
+    private static String shortErr(String message) {
+        if (message == null || message.length() == 0) {
+            return "网络超时，请开代理或重试";
+        }
+        String low = message.toLowerCase();
+        if (low.contains("timeout") || low.contains("deadline") || low.contains("timed out")
+                || low.contains("unable to resolve") || low.contains("failed to connect")
+                || message.contains("http://") || message.contains("https://")) {
+            return "网络超时，请开代理或重试";
+        }
+        if (message.contains("请先打开电脑")) {
+            return "请先打开电脑客户端并联机";
+        }
+        if (message.length() > 60) {
+            return "网络超时，请开代理或重试";
+        }
+        return message;
+    }
+
     public static void downloadViaPc(final Activity activity, final String str, final String str2, final Listener listener) {
         if (!LanLink.ok() || LanLink.pcAddr().length() == 0) {
             if (listener != null) {
-                listener.onError("请先打开电脑客户端并打开电脑联机");
+                listener.onError("请先打开电脑客户端并联机");
                 return;
             }
             return;
@@ -173,12 +206,12 @@ public final class Updater {
                         }
                     } catch (Exception e) {
                         AppState.log("更新失败：" + e.getMessage());
-                        final String message = e.getMessage();
+                        final String message = shortErr(e.getMessage());
                         activity.runOnUiThread(new Runnable() { // from class: com.tapsprite.agent.Updater.2.1
                             @Override // java.lang.Runnable
                             public void run() {
                                 if (listener != null) {
-                                    listener.onError("更新失败：" + message);
+                                    listener.onError(message.startsWith("请先") || message.contains("超时") ? message : ("更新失败：" + message));
                                 }
                             }
                         });
@@ -240,6 +273,37 @@ public final class Updater {
             if (httpURLConnection != null) {
                 httpURLConnection.disconnect();
             }
+        }
+    }
+
+    /** Longer timeout for /api/channel (PC may try several GH mirrors). */
+    private static JSONObject getJsonLong(String str, String str2, int connectMs, int readMs) throws Exception {
+        HttpURLConnection httpURLConnection = (HttpURLConnection) new URL("http://" + str + ":18766" + str2).openConnection();
+        try {
+            httpURLConnection.setConnectTimeout(connectMs);
+            httpURLConnection.setReadTimeout(readMs);
+            httpURLConnection.setRequestMethod("GET");
+            int code = httpURLConnection.getResponseCode();
+            InputStream inputStream = code >= 400 ? httpURLConnection.getErrorStream() : httpURLConnection.getInputStream();
+            ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            if (inputStream != null) {
+                byte[] bArr = new byte[2048];
+                while (true) {
+                    int read = inputStream.read(bArr);
+                    if (read <= 0) {
+                        break;
+                    }
+                    byteArrayOutputStream.write(bArr, 0, read);
+                }
+                inputStream.close();
+            }
+            String body = byteArrayOutputStream.toString("UTF-8");
+            if (body.length() == 0) {
+                throw new Exception("电脑无应答");
+            }
+            return new JSONObject(body);
+        } finally {
+            httpURLConnection.disconnect();
         }
     }
 

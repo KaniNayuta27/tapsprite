@@ -12,9 +12,15 @@ import (
 	"time"
 )
 
-const (
-	channelURL = "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/dist-channel.json"
-)
+// channelURLs are tried in order when fetching dist-channel.json.
+var channelURLs = []string{
+	"https://raw.githubusercontent.com/KaniNayuta27/tapsprite/rebuild/source-from-binaries/dist-channel.json",
+	"https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/dist-channel.json",
+	"https://ghproxy.net/https://raw.githubusercontent.com/KaniNayuta27/tapsprite/rebuild/source-from-binaries/dist-channel.json",
+	"https://mirror.ghproxy.com/https://raw.githubusercontent.com/KaniNayuta27/tapsprite/rebuild/source-from-binaries/dist-channel.json",
+}
+
+const netTimeoutMsg = "网络超时，请开代理或稍后重试"
 
 type updateStatus struct {
 	Phase   string `json:"phase"`
@@ -36,9 +42,9 @@ type apkJob struct {
 }
 
 var (
-	updMu     sync.Mutex
-	updState  = updateStatus{Phase: "idle", Msg: ""}
-	updBusy   bool
+	updMu    sync.Mutex
+	updState = updateStatus{Phase: "idle", Msg: ""}
+	updBusy  bool
 
 	apkMu    sync.Mutex
 	apkState = apkJob{}
@@ -88,28 +94,147 @@ type channelInfo struct {
 	Notes       string `json:"notes"`
 }
 
+// mirrorCandidates returns [original, raw-equivalent, ghproxy wraps…] for GitHub asset URLs.
+func mirrorCandidates(u string) []string {
+	u = strings.TrimSpace(u)
+	if u == "" {
+		return nil
+	}
+	out := []string{u}
+	add := func(s string) {
+		if s == "" || s == u {
+			return
+		}
+		for _, x := range out {
+			if x == s {
+				return
+			}
+		}
+		out = append(out, s)
+	}
+
+	rawEq := ""
+	switch {
+	case strings.HasPrefix(u, "https://raw.githubusercontent.com/"):
+		// https://raw.githubusercontent.com/owner/repo/branch/path
+		rest := strings.TrimPrefix(u, "https://raw.githubusercontent.com/")
+		parts := strings.SplitN(rest, "/", 4)
+		if len(parts) == 4 {
+			rawEq = fmt.Sprintf("https://github.com/%s/%s/raw/%s/%s", parts[0], parts[1], parts[2], parts[3])
+		}
+	case strings.Contains(u, "github.com/") && strings.Contains(u, "/raw/"):
+		// https://github.com/owner/repo/raw/branch/path
+		rest := strings.TrimPrefix(u, "https://github.com/")
+		rest = strings.TrimPrefix(rest, "http://github.com/")
+		parts := strings.SplitN(rest, "/", 5)
+		if len(parts) == 5 && parts[2] == "raw" {
+			rawEq = fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s/%s", parts[0], parts[1], parts[3], parts[4])
+		}
+	}
+
+	if rawEq != "" {
+		add(rawEq)
+	}
+
+	// Prefer fetching the raw.githubusercontent form via mirrors (more CDN-friendly).
+	mirrorBase := u
+	if strings.HasPrefix(rawEq, "https://raw.githubusercontent.com/") {
+		mirrorBase = rawEq
+	} else if strings.HasPrefix(u, "https://raw.githubusercontent.com/") {
+		mirrorBase = u
+	} else if rawEq != "" {
+		mirrorBase = rawEq
+	}
+
+	if strings.Contains(mirrorBase, "github.com") || strings.Contains(mirrorBase, "githubusercontent.com") {
+		add("https://ghproxy.net/" + mirrorBase)
+		add("https://mirror.ghproxy.com/" + mirrorBase)
+	}
+	return out
+}
+
+func shortNetErr(err error) string {
+	if err == nil {
+		return netTimeoutMsg
+	}
+	s := err.Error()
+	low := strings.ToLower(s)
+	if strings.Contains(low, "timeout") ||
+		strings.Contains(low, "deadline") ||
+		strings.Contains(low, "timed out") ||
+		strings.Contains(low, "i/o timeout") ||
+		strings.Contains(low, "connection reset") ||
+		strings.Contains(low, "connection refused") ||
+		strings.Contains(low, "no such host") ||
+		strings.Contains(low, "temporary failure") ||
+		strings.Contains(low, "network is unreachable") {
+		return netTimeoutMsg
+	}
+	// Never dump full URLs into UI.
+	if strings.Contains(s, "http://") || strings.Contains(s, "https://") {
+		return netTimeoutMsg
+	}
+	if len(s) > 80 {
+		return netTimeoutMsg
+	}
+	return s
+}
+
 func fetchChannel() (*channelInfo, error) {
-	cli := httpClient()
-	cli.Timeout = 20 * time.Second
-	req, err := http.NewRequest(http.MethodGet, channelURL, nil)
+	var last error
+	for _, u := range channelURLs {
+		cli := httpClient()
+		cli.Timeout = 28 * time.Second
+		req, err := http.NewRequest(http.MethodGet, u, nil)
+		if err != nil {
+			last = err
+			continue
+		}
+		req.Header.Set("User-Agent", "TapSprite-PC/"+version)
+		resp, err := cli.Do(req)
+		if err != nil {
+			last = err
+			continue
+		}
+		if resp.StatusCode >= 400 {
+			b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+			resp.Body.Close()
+			last = fmt.Errorf("HTTP %d", resp.StatusCode)
+			_ = b
+			continue
+		}
+		var c channelInfo
+		err = json.NewDecoder(resp.Body).Decode(&c)
+		resp.Body.Close()
+		if err != nil {
+			last = err
+			continue
+		}
+		return &c, nil
+	}
+	if last != nil {
+		return nil, fmt.Errorf("%s", shortNetErr(last))
+	}
+	return nil, fmt.Errorf("%s", netTimeoutMsg)
+}
+
+func handleChannel(w http.ResponseWriter, r *http.Request) {
+	ch, err := fetchChannel()
 	if err != nil {
-		return nil, err
+		writeJSON(w, map[string]any{"ok": false, "err": shortNetErr(err)})
+		return
 	}
-	req.Header.Set("User-Agent", "TapSprite-PC/"+version)
-	resp, err := cli.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return nil, fmt.Errorf("HTTP %d %s", resp.StatusCode, strings.TrimSpace(string(b)))
-	}
-	var c channelInfo
-	if err := json.NewDecoder(resp.Body).Decode(&c); err != nil {
-		return nil, err
-	}
-	return &c, nil
+	// Return channel JSON as-is (apk/exe/version fields) plus ok.
+	writeJSON(w, map[string]any{
+		"ok":          true,
+		"versionCode": ch.VersionCode,
+		"versionName": ch.VersionName,
+		"apk_ver":     ch.ApkVer,
+		"exe_ver":     ch.ExeVer,
+		"apk":         ch.Apk,
+		"exe":         ch.Exe,
+		"notes":       ch.Notes,
+	})
 }
 
 // compareVer returns 1 if a>b, -1 if a<b, 0 if equal (dot-separated numeric).
@@ -180,7 +305,7 @@ func handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
 		}()
 		ch, err := fetchChannel()
 		if err != nil {
-			msg := "检测失败：" + err.Error()
+			msg := "检测失败：" + shortNetErr(err)
 			setUpdate("error", 0, 0, 0, msg)
 			writeDesktopLog(msg)
 			return
@@ -210,7 +335,7 @@ func handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
 			}
 			setUpdate("downloading", pct, got, total, fmt.Sprintf("下载中 %d%%", pct))
 		}); err != nil {
-			msg := "下载失败：" + err.Error()
+			msg := "下载失败：" + shortNetErr(err)
 			setUpdate("error", 0, 0, 0, msg)
 			writeDesktopLog(msg)
 			return
@@ -229,6 +354,26 @@ func handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 func downloadFile(url, dest string, progress func(got, total int64)) error {
+	cands := mirrorCandidates(url)
+	if len(cands) == 0 {
+		cands = []string{url}
+	}
+	var last error
+	for _, cand := range cands {
+		err := downloadFileOnce(cand, dest, progress)
+		if err == nil {
+			return nil
+		}
+		last = err
+		_ = os.Remove(dest + ".part")
+	}
+	if last != nil {
+		return fmt.Errorf("%s", shortNetErr(last))
+	}
+	return fmt.Errorf("%s", netTimeoutMsg)
+}
+
+func downloadFileOnce(url, dest string, progress func(got, total int64)) error {
 	cli := httpClient()
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -241,8 +386,9 @@ func downloadFile(url, dest string, progress func(got, total int64)) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return fmt.Errorf("HTTP %d %s", resp.StatusCode, strings.TrimSpace(string(b)))
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		_ = b
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	total := resp.ContentLength
 	part := dest + ".part"
@@ -340,8 +486,8 @@ func handleFetchApk(w http.ResponseWriter, r *http.Request) {
 			setApkProgress(got, total, false, "", "电脑下载中")
 		})
 		if err != nil {
-			setApkProgress(0, 0, false, err.Error(), "下载失败")
-			writeDesktopLog("fetchapk: " + err.Error())
+			setApkProgress(0, 0, false, shortNetErr(err), "下载失败")
+			writeDesktopLog("fetchapk: " + shortNetErr(err))
 			return
 		}
 		var got, total int64

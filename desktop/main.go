@@ -28,7 +28,7 @@ var webFS embed.FS
 const (
 	httpPort = 18766
 	udpPort  = 18766
-	version  = "1.1.69"
+	version  = "1.1.70"
 )
 
 type Device struct {
@@ -109,6 +109,7 @@ func main() {
 	mux.HandleFunc("/api/slot", handleSlot)
 	mux.HandleFunc("/api/undo", handleUndo)
 	mux.HandleFunc("/api/findtest", handleFindTest)
+	mux.HandleFunc("/api/channel", handleChannel)
 	mux.HandleFunc("/api/selfupdate", handleSelfUpdate)
 	mux.HandleFunc("/api/updatestatus", handleUpdateStatus)
 	mux.HandleFunc("/api/quit", handleQuit)
