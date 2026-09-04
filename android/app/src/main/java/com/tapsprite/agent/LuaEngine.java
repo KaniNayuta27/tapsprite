@@ -144,6 +144,50 @@ public final class LuaEngine {
                 return TRUE;
             }
         });
+        globals.set("RandomsTap", new VarArgFunction() { // from class: com.tapsprite.agent.LuaEngine.RandomsTap
+            @Override
+            public Varargs invoke(Varargs varargs) {
+                LuaEngine.checkStop();
+                ExtraApi.randomsTap(varargs.arg(1).toint(), varargs.arg(2).toint(),
+                        varargs.optint(3, 5), varargs.optint(4, 1));
+                return TRUE;
+            }
+        });
+        globals.set("MoveZoomOut", new VarArgFunction() { // from class: com.tapsprite.agent.LuaEngine.MoveZoomOut
+            @Override
+            public Varargs invoke(Varargs varargs) {
+                LuaEngine.checkStop();
+                return ExtraApi.moveZoomOut(varargs.arg(1).tofloat(), varargs.arg(2).tofloat(),
+                        varargs.arg(3).tofloat(), varargs.arg(4).tofloat(), varargs.optint(5, 300))
+                        ? TRUE : FALSE;
+            }
+        });
+        globals.set("MoveZoomIn", new VarArgFunction() { // from class: com.tapsprite.agent.LuaEngine.MoveZoomIn
+            @Override
+            public Varargs invoke(Varargs varargs) {
+                LuaEngine.checkStop();
+                return ExtraApi.moveZoomIn(varargs.arg(1).tofloat(), varargs.arg(2).tofloat(),
+                        varargs.arg(3).tofloat(), varargs.arg(4).tofloat(), varargs.optint(5, 300))
+                        ? TRUE : FALSE;
+            }
+        });
+        globals.set("OpenUrl", new OneArgFunction() { // from class: com.tapsprite.agent.LuaEngine.OpenUrl
+            @Override
+            public LuaValue call(LuaValue luaValue) {
+                return ExtraApi.openUrl(luaValue.tojstring()) ? TRUE : FALSE;
+            }
+        });
+        globals.set("GetColorNum", new VarArgFunction() { // from class: com.tapsprite.agent.LuaEngine.GetColorNum
+            @Override
+            public Varargs invoke(Varargs varargs) {
+                LuaEngine.checkStop();
+                return valueOf(ScreenApi.getColorNum(
+                        varargs.arg(1).toint(), varargs.arg(2).toint(),
+                        varargs.arg(3).toint(), varargs.arg(4).toint(),
+                        varargs.optjstring(5, "000000"),
+                        (float) varargs.optdouble(6, 0.9d)));
+            }
+        });
         globals.set("GetPixelColor", new TwoArgFunction() { // from class: com.tapsprite.agent.LuaEngine.12
             @Override // org.luaj.vm2.lib.TwoArgFunction, org.luaj.vm2.lib.LibFunction, org.luaj.vm2.LuaValue
             public LuaValue call(LuaValue luaValue, LuaValue luaValue2) {
@@ -218,7 +262,23 @@ public final class LuaEngine {
             @Override // org.luaj.vm2.lib.VarArgFunction, org.luaj.vm2.lib.LibFunction, org.luaj.vm2.LuaValue
             public Varargs invoke(Varargs varargs) {
                 LuaEngine.checkStop();
-                if (!ScreenApi.findPic(varargs.arg(1).toint(), varargs.arg(2).toint(), varargs.arg(3).toint(), varargs.arg(4).toint(), varargs.optjstring(5, ""))) {
+                // 兼容：FindPic(x1,y1,x2,y2,pic[,sim])
+                // 或按键精灵风格：FindPic(..., pic, delta, dir, sim) —— 取最后的 0~1 小数为相似度
+                float sim = 0.75f;
+                if (varargs.narg() >= 8) {
+                    sim = (float) varargs.optdouble(8, 0.75d);
+                } else if (varargs.narg() >= 6) {
+                    double a6 = varargs.optdouble(6, 0.75d);
+                    if (a6 > 0.0d && a6 <= 1.0001d) {
+                        sim = (float) a6;
+                    } else if (varargs.narg() >= 7) {
+                        double a7 = varargs.optdouble(7, 0.75d);
+                        if (a7 > 0.0d && a7 <= 1.0001d) {
+                            sim = (float) a7;
+                        }
+                    }
+                }
+                if (!ScreenApi.findPic(varargs.arg(1).toint(), varargs.arg(2).toint(), varargs.arg(3).toint(), varargs.arg(4).toint(), varargs.optjstring(5, ""), sim)) {
                     return varargsOf(valueOf(-1), valueOf(-1));
                 }
                 return varargsOf(valueOf(Sprite.intXY.x), valueOf(Sprite.intXY.y));
@@ -590,6 +650,8 @@ public final class LuaEngine {
         bindElement(globals);
         bindImage(globals);
         bindUtf8(globals);
+        bindUrl(globals);
+        bindDir(globals);
     }
 
     /* JADX INFO: Access modifiers changed from: private */
@@ -711,17 +773,32 @@ public final class LuaEngine {
                 LuaTable luaTable2 = new LuaTable();
                 int i = 0;
                 while (i < all.size()) {
+                    ElementApi.Node node = all.get(i);
                     LuaTable luaTable3 = new LuaTable();
-                    String str = "";
-                    luaTable3.set("text", valueOf(all.get(i).text == null ? "" : all.get(i).text));
-                    if (all.get(i).desc != null) {
-                        str = all.get(i).desc;
-                    }
-                    luaTable3.set("desc", valueOf(str));
+                    luaTable3.set("text", valueOf(node.text == null ? "" : node.text));
+                    luaTable3.set("desc", valueOf(node.desc == null ? "" : node.desc));
+                    luaTable3.set("id", valueOf(node.id == null ? "" : node.id));
+                    luaTable3.set("cls", valueOf(node.cls == null ? "" : node.cls));
+                    luaTable3.set("clickable", valueOf(node.clickable));
+                    LuaTable bounds = new LuaTable();
+                    bounds.set("left", valueOf(node.left));
+                    bounds.set("top", valueOf(node.top));
+                    bounds.set("right", valueOf(node.right));
+                    bounds.set("bottom", valueOf(node.bottom));
+                    luaTable3.set("bounds", bounds);
+                    // 摘要字符串，便于 TracePrint
+                    luaTable3.set("boundsStr", valueOf(node.left + "," + node.top + "," + node.right + "," + node.bottom));
                     i++;
                     luaTable2.set(i, luaTable3);
                 }
                 return luaTable2;
+            }
+        });
+        luaTable.set("Click", new OneArgFunction() { // from class: com.tapsprite.agent.LuaEngine.ElementClick
+            @Override
+            public LuaValue call(LuaValue luaValue) {
+                LuaEngine.checkStop();
+                return ElementApi.clickText(luaValue.tojstring()) ? TRUE : FALSE;
             }
         });
         globals.set("Element", luaTable);
@@ -748,5 +825,56 @@ public final class LuaEngine {
             }
         });
         globals.set("UTF8", luaTable);
+    }
+
+    private static void bindUrl(Globals globals) {
+        LuaTable t = new LuaTable();
+        t.set("HttpGet", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue luaValue) {
+                LuaEngine.checkStop();
+                return valueOf(UrlApi.httpGet(luaValue.tojstring()));
+            }
+        });
+        t.set("HttpPost", new TwoArgFunction() {
+            @Override
+            public LuaValue call(LuaValue luaValue, LuaValue luaValue2) {
+                LuaEngine.checkStop();
+                return valueOf(UrlApi.httpPost(luaValue.tojstring(), luaValue2.isnil() ? "" : luaValue2.tojstring()));
+            }
+        });
+        t.set("Download", new TwoArgFunction() {
+            @Override
+            public LuaValue call(LuaValue luaValue, LuaValue luaValue2) {
+                LuaEngine.checkStop();
+                return UrlApi.download(luaValue.tojstring(), luaValue2.tojstring()) ? TRUE : FALSE;
+            }
+        });
+        globals.set("Url", t);
+        globals.set("url", t);
+    }
+
+    private static void bindDir(Globals globals) {
+        LuaTable t = new LuaTable();
+        t.set("Exist", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue luaValue) {
+                return DirApi.exist(luaValue.tojstring()) ? TRUE : FALSE;
+            }
+        });
+        t.set("Create", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue luaValue) {
+                return DirApi.create(luaValue.tojstring()) ? TRUE : FALSE;
+            }
+        });
+        t.set("Delete", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue luaValue) {
+                return DirApi.delete(luaValue.tojstring()) ? TRUE : FALSE;
+            }
+        });
+        globals.set("dir", t);
+        globals.set("Dir", t);
     }
 }

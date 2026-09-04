@@ -168,6 +168,41 @@ public class AutoService extends AccessibilityService {
         return stroke(f, f2, f3, f4, i, false);
     }
 
+    /** 双指同时滑动（捏合/放大）。两条 Stroke 并行 dispatchGesture。 */
+    public boolean pinch(final float x1, final float y1, final float x2, final float y2,
+                         final float e1x, final float e1y, final float e2x, final float e2y, final int ms) {
+        final CountDownLatch latch = new CountDownLatch(1);
+        final AtomicBoolean ok = new AtomicBoolean(false);
+        this.main.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Path p1 = new Path();
+                    p1.moveTo(x1, y1);
+                    if (x1 != e1x || y1 != e1y) {
+                        p1.lineTo(e1x, e1y);
+                    }
+                    Path p2 = new Path();
+                    p2.moveTo(x2, y2);
+                    if (x2 != e2x || y2 != e2y) {
+                        p2.lineTo(e2x, e2y);
+                    }
+                    int dur = Math.max(50, ms);
+                    GestureDescription.Builder b = new GestureDescription.Builder();
+                    b.addStroke(new GestureDescription.StrokeDescription(p1, 0L, dur));
+                    b.addStroke(new GestureDescription.StrokeDescription(p2, 0L, dur));
+                    AutoService.this.continued = null;
+                    if (!AutoService.this.dispatchGesture(b.build(), AutoService.this.cb(ok, latch), null)) {
+                        latch.countDown();
+                    }
+                } catch (Exception e) {
+                    latch.countDown();
+                }
+            }
+        });
+        return await(latch, ok);
+    }
+
     public boolean touchDown(float f, float f2) {
         return stroke(f, f2, f, f2, 80, true);
     }
