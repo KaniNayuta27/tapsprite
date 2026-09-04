@@ -28,7 +28,7 @@ var webFS embed.FS
 const (
 	httpPort = 18766
 	udpPort  = 18766
-	version  = "1.1.63-rebuild"
+	version  = "1.1.64-rebuild"
 )
 
 type Device struct {
@@ -124,11 +124,32 @@ func main() {
 	}
 	srv.mu.Unlock()
 	go allowFirewall()
-	go openAppWindow(fmt.Sprintf("http://127.0.0.1%s", addr))
+
+	uiURL := fmt.Sprintf("http://127.0.0.1%s/", addr)
 	server := &http.Server{Addr: addr, Handler: withCORS(mux)}
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatal(err)
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}()
+	waitLocalHTTP(addr)
+	// WebView2 Run() must own the main thread on Windows.
+	runWebView(uiURL)
+}
+
+// waitLocalHTTP polls until 127.0.0.1:port accepts TCP (short timeout loop).
+func waitLocalHTTP(addr string) {
+	deadline := time.Now().Add(5 * time.Second)
+	target := "127.0.0.1" + addr
+	for time.Now().Before(deadline) {
+		c, err := net.DialTimeout("tcp", target, 100*time.Millisecond)
+		if err == nil {
+			_ = c.Close()
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
+	log.Printf("warn: local HTTP %s not ready yet; opening WebView anyway", target)
 }
 
 func withCORS(next http.Handler) http.Handler {
@@ -644,6 +665,7 @@ func handleQuit(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true})
 	go func() {
 		time.Sleep(200 * time.Millisecond)
+		quitWebView()
 		os.Exit(0)
 	}()
 }

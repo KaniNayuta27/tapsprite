@@ -9,7 +9,7 @@
 | 路径 | 说明 |
 |------|------|
 | `android/` | Android Gradle 工程（`applicationId=com.tapsprite.agent`，`0.9.59-rebuild` / versionCode **84**） |
-| `desktop/` | Go 模块 PC 控制台（HTTP/UDP `0.0.0.0:18766`，内嵌 `web/ui.html`） |
+| `desktop/` | Go 模块 PC 控制台（HTTP/UDP `0.0.0.0:18766`，内嵌 `web/ui.html` + **WebView2** 窗） |
 | `public/` | 文档站 + 历史 apk/exe + `public/ocr/*.onnx` |
 | `GUIDE.md` / `version.json` | 产品文档与版本清单 |
 
@@ -18,19 +18,15 @@
 - 手机本地控制台 HTTP：**18765**（`ConsoleServer`）
 - 电脑 PC 控制台 HTTP + UDP 发现：**18766**（监听 **`0.0.0.0`**，手机可扫局域网 IP）
 
-## 独立窗原理（对齐正式 1.1.62）
+## PC 壳：进程内嵌 WebView2（1.1.64-rebuild）
 
-正式包 **不是** 内嵌 WebView2 控件，而是启动本机 **Edge / Chrome** 的应用模式窗：
+Rebuild **1.1.64-rebuild** 使用 [`github.com/jchv/go-webview2`](https://github.com/jchv/go-webview2) **进程内嵌** Microsoft Edge WebView2 窗口（Title=`触控精灵 v1.1.64-rebuild`，1280×800），导航到 `http://127.0.0.1:18766/`，主线程 `Run()` 消息循环。
 
-```text
-msedge.exe|chrome.exe --app=http://127.0.0.1:18766 --window-size=1280,800
-```
+**硬禁止**（已删除）：`chrome.exe` / `msedge.exe` / `--app=` / `openBrowser` / `rundll32` 开页，以及「已用应用模式打开 …」这类日志。
 
-Rebuild **1.1.63-rebuild** 同样走这条路径（`openAppWindow`），**禁止**用系统默认浏览器随便开标签页。
+**前提**：Windows 需已安装 **[Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)**（Win10/11 多数机器已自带）。交叉编译 **不需要 CGO**（`CGO_ENABLED=0`）。
 
-**前提**：Windows 需已安装 Microsoft Edge 或 Google Chrome。找不到浏览器时进程仍继续 Listen，日志会提示手动打开上述 URL。
-
-主进程仍是 `windowsgui` HTTP 服务；应用窗只是 UI 壳。
+主线程模型：HTTP `ListenAndServe` + UDP 在 goroutine；本机端口可连后再在主线程开 WebView。关窗或 `/api/quit` 结束进程。
 
 ## 安卓：编译与安装
 
@@ -58,11 +54,11 @@ cd android
 cd desktop
 go test ./...
 go build -o dist/tapsprite .
-# Windows 成品：
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-H windowsgui -s -w" -o dist/tapsprite-1-1-63-rebuild.exe .
+# Windows 成品（本机 Linux 可交叉）：
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-H windowsgui -s -w" -o dist/tapsprite-1-1-64-rebuild.exe .
 ```
 
-产物：`desktop/dist/tapsprite-1-1-63-rebuild.exe`（**不会**覆盖 `public/tapsprite1-1-62.exe`）。
+产物：`desktop/dist/tapsprite-1-1-64-rebuild.exe`（**不会**覆盖 `public/` 下历史 exe）。
 
 ### 联机要点
 
@@ -81,10 +77,11 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-H windowsgui -s -w" 
 
 ### 仍为 stub / 缺口（PC）
 
+- 需本机已装 **WebView2 Runtime**（未装则无法出窗）
 - `/api/crop` `/api/rotate` 与原版裁剪栈不完全一致（undo 仅简单截图栈）
 - `/api/selfupdate` `/api/fetchapk` / 托盘等：**TODO**
 - QOI 截图编码未实现（手机侧主要走 `rawz`/`png`）
-- 无 Edge/Chrome 时没有真正的独立窗（需安装浏览器）
+- 抓抓边角 / 命令移植（P1）本轮不做
 - 防火墙规则在无管理员权限时可能加不上
 - 多设备槽位/UI 细节可能与 1.1.62 有差异
 
@@ -96,8 +93,8 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-H windowsgui -s -w" 
 
 ## 测试步骤
 
-1. PC 运行 `tapsprite-1-1-63-rebuild.exe` → 应弹出 **Edge/Chrome 应用窗**（不是普通浏览器标签）。
-2. 若首次启动，确认 Windows 防火墙允许 18766；侧栏状态栏会显示本机局域网 IP。
+1. PC 运行 `tapsprite-1-1-64-rebuild.exe` → 应弹出 **内嵌 WebView2 独立窗**（不是 Chrome/Edge `--app=`，也不是普通浏览器标签）。
+2. 若首次启动，确认已装 WebView2 Runtime；确认 Windows 防火墙允许 18766；侧栏状态栏会显示本机局域网 IP。
 3. 手机装 `android/dist/tapsprite0-9-59-rebuild-debug.apk`，开无障碍等权限，打开「电脑联机」（可手动填 PC IP）。
 4. 设备出现在 PC 下拉框后，下发脚本 / 点截图，确认画面刷新。
 5. 联机失败：查防火墙、同一 WiFi、PC 日志里的 UDP/hello。
