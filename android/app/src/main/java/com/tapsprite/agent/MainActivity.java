@@ -40,6 +40,7 @@ public class MainActivity extends Activity {
     private TextView copyAdbBtn;
     private TextView copyPcBtn;
     private Switch debugSwitch;
+    CompoundButton.OnCheckedChangeListener debugListener;
     private TextView ipGo;
     private TextView lanLine;
     private TextView loadBtn;
@@ -114,6 +115,24 @@ public class MainActivity extends Activity {
             live = null;
         }
         super.onDestroy();
+    }
+
+
+    static boolean isLikelyIPv4(String s) {
+        if (s == null) return false;
+        String t = s.trim();
+        if (t.length() < 7 || t.length() > 15) return false;
+        String[] p = t.split("\\.");
+        if (p.length != 4) return false;
+        try {
+            for (String x : p) {
+                int n = Integer.parseInt(x);
+                if (n < 0 || n > 255) return false;
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private int dp(int i) {
@@ -439,7 +458,7 @@ public class MainActivity extends Activity {
         this.debugSwitch = r5;
         r5.setChecked(AppState.debugToPc);
         this.debugSwitch.setShowText(false);
-        this.debugSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() { // from class: com.tapsprite.agent.MainActivity.11
+        this.debugListener = new CompoundButton.OnCheckedChangeListener() { // from class: com.tapsprite.agent.MainActivity.11
             @Override // android.widget.CompoundButton.OnCheckedChangeListener
             public void onCheckedChanged(CompoundButton compoundButton, boolean z) {
                 AppState.debugToPc = z;
@@ -455,7 +474,8 @@ public class MainActivity extends Activity {
                 }
                 MainActivity.this.refresh();
             }
-        });
+        };
+        this.debugSwitch.setOnCheckedChangeListener(this.debugListener);
         linearLayout.addView(this.debugSwitch);
         card.addView(linearLayout);
         LinearLayout linearLayout3 = new LinearLayout(this);
@@ -484,12 +504,42 @@ public class MainActivity extends Activity {
             @Override // android.view.View.OnClickListener
             public void onClick(View view2) {
                 String trim = MainActivity.this.pcIpEdit.getText() == null ? "" : MainActivity.this.pcIpEdit.getText().toString().trim();
-                if (trim.length() < 7) {
+                if (!isLikelyIPv4(trim)) {
                     Toast.makeText(MainActivity.this, "填电脑 Wi-Fi 的 IPv4", 0).show();
-                } else {
-                    LanLink.setManualHost(trim);
-                    Toast.makeText(MainActivity.this, "正在连 " + trim, 0).show();
+                    return;
                 }
+                // Ensure online: switch may be off — setManualHost used to skip hello() then.
+                if (!AppState.debugToPc) {
+                    AppState.debugToPc = true;
+                    try {
+                        MainActivity.this.getSharedPreferences("tapsprite", 0).edit().putBoolean("debugToPc", true).apply();
+                    } catch (Exception e) {
+                    }
+                    if (MainActivity.this.debugSwitch != null) {
+                        MainActivity.this.debugSwitch.setOnCheckedChangeListener(null);
+                        MainActivity.this.debugSwitch.setChecked(true);
+                        MainActivity.this.debugSwitch.setOnCheckedChangeListener(MainActivity.this.debugListener);
+                    }
+                }
+                AppState.ensureServer();
+                Toast.makeText(MainActivity.this, "正在连 " + trim, 0).show();
+                AppState.log("正在连 " + trim);
+                LanLink.connectManual(trim, new LanLink.ConnectCallback() {
+                    @Override
+                    public void onResult(final boolean ok, final String host) {
+                        MainActivity.this.runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (ok) {
+                                    Toast.makeText(MainActivity.this, "已连上电脑 " + host, 1).show();
+                                } else {
+                                    Toast.makeText(MainActivity.this, "连不上 " + host + "。检查 exe/同 WiFi/防火墙", 1).show();
+                                }
+                                MainActivity.this.refresh();
+                            }
+                        });
+                    }
+                });
             }
         });
         linearLayout3.addView(this.ipGo);

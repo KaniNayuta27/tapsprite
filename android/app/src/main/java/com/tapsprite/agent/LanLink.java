@@ -214,10 +214,72 @@ public final class LanLink {
             lastHost = trim;
             LanPush.prependHost(trim);
             AppState.log("指定电脑 " + trim);
-            if (AppState.debugToPc) {
-                hello();
-            }
+            // Always handshake — previously hello() only ran when debugToPc was already on,
+            // so tapping「连接」with the switch off did nothing beyond saving the IP.
+            hello();
         }
+    }
+
+    /** Manual connect: save host, always attempt /api/hello on a background thread, report ok/fail. */
+    public static void connectManual(final String host, final ConnectCallback cb) {
+        final String trim = host == null ? "" : host.trim();
+        if (trim.length() < 7) {
+            if (cb != null) {
+                cb.onResult(false, trim);
+            }
+            return;
+        }
+        try {
+            App.ctx.getSharedPreferences("tapsprite", 0).edit().putString("pcManual", trim).apply();
+        } catch (Exception e) {
+        }
+        lastHost = trim;
+        LanPush.prependHost(trim);
+        ok = false;
+        AppState.log("手输连接 " + trim);
+        AppState.ensureDevice();
+        final long nextGen = nextGen();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                boolean success = false;
+                try {
+                    byte[] body = payload(true, nextGen);
+                    AppState.log("握手 #" + nextGen + " " + trim);
+                    if (post(trim, "/api/hello", body)) {
+                        // Caller should have turned debugToPc on; force online state on HTTP success.
+                        if (!AppState.debugToPc) {
+                            AppState.debugToPc = true;
+                        }
+                        onHelloOk(trim, nextGen);
+                        if (!ok) {
+                            pcHost = trim;
+                            lastHost = trim;
+                            ok = true;
+                            lastStatus = "局域网 " + trim;
+                            listenUdp();
+                            startPull();
+                        }
+                        success = true;
+                    }
+                } catch (Exception e) {
+                    AppState.log("手输连接异常 " + e.getMessage());
+                }
+                if (success) {
+                    AppState.log("已连上电脑 " + trim);
+                } else {
+                    AppState.log("连不上电脑 " + trim + "。检查 exe/同 WiFi/防火墙");
+                    lastStatus = "连不上 " + trim;
+                }
+                if (cb != null) {
+                    cb.onResult(success, trim);
+                }
+            }
+        }, "tapsprite-manual-" + nextGen).start();
+    }
+
+    public interface ConnectCallback {
+        void onResult(boolean ok, String host);
     }
 
     public static String manualHost() {

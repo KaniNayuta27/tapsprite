@@ -144,7 +144,7 @@ textarea {
 }
 .log * { user-select: text; -webkit-user-select: text; -webkit-user-drag: none; }
 .tools { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-.stage-wrap { display: grid; grid-template-columns: 1fr minmax(340px, 420px); gap: 14px; min-height: 0; }
+.stage-wrap { display: grid; grid-template-columns: 1.15fr minmax(300px, 380px); gap: 14px; min-height: 0; }
 .rightcol { display: flex; flex-direction: column; min-height: 0; overflow: auto; gap: 8px; }
 .akey {
   margin-top: 8px; padding: 10px 12px; background: #f7f5ff; border-radius: var(--radius-md);
@@ -401,37 +401,28 @@ textarea {
             <label>图片路径</label>
             <input type="text" id="akPicPath" placeholder="模板 png 路径">
             <button class="btn ghost" type="button" id="akBrowse">浏览</button>
-            <input type="file" id="akFile" accept="image/*" class="akey-hidden">
-          </div>
-          <div class="akey-row" data-f="range">
-            <label>查找范围</label>
-            <input class="num" type="number" id="akL" value="0">
-            <input class="num" type="number" id="akT" value="0">
-            <input class="num" type="number" id="akR" value="0">
-            <input class="num" type="number" id="akB" value="0">
-            <button class="btn ghost" type="button" id="akGetRange">获取当前</button>
-            <button class="btn ghost" type="button" id="akFullRange">全屏</button>
-          </div>
-          <div class="akey-row" data-f="dir">
-            <label>查找方向</label>
-            <select id="akDir">
-              <option value="0">0: 从左上向右下</option>
-              <option value="1">1: 从右上向左下</option>
-              <option value="2">2: 从左下向右上</option>
-              <option value="3">3: 从右下向左上</option>
-            </select>
-          </div>
-          <div class="akey-row" data-f="sim">
-            <label>相似度</label>
-            <input class="sim" type="text" id="akSim" value="0.9">
-            <span data-f="delta" class="akey-hidden" style="display:inline-flex;align-items:center;gap:6px;margin-left:8px">
+            <span data-f="delta" class="akey-hidden" style="display:inline-flex;align-items:center;gap:6px;margin-left:4px">
               <label style="min-width:auto">偏色</label>
               <input class="sim" type="text" id="akDelta" value="000000" style="width:72px">
             </span>
+            <input type="file" id="akFile" accept="image/*" class="akey-hidden">
+          </div>
+          <div class="akey-row" data-f="simdir">
+            <span data-f="dir" style="display:inline-flex;align-items:center;gap:6px;flex:1;min-width:0;flex-wrap:wrap">
+              <label>查找方向</label>
+              <select id="akDir">
+                <option value="0">0: 从左上向右下</option>
+                <option value="1">1: 从右上向左下</option>
+                <option value="2">2: 从左下向右上</option>
+                <option value="3">3: 从右下向左上</option>
+              </select>
+            </span>
+            <label style="min-width:auto;margin-left:4px">相似度</label>
+            <input class="sim" type="text" id="akSim" value="0.9">
           </div>
           <div class="akey-sec">
-            <h4>查找测试</h4>
-            <div class="akey-result">结果：<span id="akResult"></span></div>
+            <h4>结果</h4>
+            <div class="akey-result"><span id="akResult"></span></div>
             <button class="btn ghost block" type="button" id="akTest">开始测试</button>
           </div>
           <div class="akey-sec">
@@ -1624,10 +1615,6 @@ function akeyEls() {
   return {
     desc: document.getElementById("akColorDesc"),
     path: document.getElementById("akPicPath"),
-    l: document.getElementById("akL"),
-    t: document.getElementById("akT"),
-    r: document.getElementById("akR"),
-    b: document.getElementById("akB"),
     dir: document.getElementById("akDir"),
     sim: document.getElementById("akSim"),
     delta: document.getElementById("akDelta"),
@@ -1639,13 +1626,14 @@ function setAkeyTab(tab) {
   document.querySelectorAll("#akeyTabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   const showColor = tab !== "pic";
   const showPath = tab === "pic";
-  const showRange = tab !== "cmpex";
-  const showDir = tab !== "cmpex";
+  const showDir = tab !== "cmpex"; // 相似度 stays; only hide 查找方向 on cmpex
   const showDelta = tab === "pic";
   document.querySelectorAll("#akeyPanel [data-f=color]").forEach(el => el.classList.toggle("akey-hidden", !showColor));
   document.querySelectorAll("#akeyPanel [data-f=path]").forEach(el => el.classList.toggle("akey-hidden", !showPath));
-  document.querySelectorAll("#akeyPanel [data-f=range]").forEach(el => el.classList.toggle("akey-hidden", !showRange));
-  document.querySelectorAll("#akeyPanel [data-f=dir]").forEach(el => el.classList.toggle("akey-hidden", !showDir));
+  document.querySelectorAll("#akeyPanel [data-f=dir]").forEach(el => {
+    el.classList.toggle("akey-hidden", !showDir);
+    if (el.style) el.style.display = showDir ? "inline-flex" : "none";
+  });
   document.querySelectorAll("#akeyPanel [data-f=delta]").forEach(el => {
     el.classList.toggle("akey-hidden", !showDelta);
     el.style.display = showDelta ? "inline-flex" : "none";
@@ -1669,12 +1657,16 @@ function parseMultiColorDesc(raw) {
   return { first: s.replace(/^"|"$/g, ""), offset: "" };
 }
 function akeyRange() {
-  const e = akeyEls();
+  // L,T,R,B from the existing right-side crop boxes (#mx1 #my1 #mx2 #my2), not deleted akL..akB.
+  const x1 = parseInt(document.getElementById("mx1").value, 10) || 0;
+  const y1 = parseInt(document.getElementById("my1").value, 10) || 0;
+  const x2 = parseInt(document.getElementById("mx2").value, 10) || 0;
+  const y2 = parseInt(document.getElementById("my2").value, 10) || 0;
   return {
-    l: parseInt(e.l.value, 10) || 0,
-    t: parseInt(e.t.value, 10) || 0,
-    r: parseInt(e.r.value, 10) || 0,
-    b: parseInt(e.b.value, 10) || 0,
+    l: Math.min(x1, x2),
+    t: Math.min(y1, y2),
+    r: Math.max(x1, x2),
+    b: Math.max(y1, y2),
   };
 }
 function akeySim() {
@@ -1777,29 +1769,6 @@ async function runAkeyTest() {
       akeyEls().path.value = f.name;
       toast("已填文件名（完整路径请手改）", "ok");
     }
-  };
-  document.getElementById("akGetRange").onclick = () => {
-    if (cropRect) {
-      const x1 = Math.min(cropRect.x1, cropRect.x2), x2 = Math.max(cropRect.x1, cropRect.x2);
-      const y1 = Math.min(cropRect.y1, cropRect.y2), y2 = Math.max(cropRect.y1, cropRect.y2);
-      akeyEls().l.value = x1; akeyEls().t.value = y1; akeyEls().r.value = x2; akeyEls().b.value = y2;
-      return;
-    }
-    const mx1 = parseInt(document.getElementById("mx1").value, 10);
-    const my1 = parseInt(document.getElementById("my1").value, 10);
-    const mx2 = parseInt(document.getElementById("mx2").value, 10);
-    const my2 = parseInt(document.getElementById("my2").value, 10);
-    if ([mx1,my1,mx2,my2].every(n => Number.isFinite(n)) && (mx1 !== mx2 || my1 !== my2)) {
-      akeyEls().l.value = Math.min(mx1, mx2);
-      akeyEls().t.value = Math.min(my1, my2);
-      akeyEls().r.value = Math.max(mx1, mx2);
-      akeyEls().b.value = Math.max(my1, my2);
-    }
-  };
-  document.getElementById("akFullRange").onclick = () => {
-    let w = shot.naturalWidth || 0, h = shot.naturalHeight || 0;
-    if (!w || !h) { w = 1080; h = 2400; }
-    akeyEls().l.value = 0; akeyEls().t.value = 0; akeyEls().r.value = w; akeyEls().b.value = h;
   };
   document.getElementById("akTest").onclick = () => runAkeyTest();
   document.getElementById("akCopyScript").onclick = () => {

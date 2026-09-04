@@ -28,7 +28,7 @@ var webFS embed.FS
 const (
 	httpPort = 18766
 	udpPort  = 18766
-	version  = "1.1.71"
+	version  = "1.1.72"
 )
 
 type Device struct {
@@ -74,6 +74,7 @@ type Server struct {
 	slots    [8]Slot
 	status   string
 	sub      string
+	lanIP    string // single preferred LAN IPv4 for UI (never a Join of all NICs)
 	undoStack [][]byte
 }
 
@@ -119,15 +120,9 @@ func main() {
 
 	// Bind all interfaces so phones can reach LAN IP (same as 0.0.0.0:18766).
 	addr := fmt.Sprintf(":%d", httpPort)
-	lan := localIPv4s()
-	log.Printf("tapsprite desktop %s listening on http://0.0.0.0%s (lan=%v)", version, addr, lan)
-	srv.mu.Lock()
-	if len(lan) > 0 {
-		srv.sub = fmt.Sprintf("http://%s%s · 本机 %s", lan[0], addr, strings.Join(lan, ", "))
-	} else {
-		srv.sub = fmt.Sprintf("http://0.0.0.0%s", addr)
-	}
-	srv.mu.Unlock()
+	lanIP := preferredLocalIPv4()
+	log.Printf("tapsprite desktop %s listening on http://0.0.0.0%s (lanIP=%s)", version, addr, lanIP)
+	refreshLANSub(lanIP)
 	go allowFirewall()
 	scheduleStartupCleanup()
 
@@ -265,8 +260,9 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 		srv.selected = id
 	}
 	srv.status = "已连接 " + name
-	srv.sub = host
 	srv.mu.Unlock()
+	// Re-pick display LAN IP now that a phone Host is known (same-/24 preference).
+	refreshLANSub(preferredLocalIPv4())
 	addLog("hello " + name + " (" + id + ") from " + host)
 	writeJSON(w, map[string]any{"ok": true})
 }
@@ -307,9 +303,11 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 	if d := srv.devices[srv.selected]; d != nil {
 		ip = d.Host
 	}
+	lanIP := srv.lanIP
 	writeJSON(w, map[string]any{
 		"status":   srv.status,
 		"sub":      srv.sub,
+		"lanIP":    lanIP,
 		"ip":       ip,
 		"devices":  devs,
 		"selected": srv.selected,
@@ -762,14 +760,90 @@ func readWeb(path string) ([]byte, error) {
 	return b, err
 }
 
-func localIPv4s() []string {
-	out := []string{}
+// virtualIfaceName filters VM / tunnel / VPN adapters (case-insensitive substring).
+func virtualIfaceName(name string) bool {
+	n := strings.ToLower(name)
+	keys := []string{
+		"vmware", "vbox", "virtualbox", "hyper-v", "vethernet", "wsl", "docker",
+		"tun", "tap", "zerotier", "wg", "wireguard", "vpn", "hamachi", "tailscale",
+		"utun", "virbr", "veth", "hyperv", "npcap", "loopback",
+	}
+	for _, k := range keys {
+		if strings.Contains(n, k) {
+			return true
+		}
+	}
+	return false
+}
+
+func isAPIPA(ip net.IP) bool {
+	ip4 := ip.To4()
+	return ip4 != nil && ip4[0] == 169 && ip4[1] == 254
+}
+
+func isRFC1918(ip net.IP) bool {
+	ip4 := ip.To4()
+	if ip4 == nil {
+		return false
+	}
+	if ip4[0] == 10 {
+		return true
+	}
+	if ip4[0] == 192 && ip4[1] == 168 {
+		return true
+	}
+	if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
+		return true
+	}
+	return false
+}
+
+func sameIPv4Slash24(a, b string) bool {
+	ap := strings.Split(a, ".")
+	bp := strings.Split(b, ".")
+	if len(ap) != 4 || len(bp) != 4 {
+		return false
+	}
+	return ap[0] == bp[0] && ap[1] == bp[1] && ap[2] == bp[2]
+}
+
+// defaultRouteLocalIP: classic UDP dial to a public DNS; LocalAddr is the egress NIC IP.
+func defaultRouteLocalIP() string {
+	c, err := net.DialTimeout("udp4", "1.1.1.1:53", 800*time.Millisecond)
+	if err != nil {
+		return ""
+	}
+	defer c.Close()
+	la, ok := c.LocalAddr().(*net.UDPAddr)
+	if !ok || la == nil || la.IP == nil {
+		return ""
+	}
+	ip4 := la.IP.To4()
+	if ip4 == nil || ip4.IsLoopback() || isAPIPA(ip4) {
+		return ""
+	}
+	return ip4.String()
+}
+
+type lanCand struct {
+	ip   string
+	name string
+	raw  net.IP
+}
+
+// listLANCandidates enumerates up, non-loopback IPv4s, dropping APIPA and virtual/tunnel NICs.
+func listLANCandidates() []lanCand {
+	out := []lanCand{}
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return out
 	}
+	seen := map[string]bool{}
 	for _, iface := range ifaces {
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		if virtualIfaceName(iface.Name) {
 			continue
 		}
 		addrs, err := iface.Addrs()
@@ -787,16 +861,146 @@ func localIPv4s() []string {
 			if ip == nil || ip.IsLoopback() {
 				continue
 			}
-			ip = ip.To4()
-			if ip == nil {
+			ip4 := ip.To4()
+			if ip4 == nil || isAPIPA(ip4) {
 				continue
 			}
-			s := ip.String()
-			if strings.HasPrefix(s, "169.254.") {
+			s := ip4.String()
+			if seen[s] {
 				continue
 			}
-			out = append(out, s)
+			seen[s] = true
+			out = append(out, lanCand{ip: s, name: iface.Name, raw: ip4})
 		}
+	}
+	return out
+}
+
+func onlinePhoneHosts() []string {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	out := []string{}
+	for _, d := range srv.devices {
+		if d != nil && d.Host != "" {
+			h := d.Host
+			// strip zone / unexpected
+			if i := strings.IndexByte(h, '%'); i >= 0 {
+				h = h[:i]
+			}
+			if net.ParseIP(h) != nil {
+				out = append(out, h)
+			}
+		}
+	}
+	return out
+}
+
+func rankLANIP(ip string) int {
+	// lower is better; never use "last list item" as a rule
+	if strings.HasPrefix(ip, "192.168.") {
+		return 0
+	}
+	if strings.HasPrefix(ip, "10.") {
+		return 1
+	}
+	p := net.ParseIP(ip)
+	if p != nil && isRFC1918(p) {
+		return 2 // 172.16-31
+	}
+	return 3
+}
+
+func pickBestAmong(cands []lanCand) string {
+	if len(cands) == 0 {
+		return ""
+	}
+	best := cands[0]
+	for _, c := range cands[1:] {
+		if rankLANIP(c.ip) < rankLANIP(best.ip) {
+			best = c
+		}
+	}
+	return best.ip
+}
+
+// preferredLocalIPv4 picks ONE LAN IPv4 for UI / srv.sub /api/status.
+//
+// Combined strategy:
+//  1. Filter: loopback, APIPA 169.254.*, virtual/tunnel NIC names (vmware/vbox/wsl/docker/tun/tap/vpn/…).
+//  2. Prefer RFC1918 when any exist (drop public/other if private present).
+//  3. Prefer default-route egress (UDP dial 1.1.1.1:53 → LocalAddr) when that address is in the candidate set.
+//  4. If an online phone Host is known, prefer a local address on the same /24 (or same net segment).
+//  5. If still multiple: prefer 192.168.*, then 10.*, then other RFC1918 — never lan[len-1].
+func preferredLocalIPv4() string {
+	cands := listLANCandidates()
+	if len(cands) == 0 {
+		return ""
+	}
+	// (2) Prefer RFC1918 pool when available.
+	priv := make([]lanCand, 0, len(cands))
+	for _, c := range cands {
+		if isRFC1918(c.raw) {
+			priv = append(priv, c)
+		}
+	}
+	if len(priv) > 0 {
+		cands = priv
+	}
+	set := map[string]lanCand{}
+	for _, c := range cands {
+		set[c.ip] = c
+	}
+
+	// (4) Phone same-/24 narrows the pool first when applicable.
+	phones := onlinePhoneHosts()
+	if len(phones) > 0 {
+		same := make([]lanCand, 0)
+		for _, c := range cands {
+			for _, ph := range phones {
+				if sameIPv4Slash24(c.ip, ph) {
+					same = append(same, c)
+					break
+				}
+			}
+		}
+		if len(same) > 0 {
+			cands = same
+			set = map[string]lanCand{}
+			for _, c := range cands {
+				set[c.ip] = c
+			}
+		}
+	}
+
+	// (3) Default-route egress if present in (possibly narrowed) set.
+	if egress := defaultRouteLocalIP(); egress != "" {
+		if _, ok := set[egress]; ok {
+			return egress
+		}
+	}
+
+	// (5) Stable preference order — not "last in enumeration".
+	return pickBestAmong(cands)
+}
+
+func refreshLANSub(ip string) {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	srv.lanIP = ip
+	if ip != "" {
+		// Single IP only — short tip; do not Join every NIC.
+		srv.sub = fmt.Sprintf("http://%s:%d · 局域网", ip, httpPort)
+	} else {
+		srv.sub = fmt.Sprintf("http://0.0.0.0:%d", httpPort)
+	}
+}
+
+// localIPv4s kept for diagnostics / tests; UI must use preferredLocalIPv4 instead.
+func localIPv4s() []string {
+	cands := listLANCandidates()
+	out := make([]string, 0, len(cands))
+	for _, c := range cands {
+		out = append(out, c.ip)
 	}
 	return out
 }
