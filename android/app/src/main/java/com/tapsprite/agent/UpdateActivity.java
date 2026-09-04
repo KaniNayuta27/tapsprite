@@ -28,6 +28,9 @@ public class UpdateActivity extends Activity implements Updater.Listener {
         getWindow().setStatusBarColor(-16052980);
         getWindow().setNavigationBarColor(-16052980);
         setContentView(buildUi());
+        if (getIntent() != null && getIntent().getBooleanExtra("auto", false)) {
+            Updater.check(this, true, this);
+        }
     }
 
     private int dp(int i) {

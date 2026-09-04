@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.75</title>
+<title>触控精灵 v1.1.76</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -73,16 +73,24 @@ aside {
   display: block; color: var(--fg); font-size: 13px; font-weight: 650; margin: 0;
   min-width: 0; flex: 1;
 }
+.stat-upds {
+  display: flex; align-items: center; gap: 2px;
+  flex: none; margin: -4px -6px 0 0;
+}
 .stat-upd {
   flex: none; width: 24px; height: 24px; border: 0; border-radius: 8px;
   background: transparent; color: var(--muted);
   display: grid; place-items: center; padding: 0;
-  margin: -4px -6px 0 0;
+  margin: 0;
   transition: transform 160ms var(--ease-out), background-color var(--motion), color var(--motion);
+}
+.stat-upd.apk {
+  background: var(--accent-soft); color: var(--accent);
 }
 .stat-upd:active { transform: scale(0.97); }
 @media (hover: hover) and (pointer: fine) {
   .stat-upd:hover { background: #efeaff; color: var(--accent); }
+  .stat-upd.apk:hover { background: #e4dcff; color: var(--accent); }
 }
 .stat-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .stat-line #stSub { min-width: 0; }
@@ -99,6 +107,7 @@ aside {
 .devrow .btn.icon { width: 38px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 main { padding: 28px 24px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; height: 100%; }
 h1 { margin: 0 0 6px; font-size: 28px; font-weight: 650; letter-spacing: -.03em; text-wrap: balance; }
+#page-home > h1 { margin-bottom: 16px; }
 h1 em { font-style: normal; font-size: 14px; color: var(--muted); font-weight: 500; margin-left: 10px; }
 .lede { color: var(--muted); margin: 0 0 22px; font-size: 14px; text-wrap: pretty; }
 .card {
@@ -330,7 +339,7 @@ textarea {
 </head>
 <body>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.75</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.76</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -347,9 +356,14 @@ textarea {
   <div class="stat">
     <div class="stat-head">
       <b id="stTitle">正在连接</b>
-      <button type="button" class="stat-upd" id="upd" title="检查更新" aria-label="检查更新">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      </button>
+      <div class="stat-upds">
+        <button type="button" class="stat-upd apk" id="updApk" title="检查 App 更新" aria-label="检查 App 更新">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        </button>
+        <button type="button" class="stat-upd" id="upd" title="检查 PC 更新" aria-label="检查 PC 更新">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+      </div>
     </div>
     <div class="stat-line">
       <span id="stSub"></span>
@@ -360,7 +374,6 @@ textarea {
 <main>
   <section id="page-home">
     <h1>控制台</h1>
-    <p class="lede">手机 App 开着即可下发。保存截图走系统另存为，不会下载到浏览器。</p>
     <div class="card">
       <div class="script-wrap" id="edWrap">
       <div class="edtools">
@@ -374,7 +387,6 @@ textarea {
       </div>
       <div class="edcode"><div id="monaco"></div></div>
       </div>
-      <div id="hint" hidden></div>
       <div class="split" id="split"></div>
       <div class="row">
         <button class="btn primary" id="send">发送到手机</button>
@@ -559,16 +571,18 @@ function showUpdateBar(u) {
   if (!bar || !u) return;
   const phase = u.phase || "idle";
   const text = u.msg || "";
-  if (!text || phase === "idle") {
-    if (phase === "idle" && text && text.indexOf("已是最新") >= 0) {
+  if (phase === "idle") {
+    if (text) {
       bar.className = "on";
       msg.textContent = text;
       fill.style.width = "100%";
       clearTimeout(showUpdateBar._t);
-      showUpdateBar._t = setTimeout(() => { bar.className = ""; }, 4000);
+      const ms = text.indexOf("已是最新") >= 0 ? 4000 : 6000;
+      showUpdateBar._t = setTimeout(() => { bar.className = ""; }, ms);
       return;
     }
-    if (phase === "idle") { bar.className = ""; return; }
+    bar.className = "";
+    return;
   }
   bar.className = "on" + (phase === "error" ? " err" : "");
   msg.textContent = text || (phase === "checking" ? "正在检测版本" : phase === "downloading" ? ("下载中 " + (u.percent || 0) + "%") : text);
@@ -578,6 +592,14 @@ document.getElementById("upd").onclick = async () => {
   showUpdateBar({ phase: "checking", percent: 0, msg: "正在检测版本" });
   try {
     await api("/api/selfupdate", {});
+  } catch (e) {
+    showUpdateBar({ phase: "error", percent: 0, msg: "检查失败 " + (e && e.message ? e.message : e) });
+  }
+};
+document.getElementById("updApk").onclick = async () => {
+  showUpdateBar({ phase: "checking", percent: 0, msg: "正在检测 App 版本" });
+  try {
+    await api("/api/apkupdate", {});
   } catch (e) {
     showUpdateBar({ phase: "error", percent: 0, msg: "检查失败 " + (e && e.message ? e.message : e) });
   }

@@ -1,9 +1,9 @@
 {
-  "versionCode": 90,
-  "versionName": "0.9.65",
-  "apk_ver": "0.9.65",
-  "exe_ver": "1.1.75",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-65.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-75.exe",
-  "notes": "检查更新改为状态卡右上角图标；抓抓无权限只留底栏提示、去掉居中遮罩；1.1.75 / 0.9.65"
+  "versionCode": 91,
+  "versionName": "0.9.66",
+  "apk_ver": "0.9.66",
+  "exe_ver": "1.1.76",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-66.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-76.exe",
+  "notes": "去掉控制台底栏提示；PC 增加独立检查 App 更新；1.1.76 / 0.9.66"
 }

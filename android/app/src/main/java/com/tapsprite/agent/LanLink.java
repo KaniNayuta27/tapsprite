@@ -630,6 +630,9 @@ public final class LanLink {
                     } else if ("stop".equals(extractString3)) {
                         ScriptEngine.requestStop();
                         return;
+                    } else if ("update".equals(extractString3) || "apkupdate".equals(extractString3)) {
+                        MainActivity.openUpdateFromPc();
+                        return;
                     } else {
                         if ("shot".equals(extractString3) || "capture".equals(extractString3)) {
                             LanLink.sendShot();
@@ -806,7 +809,7 @@ public final class LanLink {
     }
 
     private static byte[] payload(boolean z, long j) {
-        return ("{\"id\":" + ConsoleServer.jsonStr(AppState.deviceId) + ",\"name\":" + ConsoleServer.jsonStr(AppState.deviceName) + ",\"a11y\":" + (AppState.auto != null) + ",\"cap\":" + CaptureService.ready + ",\"emu\":" + AppState.isEmulator() + ",\"ips\":" + ConsoleServer.jsonStr(join(ConsoleServer.ipv4())) + ",\"online\":" + z + ",\"gen\":" + j + "}").getBytes(UTF8);
+        return ("{\"id\":" + ConsoleServer.jsonStr(AppState.deviceId) + ",\"name\":" + ConsoleServer.jsonStr(AppState.deviceName) + ",\"a11y\":" + (AppState.auto != null) + ",\"cap\":" + CaptureService.ready + ",\"emu\":" + AppState.isEmulator() + ",\"ips\":" + ConsoleServer.jsonStr(join(ConsoleServer.ipv4())) + ",\"online\":" + z + ",\"gen\":" + j + ",\"versionCode\":" + Updater.currentCode() + ",\"versionName\":" + ConsoleServer.jsonStr(Updater.currentName()) + "}").getBytes(UTF8);
     }
 
     /* JADX INFO: Access modifiers changed from: private */

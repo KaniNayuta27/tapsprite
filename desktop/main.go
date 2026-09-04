@@ -28,22 +28,24 @@ var webFS embed.FS
 const (
 	httpPort = 18766
 	udpPort  = 18766
-	version  = "1.1.75"
+	version  = "1.1.76"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 )
 
 type Device struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	A11y   bool   `json:"a11y"`
-	Cap    bool   `json:"cap"`
-	Emu    bool   `json:"emu"`
-	IPs    string `json:"ips"`
-	Online bool   `json:"online"`
-	Gen    int64  `json:"gen"`
-	Host   string `json:"-"`
-	Seen   time.Time `json:"-"`
+	ID      string    `json:"id"`
+	Name    string    `json:"name"`
+	A11y    bool      `json:"a11y"`
+	Cap     bool      `json:"cap"`
+	Emu     bool      `json:"emu"`
+	IPs     string    `json:"ips"`
+	Online  bool      `json:"online"`
+	Gen     int64     `json:"gen"`
+	VerCode int       `json:"verCode,omitempty"`
+	VerName string    `json:"verName,omitempty"`
+	Host    string    `json:"-"`
+	Seen    time.Time `json:"-"`
 }
 
 type Cmd struct {
@@ -114,6 +116,7 @@ func main() {
 	mux.HandleFunc("/api/findtest", handleFindTest)
 	mux.HandleFunc("/api/channel", handleChannel)
 	mux.HandleFunc("/api/selfupdate", handleSelfUpdate)
+	mux.HandleFunc("/api/apkupdate", handleApkUpdate)
 	mux.HandleFunc("/api/updatestatus", handleUpdateStatus)
 	mux.HandleFunc("/api/quit", handleQuit)
 	mux.HandleFunc("/api/fetchapk", handleFetchApk)
@@ -249,16 +252,26 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	emu, _ := body["emu"].(bool)
 	ips, _ := body["ips"].(string)
 	online, _ := body["online"].(bool)
+	verName, _ := body["versionName"].(string)
+	if verName == "" {
+		verName, _ = body["ver"].(string)
+	}
+	verCode := jsonInt(body["versionCode"])
+	if verCode == 0 {
+		verCode = jsonInt(body["verCode"])
+	}
 	var gen int64
 	switch t := body["gen"].(type) {
 	case float64:
 		gen = int64(t)
+	case int64:
+		gen = t
 	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
 	srv.mu.Lock()
 	prev, had := srv.devices[id]
 	fresh := !had || time.Since(prev.Seen) > 60*time.Second || !prev.Online
-	d := &Device{ID: id, Name: name, A11y: a11y, Cap: capv, Emu: emu, IPs: ips, Online: online, Gen: gen, Host: host, Seen: time.Now()}
+	d := &Device{ID: id, Name: name, A11y: a11y, Cap: capv, Emu: emu, IPs: ips, Online: online, Gen: gen, VerCode: verCode, VerName: verName, Host: host, Seen: time.Now()}
 	srv.devices[id] = d
 	if srv.selected == "" {
 		srv.selected = id
@@ -350,6 +363,37 @@ func handleDevice(w http.ResponseWriter, r *http.Request) {
 	}
 	srv.mu.Unlock()
 	writeJSON(w, map[string]any{"ok": true})
+}
+
+func jsonInt(v any) int {
+	switch t := v.(type) {
+	case float64:
+		return int(t)
+	case float32:
+		return int(t)
+	case int:
+		return t
+	case int64:
+		return int(t)
+	case json.Number:
+		n, _ := t.Int64()
+		return int(n)
+	case string:
+		n, _ := strconv.Atoi(strings.TrimSpace(t))
+		return n
+	default:
+		return 0
+	}
+}
+
+func selectedLiveDevice() (id string, live bool, verCode int, verName string) {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	sel := srv.devices[srv.selected]
+	if !deviceLiveLocked(sel) {
+		return "", false, 0, ""
+	}
+	return sel.ID, true, sel.VerCode, sel.VerName
 }
 
 func parseBoolQuery(v string) (bool, bool) {

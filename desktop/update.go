@@ -345,6 +345,154 @@ func handleUpdateStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, getUpdate())
 }
 
+// apkUpdateNeeded mirrors App Updater.check: integer versionCode first, then name.
+// Unknown local version (0 / "") cannot prove "already latest", so a check is needed.
+func apkUpdateNeeded(remoteCode, localCode int, remoteName, localName string) bool {
+	if localCode > 0 && remoteCode > 0 {
+		return remoteCode > localCode
+	}
+	if strings.TrimSpace(localName) != "" && strings.TrimSpace(remoteName) != "" {
+		return compareVer(remoteName, localName) > 0
+	}
+	return true
+}
+
+func apkFileName(name string) string {
+	if name == "" {
+		name = "update"
+	}
+	fname := name
+	if !strings.HasSuffix(strings.ToLower(fname), ".apk") {
+		if strings.Contains(name, ".") && !strings.Contains(name, "/") {
+			fname = verToFileStem(name, "apk")
+		} else {
+			fname = "tapsprite-update.apk"
+		}
+	}
+	if !strings.HasPrefix(strings.ToLower(fname), "tapsprite") {
+		fname = "tapsprite-" + fname
+	}
+	return fname
+}
+
+func markApkReady(dest, name string, size int64) {
+	apkMu.Lock()
+	apkState.Path = dest
+	apkState.Ready = true
+	apkState.Busy = false
+	apkState.Err = ""
+	apkState.Name = name
+	apkState.Got = size
+	apkState.Total = size
+	apkState.Msg = "下载完成"
+	apkMu.Unlock()
+}
+
+func handleApkUpdate(w http.ResponseWriter, r *http.Request) {
+	updMu.Lock()
+	if updBusy {
+		updMu.Unlock()
+		writeJSON(w, map[string]any{"ok": true, "msg": "已在更新中", "busy": true})
+		return
+	}
+	updBusy = true
+	updMu.Unlock()
+
+	setUpdate("checking", 0, 0, 0, "正在检测 App 版本")
+	writeJSON(w, map[string]any{"ok": true, "msg": "正在检测 App 版本"})
+
+	go runApkUpdate()
+}
+
+func runApkUpdate() {
+	defer func() {
+		updMu.Lock()
+		updBusy = false
+		updMu.Unlock()
+		apkMu.Lock()
+		apkState.Busy = false
+		apkMu.Unlock()
+	}()
+
+	ch, err := fetchChannel()
+	if err != nil {
+		msg := "检测失败：" + shortNetErr(err)
+		setUpdate("error", 0, 0, 0, msg)
+		writeDesktopLog(msg)
+		return
+	}
+	remoteCode := ch.VersionCode
+	remoteName := strings.TrimSpace(ch.ApkVer)
+	if remoteName == "" {
+		remoteName = strings.TrimSpace(ch.VersionName)
+	}
+	id, live, localCode, localName := selectedLiveDevice()
+	if !apkUpdateNeeded(remoteCode, localCode, remoteName, localName) {
+		label := localName
+		if label == "" {
+			label = remoteName
+		}
+		if localCode > 0 {
+			setUpdate("idle", 100, 0, 0, fmt.Sprintf("已是最新 %s（%d）", label, localCode))
+		} else {
+			setUpdate("idle", 100, 0, 0, "已是最新 "+label)
+		}
+		return
+	}
+	if strings.TrimSpace(ch.Apk) == "" {
+		msg := "清单缺少 apk 下载地址"
+		setUpdate("error", 0, 0, 0, msg)
+		writeDesktopLog(msg)
+		return
+	}
+	if remoteName == "" {
+		remoteName = "update"
+	}
+	fname := apkFileName(remoteName)
+	dest := filepath.Join(downloadsDir(), fname)
+
+	apkMu.Lock()
+	apkState = apkJob{Busy: true, Ready: false, Name: remoteName, Msg: "开始下载"}
+	apkMu.Unlock()
+
+	var size int64
+	if fi, e := os.Stat(dest); e == nil && fi.Size() >= 10000 {
+		size = fi.Size()
+		markApkReady(dest, remoteName, size)
+	} else {
+		setUpdate("downloading", 0, 0, 0, "发现 App "+remoteName+"，开始下载")
+		if err := downloadFile(ch.Apk, dest, func(got, total int64) {
+			pct := 0
+			if total > 0 {
+				pct = int(got * 100 / total)
+			}
+			setUpdate("downloading", pct, got, total, fmt.Sprintf("App 下载中 %d%%", pct))
+			setApkProgress(got, total, false, "", "电脑下载中")
+		}); err != nil {
+			msg := "下载失败：" + shortNetErr(err)
+			setUpdate("error", 0, 0, 0, msg)
+			writeDesktopLog(msg)
+			return
+		}
+		if fi, e := os.Stat(dest); e == nil {
+			size = fi.Size()
+		}
+		markApkReady(dest, remoteName, size)
+		cleanupOldDownloads("apk", dest)
+	}
+
+	if live {
+		enqueue(id, map[string]any{"type": "control", "action": "update"})
+		if localCode > 0 {
+			setUpdate("idle", 100, size, size, "App "+remoteName+" 已下载，已通知手机安装")
+		} else {
+			setUpdate("idle", 100, size, size, "App "+remoteName+" 已就绪，请在手机点检查更新安装")
+		}
+		return
+	}
+	setUpdate("idle", 100, size, size, "App "+remoteName+" 已下载到 Downloads（未联机手机）")
+}
+
 func handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
 	updMu.Lock()
 	if updBusy {
@@ -532,22 +680,13 @@ func handleFetchApk(w http.ResponseWriter, r *http.Request) {
 			apkMu.Unlock()
 		}()
 		name := body.Name
-		if name == "" {
-			name = "update"
-		}
-		// prefer tapspriteX-Y-Z.apk naming when name looks like a version
-		fname := name
-		if !strings.HasSuffix(strings.ToLower(fname), ".apk") {
-			if strings.Contains(name, ".") && !strings.Contains(name, "/") {
-				fname = verToFileStem(name, "apk")
-			} else {
-				fname = "tapsprite-update.apk"
-			}
-		}
-		if !strings.HasPrefix(strings.ToLower(fname), "tapsprite") {
-			fname = "tapsprite-" + fname
-		}
+		fname := apkFileName(name)
 		dest := filepath.Join(downloadsDir(), fname)
+		if fi, e := os.Stat(dest); e == nil && fi.Size() >= 10000 {
+			markApkReady(dest, name, fi.Size())
+			setUpdate("idle", 100, fi.Size(), fi.Size(), "APK 下载完成")
+			return
+		}
 		setApkProgress(0, 0, false, "", "电脑下载中")
 		err := downloadFile(body.URL, dest, func(got, total int64) {
 			setApkProgress(got, total, false, "", "电脑下载中")

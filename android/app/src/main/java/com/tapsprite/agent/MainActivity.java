@@ -84,6 +84,35 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** PC-triggered App update: open 检查更新 and auto download/install via LAN. */
+    static void openUpdateFromPc() {
+        final android.content.Context ctx = App.ctx;
+        if (ctx == null) {
+            return;
+        }
+        AppState.log("电脑要求检查 App 更新");
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    MainActivity main = live;
+                    if (main != null && !main.isFinishing()) {
+                        Intent i = new Intent(main, UpdateActivity.class);
+                        i.putExtra("auto", true);
+                        main.startActivity(i);
+                        return;
+                    }
+                    Intent i = new Intent(ctx, UpdateActivity.class);
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                    i.putExtra("auto", true);
+                    ctx.startActivity(i);
+                } catch (Exception e) {
+                    AppState.log("无法打开检查更新：" + e.getMessage());
+                }
+            }
+        });
+    }
+
     /** Bring App to front and pop the system MediaProjection dialog (抓抓 / LAN shot). */
     static void askCaptureForShot() {
         pendingShotAfterCapture = true;

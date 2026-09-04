@@ -160,6 +160,26 @@ func TestStatusA11yEmptyWhenDisconnected(t *testing.T) {
 	}
 }
 
+func TestHelloStoresAppVersion(t *testing.T) {
+	resetSrv()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/hello", handleHello)
+	body := `{"id":"dev1","name":"phone","a11y":true,"cap":true,"online":true,"gen":1,"versionCode":91,"versionName":"0.9.66"}`
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/hello", strings.NewReader(body))
+	req.RemoteAddr = "192.168.1.2:12345"
+	mux.ServeHTTP(rr, req)
+	srv.mu.Lock()
+	d := srv.devices["dev1"]
+	srv.mu.Unlock()
+	if d == nil {
+		t.Fatal("device missing")
+	}
+	if d.VerCode != 91 || d.VerName != "0.9.66" {
+		t.Fatalf("want 91/0.9.66 got %d/%s", d.VerCode, d.VerName)
+	}
+}
+
 func TestShotNoPermWhenCapOff(t *testing.T) {
 	resetSrv()
 	srv.devices["dev1"] = &Device{
