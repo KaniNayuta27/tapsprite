@@ -116,6 +116,19 @@ public final class Sprite {
         return ScreenApi.getPixelColor(i, i2);
     }
 
+    public static String getPixelColorA11y(int i, int i2) {
+        if (Build.VERSION.SDK_INT < 30) {
+            AppState.log("GetPixelColorA11y：需要安卓 11+");
+            return "";
+        }
+        AutoService autoService = AppState.auto;
+        if (autoService == null) {
+            AppState.log("GetPixelColorA11y：未开启无障碍");
+            return "";
+        }
+        return autoService.getPixelColorA11y(i, i2);
+    }
+
     public static boolean findColor(int i, int i2, int i3, int i4, String str, float f, int i5) {
         return ScreenApi.findColor(i, i2, i3, i4, str, f, i5);
     }
@@ -237,6 +250,11 @@ public final class Sprite {
             String pixelColor = getPixelColor(i(strArr, 0, 0), i(strArr, 1, 0));
             AppState.log("GetPixelColor " + i(strArr, 0, 0) + "," + i(strArr, 1, 0) + " = " + pixelColor);
             return pixelColor;
+        }
+        if (lowerCase.equals("getpixelcolora11y") || lowerCase.equals("getcolora11y")) {
+            String pixelColorA11y = getPixelColorA11y(i(strArr, 0, 0), i(strArr, 1, 0));
+            AppState.log("GetPixelColorA11y " + i(strArr, 0, 0) + "," + i(strArr, 1, 0) + " = " + pixelColorA11y);
+            return pixelColorA11y;
         }
         if (lowerCase.equals("findcolor")) {
             AppState.log("FindColor " + (findColor(i(strArr, 0, 0), i(strArr, 1, 0), i(strArr, 2, 0), i(strArr, 3, 0), s(strArr, 4, "000000"), f(strArr, 5), i(strArr, 6, 0)) ? intXY : "-1,-1"));

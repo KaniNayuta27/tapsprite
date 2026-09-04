@@ -3,7 +3,9 @@ package com.tapsprite.agent;
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.content.ContentResolver;
+import android.graphics.Bitmap;
 import android.graphics.Path;
+import android.hardware.HardwareBuffer;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -14,6 +16,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /* loaded from: classes.dex */
 public class AutoService extends AccessibilityService {
@@ -310,6 +313,121 @@ public class AutoService extends AccessibilityService {
             Thread.currentThread().interrupt();
             return false;
         }
+    }
+
+
+    public String getPixelColorA11y(int x, int y) {
+        if (Build.VERSION.SDK_INT < 30) {
+            AppState.log("GetPixelColorA11y：需要安卓 11+");
+            return "";
+        }
+        if (AppState.auto == null) {
+            AppState.log("GetPixelColorA11y：未开启无障碍");
+            return "";
+        }
+        final CountDownLatch latch = new CountDownLatch(1);
+        final AtomicReference<String> colorRef = new AtomicReference<>("");
+        final int reqX = x;
+        final int reqY = y;
+        try {
+            takeScreenshot(0, new Executor() { // from class: com.tapsprite.agent.AutoService.A11yColorExec
+                @Override // java.util.concurrent.Executor
+                public void execute(Runnable runnable) {
+                    runnable.run();
+                }
+            }, new AccessibilityService.TakeScreenshotCallback() { // from class: com.tapsprite.agent.AutoService.A11yColorCb
+                @Override // android.accessibilityservice.AccessibilityService.TakeScreenshotCallback
+                public void onSuccess(AccessibilityService.ScreenshotResult screenshotResult) {
+                    HardwareBuffer hardwareBuffer = null;
+                    Bitmap hardwareBitmap = null;
+                    Bitmap softBitmap = null;
+                    try {
+                        if (screenshotResult == null) {
+                            AppState.log("GetPixelColorA11y：截图结果为空");
+                            return;
+                        }
+                        hardwareBuffer = screenshotResult.getHardwareBuffer();
+                        if (hardwareBuffer == null) {
+                            AppState.log("GetPixelColorA11y：HardwareBuffer 为空");
+                            return;
+                        }
+                        hardwareBitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, screenshotResult.getColorSpace());
+                        if (hardwareBitmap == null) {
+                            AppState.log("GetPixelColorA11y：无法包装 Bitmap");
+                            return;
+                        }
+                        softBitmap = hardwareBitmap.copy(Bitmap.Config.ARGB_8888, false);
+                        if (softBitmap == null) {
+                            AppState.log("GetPixelColorA11y：无法复制为软件 Bitmap");
+                            return;
+                        }
+                        int width = softBitmap.getWidth();
+                        int height = softBitmap.getHeight();
+                        if (width <= 0 || height <= 0) {
+                            AppState.log("GetPixelColorA11y：截图像素尺寸无效");
+                            return;
+                        }
+                        int cx = reqX;
+                        int cy = reqY;
+                        if (cx < 0 || cy < 0 || cx >= width || cy >= height) {
+                            AppState.log("GetPixelColorA11y：坐标越界 (" + reqX + "," + reqY + ") 图 " + width + "x" + height + "，已夹紧");
+                            cx = Math.max(0, Math.min(cx, width - 1));
+                            cy = Math.max(0, Math.min(cy, height - 1));
+                        }
+                        colorRef.set(ColorUtil.hex(softBitmap.getPixel(cx, cy)));
+                    } catch (Exception e) {
+                        AppState.log("GetPixelColorA11y：取色失败：" + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
+                    } finally {
+                        try {
+                            if (softBitmap != null) {
+                                softBitmap.recycle();
+                            }
+                        } catch (Exception e) {
+                        }
+                        try {
+                            if (hardwareBitmap != null) {
+                                hardwareBitmap.recycle();
+                            }
+                        } catch (Exception e) {
+                        }
+                        try {
+                            if (hardwareBuffer != null) {
+                                hardwareBuffer.close();
+                            }
+                        } catch (Exception e) {
+                        }
+                        latch.countDown();
+                    }
+                }
+
+                @Override // android.accessibilityservice.AccessibilityService.TakeScreenshotCallback
+                public void onFailure(int errorCode) {
+                    String reason;
+                    if (errorCode == AccessibilityService.ERROR_TAKE_SCREENSHOT_INTERVAL_TIME_SHORT) {
+                        reason = "截图间隔太短/冷却中";
+                    } else if (errorCode == AccessibilityService.ERROR_TAKE_SCREENSHOT_NO_ACCESSIBILITY_ACCESS) {
+                        reason = "无障碍无截图权限";
+                    } else if (errorCode == AccessibilityService.ERROR_TAKE_SCREENSHOT_INTERNAL_ERROR) {
+                        reason = "内部错误";
+                    } else if (errorCode == AccessibilityService.ERROR_TAKE_SCREENSHOT_INVALID_DISPLAY) {
+                        reason = "无效显示器";
+                    } else {
+                        reason = "失败码 " + errorCode;
+                    }
+                    AppState.log("GetPixelColorA11y：截图失败——" + reason);
+                    latch.countDown();
+                }
+            });
+            if (!latch.await(3L, TimeUnit.SECONDS)) {
+                AppState.log("GetPixelColorA11y：等待截图超时");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            AppState.log("GetPixelColorA11y：被中断");
+        } catch (Throwable th) {
+            AppState.log("GetPixelColorA11y：异常：" + (th.getMessage() != null ? th.getMessage() : th.getClass().getSimpleName()));
+        }
+        return colorRef.get() != null ? colorRef.get() : "";
     }
 
     public boolean takeA11yShot() {

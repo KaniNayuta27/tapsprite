@@ -195,6 +195,15 @@ public final class LuaEngine {
                 return valueOf(Sprite.getPixelColor(luaValue.toint(), luaValue2.toint()));
             }
         });
+        TwoArgFunction getPixelColorA11yFn = new TwoArgFunction() { // from class: com.tapsprite.agent.LuaEngine.GetPixelColorA11y
+            @Override // org.luaj.vm2.lib.TwoArgFunction, org.luaj.vm2.lib.LibFunction, org.luaj.vm2.LuaValue
+            public LuaValue call(LuaValue luaValue, LuaValue luaValue2) {
+                LuaEngine.checkStop();
+                return valueOf(Sprite.getPixelColorA11y(luaValue.toint(), luaValue2.toint()));
+            }
+        };
+        globals.set("GetPixelColorA11y", getPixelColorA11yFn);
+        globals.set("GetColorA11y", getPixelColorA11yFn);
         globals.set("FindColor", new VarArgFunction() { // from class: com.tapsprite.agent.LuaEngine.13
             @Override // org.luaj.vm2.lib.VarArgFunction, org.luaj.vm2.lib.LibFunction, org.luaj.vm2.LuaValue
             public Varargs invoke(Varargs varargs) {

@@ -10,8 +10,8 @@ android {
         applicationId "com.tapsprite.agent"
         minSdk 24
         targetSdk 34
-        versionCode 85
-        versionName "0.9.60-rebuild"
+        versionCode 86
+        versionName "0.9.61-rebuild"
     }
 
     buildTypes {
