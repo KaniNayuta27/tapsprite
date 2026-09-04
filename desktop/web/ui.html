@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.66-rebuild</title>
+<title>触控精灵 v1.1.67-rebuild</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -257,7 +257,7 @@ textarea {
 </head>
 <body>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.66-rebuild</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.67-rebuild</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -934,8 +934,16 @@ document.getElementById("devRef").onclick = () => {
   document.getElementById("devSel")._sig = "";
   api("/api/refresh", {});
 };
-setInterval(tick, 100);
-tick();
+(function liveTick(){
+  function loop(){
+    Promise.resolve(tick()).finally(function(){
+      // ~1 frame; falls back near 16ms when rAF is throttled in background
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(loop);
+      else setTimeout(loop, 16);
+    });
+  }
+  loop();
+})();
 (function () {
   const DEFAULT = 'KeyPress("Home")\nDelay(1000)\nTap(167, 775)\nDelay(2000)\nKeyPress("Back")\nDelay(2000)\n';
   const cmds = [
