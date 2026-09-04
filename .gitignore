@@ -1,0 +1,17 @@
+# Android
+android/local.properties
+android/.gradle/
+android/**/build/
+android/captures/
+*.iml
+.idea/
+
+# Go
+desktop/tapsprite
+desktop/tapsprite.exe
+desktop/tapsprite-linux
+
+# OS / editor
+.DS_Store
+*.swp
+*~

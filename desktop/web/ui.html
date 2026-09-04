@@ -1,0 +1,1481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>触控精灵 v1.1.62</title>
+<link rel="stylesheet" href="/vs/editor/editor.main.css"/>
+<style>
+:root {
+  --bg: #f3f0fa;
+  --bg-elev: #ffffff;
+  --fg: #1a1430;
+  --muted: #746d8c;
+  --accent: #6d5ef5;
+  --accent-soft: #efeaff;
+  --accent-fg: #ffffff;
+  --log: #1a1430;
+  --log-fg: #d8d3ee;
+  --ok: #2f9e6b;
+  --radius-xl: 24px;
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --shadow: 0 0 0 1px rgba(26,20,48,.06), 0 1px 2px -1px rgba(26,20,48,.06), 0 8px 24px rgba(40,30,80,.05);
+  --font: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --mono: "Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace;
+  --motion: 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+* { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+html { -webkit-font-smoothing: antialiased; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font);
+  display: grid; grid-template-columns: 268px 1fr; height: 100%;
+}
+button { font-family: inherit; cursor: pointer; }
+button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+aside {
+  background: var(--bg-elev);
+  padding: 28px 16px;
+  display: flex; flex-direction: column;
+  min-height: 0; height: 100%; overflow: hidden;
+  box-shadow: 1px 0 0 rgba(26,20,48,.06);
+}
+.brand { padding: 0 12px 4px; }
+.brand h2 { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -.03em; text-wrap: balance; }
+.brand small { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: .14em; }
+.nav { margin-top: 28px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.nav button {
+  text-align: left; border: 0; background: transparent; color: var(--muted);
+  padding: 12px 14px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600;
+  transition: transform 160ms var(--ease-out), background-color var(--motion), color var(--motion);
+}
+.nav button:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .nav button:hover { background: #f6f3ff; color: var(--fg); }
+}
+.nav button.on { background: var(--accent-soft); color: var(--fg); }
+.stat {
+  background: #f7f5ff; border-radius: var(--radius-lg); padding: 14px 16px;
+  font-size: 12px; color: var(--muted);
+}
+.stat b { display: block; color: var(--fg); font-size: 13px; font-weight: 650; margin-bottom: 4px; }
+.devbox { margin: 0 0 14px; }
+.devbox label { display: block; font-size: 11px; color: var(--muted); font-weight: 650; letter-spacing: .12em; margin-bottom: 6px; }
+.devrow { display: flex; gap: 8px; align-items: center; }
+.devrow select {
+  flex: 1; min-width: 0; border: 0; border-radius: 12px; padding: 10px 12px;
+  background: #f7f5ff; color: var(--fg); font: 13px/1.3 inherit; font-weight: 600;
+}
+.devrow .btn.icon { width: 38px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+main { padding: 28px 24px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; height: 100%; }
+h1 { margin: 0 0 6px; font-size: 28px; font-weight: 650; letter-spacing: -.03em; text-wrap: balance; }
+h1 em { font-style: normal; font-size: 14px; color: var(--muted); font-weight: 500; margin-left: 10px; }
+.lede { color: var(--muted); margin: 0 0 22px; font-size: 14px; text-wrap: pretty; }
+.card {
+  background: var(--bg-elev); border-radius: var(--radius-xl); padding: var(--space-4);
+  box-shadow: var(--shadow);
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+}
+textarea {
+  font-family: inherit;
+}
+.split {
+  height: 10px; margin: 2px 0 8px; cursor: ns-resize;
+  display: flex; align-items: center; justify-content: center;
+}
+.split::after {
+  content: ""; width: 42px; height: 4px; border-radius: 99px;
+  background: #c9c2de; box-shadow: 0 3px 0 #ddd7ee;
+}
+.script-wrap {
+  position: relative; height: 240px; min-height: 120px; flex: none;
+  border-radius: var(--radius-md); background: #1a1628; overflow: hidden;
+  display: flex; flex-direction: row;
+}
+.edtools {
+  width: 38px; flex: none; display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 4px; background: #efeaff; z-index: 2;
+  border-right: 1px solid rgba(26,20,48,.06);
+}
+.edtools button {
+  width: 30px; height: 30px; border: 0; border-radius: 8px;
+  background: transparent; color: #5c5670;
+  display: grid; place-items: center; padding: 0;
+  transition: transform 160ms var(--ease-out), background-color var(--motion), color var(--motion);
+}
+.edtools button:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .edtools button:hover { background: #fff; color: var(--accent); }
+}
+.edtools button.cmt { color: #2f9e6b; }
+.edtools button.unc { color: #e44545; }
+.edcode { flex: 1; position: relative; min-width: 0; min-height: 0; }
+#monaco { position: absolute; inset: 0; }
+.monaco-editor, .monaco-editor textarea {
+  user-select: text !important; -webkit-user-select: text !important;
+}
+.row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.btn {
+  border: 0; height: 40px; min-width: 44px; padding: 0 18px; border-radius: 999px;
+  font-weight: 650; font-size: 14px; line-height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  vertical-align: middle;
+  transition: transform 160ms var(--ease-out), background-color var(--motion), color var(--motion);
+}
+.btn:active { transform: scale(0.97); }
+.btn.primary { background: var(--accent); color: var(--accent-fg); }
+.btn.ghost { background: var(--accent-soft); color: var(--fg); }
+.btn.undo { background: #ece8f5; color: #5c5670; }
+.btn.ok { background: #e44545; color: #fff; }
+.btn.ok:hover { background: #cc3a3a; }
+.btn.save { background: #2f9e6b; color: #fff; }
+.btn.save:hover { background: #27885b; }
+.log {
+  margin-top: 12px; flex: none; min-height: 72px; overflow: auto; font: 12px/1.5 var(--mono);
+  background: var(--log); color: var(--log-fg); border-radius: var(--radius-lg); padding: 12px 14px;
+  font-variant-numeric: tabular-nums; cursor: text; caret-color: transparent; outline: none;
+  user-select: text; -webkit-user-select: text; -webkit-user-drag: none;
+}
+.log * { user-select: text; -webkit-user-select: text; -webkit-user-drag: none; }
+.tools { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.stage-wrap { display: grid; grid-template-columns: 1fr 280px; gap: 16px; min-height: 0; }
+.rightcol { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+.stage {
+  background: #111018; overflow: auto; height: calc(100vh - 196px);
+  position: relative; cursor: crosshair; border-radius: 0; user-select: none;
+}
+#shot { image-rendering: pixelated; transform-origin: 0 0; display: block; -webkit-user-drag: none; user-select: none; pointer-events: none; }
+.slots { display: flex; flex-direction: column; gap: 8px; }
+.slot {
+  display: grid; grid-template-columns: 22px auto auto; gap: 8px; align-items: center;
+  background: #f7f5ff; border-radius: var(--radius-md); padding: 10px 12px; font: 12px var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.coord, .hexc { cursor: inherit; }
+.hexc { min-width: 4.2em; }
+.sw { width: 40px; height: 24px; border-radius: 6px; background: repeating-conic-gradient(#ddd 0 25%, #f4f4f4 0 50%) 0 0 / 8px 8px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+.ctx {
+  position: fixed; z-index: 40; min-width: 220px; padding: 6px 0;
+  background: #fff; color: #222; border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.18); font-size: 13px; display: none;
+}
+.ctx b { display: block; padding: 8px 16px; font-weight: 600; cursor: pointer; }
+.ctx b:hover { background: #f3f0fa; }
+.ctx hr { border: 0; border-top: 1px solid #eee; margin: 4px 0; }
+.cropbox {
+  position: absolute; border: 1px dashed var(--accent); background: rgba(109,94,245,.14);
+  display: none; pointer-events: none;
+}
+.cropbox.adjust { pointer-events: auto; }
+.cropbox i {
+  position: absolute; width: 10px; height: 10px; background: var(--accent);
+  border-radius: 1px; pointer-events: auto;
+}
+.cropbox i::after {
+  content: ""; position: absolute; inset: -8px;
+}
+.cropbox i[data-h=nw] { left: -5px; top: -5px; cursor: nwse-resize; }
+.cropbox i[data-h=n]  { left: 50%; top: -5px; margin-left: -5px; cursor: ns-resize; }
+.cropbox i[data-h=ne] { right: -5px; top: -5px; cursor: nesw-resize; }
+.cropbox i[data-h=e]  { right: -5px; top: 50%; margin-top: -5px; cursor: ew-resize; }
+.cropbox i[data-h=se] { right: -5px; bottom: -5px; cursor: nwse-resize; }
+.cropbox i[data-h=s]  { left: 50%; bottom: -5px; margin-left: -5px; cursor: ns-resize; }
+.cropbox i[data-h=sw] { left: -5px; bottom: -5px; cursor: nesw-resize; }
+.cropbox i[data-h=w]  { left: -5px; top: 50%; margin-top: -5px; cursor: ew-resize; }
+.selbox {
+  position: absolute; border: 1px dashed #e8c547; background: rgba(232,197,71,.12);
+  display: none; pointer-events: none;
+}
+.meas {
+  margin-top: 12px; padding: 12px; background: #f7f5ff; border-radius: var(--radius-md);
+  font: 12px var(--mono); color: var(--fg);
+}
+.meas input {
+  width: 44px; margin: 0 4px 0 0; border: 1px solid #e4dff2; border-radius: 8px;
+  padding: 6px 6px; font: 12px var(--mono); background: #fff; color: var(--fg);
+  user-select: text; -webkit-user-select: text; -webkit-user-drag: none;
+}
+.measrow { display: flex; align-items: center; flex-wrap: nowrap; }
+.measrow .btn { margin-left: auto; }
+.meas .sz { color: var(--muted); margin: 0; }
+.szrow { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.szrow .sz { flex: 1; }
+.meas .btn { height: 32px; line-height: 32px; font-size: 12px; min-width: 52px; }
+.origin {
+  margin-bottom: 10px; padding: 10px 12px; background: #f7f5ff; border-radius: var(--radius-md);
+  font: 12px var(--mono); display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.origin input {
+  width: 44px; margin: 0 4px 0 0; border: 1px solid #e4dff2; border-radius: 8px;
+  padding: 6px 6px; font: 12px var(--mono); background: #fff; color: var(--fg);
+  user-select: text; -webkit-user-select: text; -webkit-user-drag: none;
+}
+.origin .btn { height: 28px; line-height: 28px; font-size: 12px; padding: 0 10px; }
+.hud {
+  position: fixed; pointer-events: none; z-index: 9; display: none;
+  background: #111018; color: #fff; font: 12px/1.4 var(--mono); padding: 6px; border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+.hud canvas { display: block; width: 120px; height: 120px; image-rendering: pixelated; background: #222; }
+.hud .t { margin-top: 6px; white-space: pre; font-variant-numeric: tabular-nums; }
+.slots { display: flex; flex-direction: column; gap: 6px; }
+.slot {
+  display: grid; grid-template-columns: 22px auto auto; gap: 8px; align-items: center;
+  background: #f7f5ff; border-radius: var(--radius-md); padding: 8px 10px; font: 12px var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+.sw { width: 28px; height: 18px; border-radius: 6px; background: #ddd; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+#page-home { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; overflow: hidden; }
+#page-grab { display: none; flex: 1; min-height: 0; height: 100%; }
+#toast {
+  position: fixed; left: 50%; bottom: 28px; z-index: 50;
+  max-width: min(440px, 86vw); padding: 12px 16px; border-radius: 14px;
+  background: #3a1730; color: #ffe8ea; font-size: 13px; font-weight: 650;
+  box-shadow: 0 12px 32px rgba(40,16,30,.28);
+  opacity: 0; pointer-events: none;
+  transform: translateX(-50%) translateY(8px) scale(0.97);
+  transform-origin: 50% 100%;
+  transition: transform 200ms var(--ease-out), opacity 200ms var(--ease-out);
+}
+#toast.on {
+  opacity: 1; pointer-events: auto;
+  transform: translateX(-50%) translateY(0) scale(1);
+}
+#toast.ok { background: #173a2a; color: #e8fff4; }
+@media (prefers-reduced-motion: reduce) {
+  .btn, .nav button, #toast { transition: opacity 160ms ease; }
+  .btn:active, .nav button:active { transform: none; }
+  #toast { transform: translateX(-50%); }
+}
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.62</small></div>
+  <div class="nav">
+    <button class="on" id="navHome">控制台</button>
+    <button id="navGrab">抓抓</button>
+  </div>
+  <div class="devbox">
+    <label>设备</label>
+    <div class="devrow">
+      <select id="devSel"><option value="">等待设备</option></select>
+      <button class="btn ghost icon" id="devRef" title="刷新" aria-label="刷新">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.3-6"/><polyline points="21 3 21 9 15 9"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="stat"><b id="stTitle">正在连接</b><span id="stSub">MQTT</span></div>
+</aside>
+<main>
+  <section id="page-home">
+    <h1>控制台</h1>
+    <p class="lede">手机 App 开着即可下发。保存截图走系统另存为，不会下载到浏览器。</p>
+    <div class="card">
+      <div class="script-wrap" id="edWrap">
+      <div class="edtools">
+        <button type="button" id="edSave" title="保存到桌面 (Ctrl+S)" aria-label="保存"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></button>
+        <button type="button" class="cmt" id="edCmt" title="注释" aria-label="注释" style="font:700 13px/1 var(--mono)">//</button>
+        <button type="button" class="unc" id="edUnc" title="取消注释" aria-label="取消注释" style="font:700 16px/1 var(--font)">×</button>
+        <button type="button" id="edFind" title="查找 (Ctrl+F)" aria-label="查找"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg></button>
+        <button type="button" id="edRep" title="替换 (Ctrl+H)" aria-label="替换"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3 21 7l-4 4"/><path d="M21 7H8"/><path d="m7 21-4-4 4-4"/><path d="M3 17h13"/></svg></button>
+        <button type="button" id="edChk" title="语法检测" aria-label="语法检测"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></button>
+        <button type="button" id="fmtBtn" title="整理缩进" aria-label="缩进"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M3 12h12"/><path d="M3 18h18"/></svg></button>
+      </div>
+      <div class="edcode"><div id="monaco"></div></div>
+      </div>
+      <div id="hint" hidden></div>
+      <div class="split" id="split"></div>
+      <div class="row">
+        <button class="btn primary" id="send">发送到手机</button>
+        <button class="btn ghost" id="sendRun">发送并运行</button>
+        <button class="btn ghost" id="start">开始</button>
+        <button class="btn ghost" id="stop">停止</button>
+        <button class="btn ghost" id="upd">检查更新</button>
+      </div>
+      <div class="log" id="log" tabindex="0"></div>
+    </div>
+  </section>
+  <section id="page-grab">
+    <h1>抓抓</h1>
+    <p class="lede">拖出选区后可调框，回车确认裁剪。保存只在裁剪后出现。</p>
+    <div class="tools">
+      <button class="btn primary" id="shotBtn">截屏</button>
+      <button class="btn ghost" id="cropBtn">裁剪</button>
+      <button class="btn ghost" id="rotL">左转 90°</button>
+      <button class="btn ghost" id="rotR">右转 90°</button>
+      <button class="btn undo" id="undoBtn" style="display:none">回退</button>
+      <button class="btn save" id="saveBtn" style="display:none">保存</button>
+      <button class="btn ghost" id="saveAsBtn" style="display:none">自定义位置</button>
+    </div>
+    <div class="stage-wrap">
+      <div class="stage" id="stage"><img id="shot" alt=""/><div class="cropbox" id="cropbox">
+        <i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i>
+        <i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i>
+      </div><div class="selbox" id="selbox"></div></div>
+      <div class="rightcol">
+      <div class="origin">起点 QX <input id="ox" value="0"> QY <input id="oy" value="0"> <button class="btn ghost" id="oxReset">还原</button></div>
+      <div class="slots" id="slots"></div>
+      <div class="meas">
+        <div class="measrow">
+          <input id="mx1" value="0"> <input id="my1" value="0">
+          <input id="mx2" value="0"> <input id="my2" value="0">
+          <button class="btn ghost" id="copyRect">复制</button>
+        </div>
+        <div class="szrow">
+          <span class="sz" id="msz">0 × 0</span>
+          <button class="btn ghost" id="cropRange">截取</button>
+          <button class="btn ghost" id="showRange">显示</button>
+        </div>
+      </div>
+      </div>
+    </div>
+  </section>
+</main>
+<div class="hud" id="hud"><canvas id="lens" width="120" height="120"></canvas><div class="t" id="hudTxt"></div></div>
+<div class="ctx" id="ctxm"></div>
+<div id="toast" role="status"></div>
+<script src="/luaparse.js"></script>
+<script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
+<script>require.config({ paths: { vs: "https://unpkg.com/monaco-editor@0.45.0/min/vs" } });</script>
+<script>
+const logEl = document.getElementById("log");
+logEl.addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  const allow = (e.ctrlKey || e.metaKey) && (k === "c" || k === "a");
+  if (!allow) e.preventDefault();
+});
+logEl.addEventListener("contextmenu", (e) => e.preventDefault());
+logEl.addEventListener("dragstart", (e) => e.preventDefault());
+function scriptText() { return window.ed ? window.ed.getValue() : ""; }
+const shot = document.getElementById("shot");
+const hud = document.getElementById("hud");
+const lens = document.getElementById("lens");
+const hudTxt = document.getElementById("hudTxt");
+const cropbox = document.getElementById("cropbox");
+const cropBtn = document.getElementById("cropBtn");
+const selbox = document.getElementById("selbox");
+let zoom = 1, cropOn = false, c0 = null, expectingShot = false, lastRev = 0;
+let cropRect = null, dragMode = null, fitPending = false;
+let selRect = null, selStart = null, selMoved = false;
+const saveBtn = document.getElementById("saveBtn");
+const undoBtn = document.getElementById("undoBtn");
+function showSaveUndo(on) {
+  undoBtn.style.display = on ? "inline-flex" : "none";
+  saveBtn.style.display = on ? "inline-flex" : "none";
+  document.getElementById("saveAsBtn").style.display = on ? "inline-flex" : "none";
+}
+function hideSavePair() {
+  saveBtn.style.display = "none";
+  document.getElementById("saveAsBtn").style.display = "none";
+}
+function addLog(s) {
+  const d = document.createElement("div");
+  const t = new Date();
+  const p = [t.getHours(), t.getMinutes(), t.getSeconds()].map(n => String(n).padStart(2,"0")).join(":");
+  d.textContent = /^\d{2}:\d{2}:\d{2}\b/.test(s) ? s : (p + "  " + s);
+  logEl.appendChild(d);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function api(path, body) {
+  return fetch(path, { method: body ? "POST" : "GET", headers: body ? {"Content-Type":"application/json"} : {}, body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+}
+function toast(msg, kind) {
+  const el = document.getElementById("toast");
+  if (!el || !msg) return;
+  el.textContent = msg;
+  el.className = kind || "warn";
+  el.classList.add("on");
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.classList.remove("on"), 12000);
+}
+function imgXY(e) {
+  const r = shot.getBoundingClientRect();
+  if (!r.width || !shot.naturalWidth) return null;
+  return {
+    x: Math.floor((e.clientX - r.left) / r.width * shot.naturalWidth),
+    y: Math.floor((e.clientY - r.top) / r.height * shot.naturalHeight)
+  };
+}
+function show(p) {
+  document.getElementById("page-home").style.display = p === "home" ? "flex" : "none";
+  document.getElementById("page-grab").style.display = p === "grab" ? "block" : "none";
+  document.getElementById("navHome").className = p === "home" ? "on" : "";
+  document.getElementById("navGrab").className = p === "grab" ? "on" : "";
+}
+document.getElementById("navHome").onclick = () => show("home");
+document.getElementById("navGrab").onclick = () => show("grab");
+document.getElementById("send").onclick = () => api("/api/script", { script: scriptText(), run: false });
+document.getElementById("sendRun").onclick = () => api("/api/script", { script: scriptText(), run: true });
+document.getElementById("start").onclick = () => api("/api/control", { action: "start" });
+document.getElementById("stop").onclick = () => api("/api/control", { action: "stop" });
+document.getElementById("upd").onclick = async () => {
+  toast("正在检查更新…", "ok");
+  try {
+    const r = await api("/api/selfupdate", {});
+    const msg = (r && r.msg) || "检查完成";
+    toast(msg, r && r.ok ? "ok" : "warn");
+  } catch (e) {
+    toast("检查失败 " + (e && e.message ? e.message : e), "warn");
+  }
+};
+document.getElementById("shotBtn").onclick = async () => {
+  expectingShot = true;
+  const r = await api("/api/shot", {});
+  if (r && r.notice) {
+    expectingShot = false;
+    toast(r.notice);
+    if (r.noticeAt) window._noticeAt = r.noticeAt;
+  }
+};
+document.getElementById("saveBtn").onclick = async () => {
+  const r = await api("/api/save", {});
+  if (r.path) {
+    addLog("已保存 " + r.path);
+    hideSavePair();
+  }
+};
+document.getElementById("saveAsBtn").onclick = async () => {
+  const s = await fetch("/api/frame").then(r => r.json());
+  if (!s.b64) return;
+  const bin = Uint8Array.from(atob(s.b64), c => c.charCodeAt(0));
+  const blob = new Blob([bin], { type: "image/png" });
+  try {
+    if (window.showSaveFilePicker) {
+      const h = await window.showSaveFilePicker({
+        suggestedName: new Date().toISOString().replace(/\D/g,"").slice(0,17) + ".png",
+        types: [{ description: "PNG 图片", accept: { "image/png": [".png"] } }]
+      });
+      const w = await h.createWritable();
+      await w.write(blob);
+      await w.close();
+      hideSavePair();
+      return;
+    }
+  } catch (err) {
+    if (err && err.name === "AbortError") return;
+  }
+  const r = await api("/api/saveas", {});
+  if (r && r.ok !== false) hideSavePair();
+};
+document.getElementById("undoBtn").onclick = () => {
+  api("/api/undo", {}).then((r) => {
+    showSaveUndo(!!(r && r.more));
+    cropRect = null;
+    cropbox.style.display = "none";
+    cropbox.classList.remove("adjust");
+    refreshShot();
+  });
+};
+cropBtn.onclick = (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (cropRect) {
+    const w = Math.abs(cropRect.x2 - cropRect.x1), h = Math.abs(cropRect.y2 - cropRect.y1);
+    if (w >= 4 && h >= 4) {
+      applyCrop();
+    }
+    cropBtn.textContent = "裁剪";
+    cropBtn.className = "btn ghost";
+    cropOn = false;
+    cropRect = null;
+    cropbox.style.display = "none";
+    return;
+  }
+  if (cropOn) {
+    cropOn = false;
+    cropBtn.textContent = "裁剪";
+    cropBtn.className = "btn ghost";
+    return;
+  }
+  cropOn = true;
+  cropRect = null;
+  clearSel();
+  cropbox.style.display = "none";
+  cropBtn.textContent = "确定";
+  cropBtn.className = "btn ok";
+};
+document.getElementById("rotL").onclick = () => api("/api/rotate", { dir: "ccw" }).then(refreshShot);
+document.getElementById("rotR").onclick = () => api("/api/rotate", { dir: "cw" }).then(refreshShot);
+async function refreshShot(keepZoom) {
+  const s = await fetch("/api/frame").then(r => r.json());
+  if (!s.b64) return;
+  shot.src = "data:image/png;base64," + s.b64;
+  if (!keepZoom) {
+    zoom = 1;
+    shot.style.transform = "scale(1)";
+    fitPending = true;
+  }
+}
+function fitZoom() {
+  if (!shot.naturalWidth) return 1;
+  const sw = stage.clientWidth, sh = stage.clientHeight;
+  if (!sw || !sh) return 1;
+  return Math.min(sw / shot.naturalWidth, sh / shot.naturalHeight);
+}
+const stage = document.getElementById("stage");
+shot.draggable = false;
+shot.addEventListener("dragstart", (e) => e.preventDefault());
+stage.addEventListener("wheel", (e) => {
+  if (e.ctrlKey) {
+    e.preventDefault();
+    if (e.deltaY > 0 && fitPending) {
+      fitPending = false;
+      zoom = fitZoom();
+    } else {
+      fitPending = false;
+      zoom *= e.deltaY < 0 ? 1.12 : 0.89;
+    }
+    zoom = Math.max(0.05, Math.min(12, zoom));
+    shot.style.transform = "scale(" + zoom + ")";
+    layoutCrop();
+    layoutSel();
+    return;
+  }
+  e.preventDefault();
+  if (e.shiftKey) {
+    stage.scrollLeft += e.deltaY;
+  } else {
+    stage.scrollTop += e.deltaY;
+  }
+}, { passive: false });
+function layoutSel() {
+  if (!selRect || !shot.naturalWidth) { selbox.style.display = "none"; return; }
+  const r = shot.getBoundingClientRect();
+  const st = stage.getBoundingClientRect();
+  const x1 = Math.min(selRect.x1, selRect.x2), x2 = Math.max(selRect.x1, selRect.x2);
+  const y1 = Math.min(selRect.y1, selRect.y2), y2 = Math.max(selRect.y1, selRect.y2);
+  const left = r.left + x1 / shot.naturalWidth * r.width - st.left + stage.scrollLeft;
+  const top = r.top + y1 / shot.naturalHeight * r.height - st.top + stage.scrollTop;
+  selbox.style.display = "block";
+  selbox.style.left = left + "px";
+  selbox.style.top = top + "px";
+  selbox.style.width = Math.max(1, (x2 - x1) / shot.naturalWidth * r.width) + "px";
+  selbox.style.height = Math.max(1, (y2 - y1) / shot.naturalHeight * r.height) + "px";
+}
+function fillMeas() {
+  if (!selRect) return;
+  const x1 = Math.min(selRect.x1, selRect.x2), x2 = Math.max(selRect.x1, selRect.x2);
+  const y1 = Math.min(selRect.y1, selRect.y2), y2 = Math.max(selRect.y1, selRect.y2);
+  document.getElementById("mx1").value = x1;
+  document.getElementById("my1").value = y1;
+  document.getElementById("mx2").value = x2;
+  document.getElementById("my2").value = y2;
+  updateMeasSize();
+}
+function clearSel() {
+  selRect = null;
+  selbox.style.display = "none";
+}
+document.getElementById("copyRect").onclick = () => {
+  const x1 = document.getElementById("mx1").value || "0";
+  const y1 = document.getElementById("my1").value || "0";
+  const x2 = document.getElementById("mx2").value || "0";
+  const y2 = document.getElementById("my2").value || "0";
+  copyText(x1 + ", " + y1 + ", " + x2 + ", " + y2);
+};
+function measNums() {
+  return ["mx1", "my1", "mx2", "my2"].map((id) => {
+    const v = document.getElementById(id).value.trim();
+    if (v === "" || v === "-") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  });
+}
+function updateMeasSize() {
+  const n = measNums();
+  if (n.some((x) => x === null)) {
+    document.getElementById("msz").textContent = "—";
+    return;
+  }
+  document.getElementById("msz").textContent = Math.abs(n[2] - n[0]) + " × " + Math.abs(n[3] - n[1]);
+}
+["mx1", "my1", "mx2", "my2", "ox", "oy"].forEach((id) => {
+  const el = document.getElementById(id);
+  el.addEventListener("input", updateMeasSize);
+  el.addEventListener("focus", () => { el.select(); });
+  el.addEventListener("mouseup", (e) => e.preventDefault());
+  el.addEventListener("dragstart", (e) => e.preventDefault());
+  el.draggable = false;
+  el.addEventListener("blur", () => {
+    if (el.value.trim() === "" || el.value.trim() === "-") el.value = "0";
+    updateMeasSize();
+  });
+});
+document.getElementById("cropRange").onclick = () => {
+  const n = measNums();
+  if (n.some((x) => x === null)) return;
+  const w = Math.abs(n[2] - n[0]), h = Math.abs(n[3] - n[1]);
+  if (w < 2 || h < 2) return;
+  cropRect = { x1: n[0], y1: n[1], x2: n[2], y2: n[3] };
+  applyCrop();
+  cropOn = false;
+  cropBtn.textContent = "裁剪";
+  cropBtn.className = "btn ghost";
+};
+function originXY() {
+  return [
+    Number(document.getElementById("ox").value) || 0,
+    Number(document.getElementById("oy").value) || 0
+  ];
+}
+document.getElementById("ox").oninput = document.getElementById("oy").oninput = () => {
+  if (window._slots) renderSlots(window._slots);
+};
+document.getElementById("oxReset").onclick = () => {
+  document.getElementById("ox").value = 0;
+  document.getElementById("oy").value = 0;
+  if (window._slots) renderSlots(window._slots);
+};
+document.getElementById("showRange").onclick = () => {
+  const x1 = parseInt(document.getElementById("mx1").value, 10) || 0;
+  const y1 = parseInt(document.getElementById("my1").value, 10) || 0;
+  const x2 = parseInt(document.getElementById("mx2").value, 10) || 0;
+  const y2 = parseInt(document.getElementById("my2").value, 10) || 0;
+  selRect = { x1, y1, x2, y2 };
+  fillMeas();
+  layoutSel();
+};
+function layoutCrop() {
+  if (!cropRect) { cropbox.style.display = "none"; return; }
+  const r = shot.getBoundingClientRect();
+  const st = stage.getBoundingClientRect();
+  const x1 = Math.min(cropRect.x1, cropRect.x2), x2 = Math.max(cropRect.x1, cropRect.x2);
+  const y1 = Math.min(cropRect.y1, cropRect.y2), y2 = Math.max(cropRect.y1, cropRect.y2);
+  const left = r.left + x1 / shot.naturalWidth * r.width - st.left + stage.scrollLeft;
+  const top = r.top + y1 / shot.naturalHeight * r.height - st.top + stage.scrollTop;
+  cropbox.style.display = "block";
+  cropbox.style.left = left + "px";
+  cropbox.style.top = top + "px";
+  cropbox.style.width = ((x2 - x1) / shot.naturalWidth * r.width) + "px";
+  cropbox.style.height = ((y2 - y1) / shot.naturalHeight * r.height) + "px";
+}
+stage.addEventListener("mousemove", async (e) => {
+  if (dragMode === "seldraw" && selStart) {
+    const pt = imgXY(e);
+    if (pt) {
+      const dx = Math.abs(pt.x - selStart.x), dy = Math.abs(pt.y - selStart.y);
+      if (dx >= 4 || dy >= 4) {
+        selMoved = true;
+        selRect = { x1: selStart.x, y1: selStart.y, x2: pt.x, y2: pt.y };
+        layoutSel();
+        fillMeas();
+      }
+    }
+    hud.style.display = "none";
+    return;
+  }
+  if (dragMode && cropRect) {
+    const pt = imgXY(e);
+    if (pt) {
+      hud.style.display = "none";
+      if (dragMode === "draw" || dragMode === "move") {
+        if (dragMode === "draw") { cropRect.x2 = pt.x; cropRect.y2 = pt.y; }
+        else {
+          const dx = pt.x - dragMode.lx, dy = pt.y - dragMode.ly;
+          cropRect.x1 += dx; cropRect.y1 += dy; cropRect.x2 += dx; cropRect.y2 += dy;
+          dragMode.lx = pt.x; dragMode.ly = pt.y;
+        }
+      } else if (typeof dragMode === "string") {
+        if (dragMode.indexOf("n") >= 0) cropRect.y1 = pt.y;
+        if (dragMode.indexOf("s") >= 0) cropRect.y2 = pt.y;
+        if (dragMode.indexOf("w") >= 0) cropRect.x1 = pt.x;
+        if (dragMode.indexOf("e") >= 0) cropRect.x2 = pt.x;
+      }
+      layoutCrop();
+    }
+    return;
+  }
+  const pt = imgXY(e);
+  if (!pt) { hud.style.display = "none"; return; }
+  const z = lens.getContext("2d");
+  z.imageSmoothingEnabled = false;
+  z.fillStyle = "#222";
+  z.fillRect(0, 0, 120, 120);
+  z.drawImage(shot, pt.x - 6, pt.y - 6, 13, 13, 0, 0, 120, 120);
+  z.fillStyle = "#f33";
+  z.fillRect(58, 58, 4, 4);
+  const p = await fetch("/api/pixel?x=" + pt.x + "&y=" + pt.y).then(r => r.json());
+  if (!p.ok) { hud.style.display = "none"; return; }
+  hud.style.display = "block";
+  hud.style.left = Math.min(e.clientX + 18, innerWidth - 140) + "px";
+  hud.style.top = Math.min(e.clientY + 18, innerHeight - 160) + "px";
+  hudTxt.textContent = p.x + "," + p.y + "  " + p.hex + "\nRGB(" + p.r + "," + p.g + "," + p.b + ")";
+  window._px = p;
+});
+stage.addEventListener("mouseleave", () => { if (!cropOn && !cropRect) hud.style.display = "none"; });
+stage.addEventListener("mousedown", (e) => {
+  e.preventDefault();
+  hud.style.display = "none";
+  const h = e.target && e.target.getAttribute && e.target.getAttribute("data-h");
+  const pt = imgXY(e);
+  if (h && cropRect) { dragMode = h; return; }
+  if (cropRect && pt) {
+    const x1 = Math.min(cropRect.x1, cropRect.x2), x2 = Math.max(cropRect.x1, cropRect.x2);
+    const y1 = Math.min(cropRect.y1, cropRect.y2), y2 = Math.max(cropRect.y1, cropRect.y2);
+    if (pt.x >= x1 && pt.x <= x2 && pt.y >= y1 && pt.y <= y2) {
+      dragMode = { lx: pt.x, ly: pt.y };
+      return;
+    }
+  }
+  if (!cropOn || !pt) {
+    if (!cropOn && pt && !cropRect) {
+      selStart = pt;
+      selMoved = false;
+      dragMode = "seldraw";
+    }
+    return;
+  }
+  clearSel();
+  cropRect = { x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y };
+  dragMode = "draw";
+  cropbox.classList.remove("adjust");
+  cropbox.style.display = "none";
+});
+window.addEventListener("mouseup", () => {
+  if (dragMode === "seldraw") {
+    if (!selMoved) {
+      if (selRect) {
+        const x1 = Math.min(selRect.x1, selRect.x2), x2 = Math.max(selRect.x1, selRect.x2);
+        const y1 = Math.min(selRect.y1, selRect.y2), y2 = Math.max(selRect.y1, selRect.y2);
+        if (!(selStart && selStart.x >= x1 && selStart.x <= x2 && selStart.y >= y1 && selStart.y <= y2)) {
+          clearSel();
+        }
+      }
+    }
+    dragMode = null;
+    selStart = null;
+    return;
+  }
+  if (!dragMode) return;
+  const drawing = dragMode === "draw";
+  dragMode = null;
+  if (cropRect && drawing) {
+    const w = Math.abs(cropRect.x2 - cropRect.x1), h = Math.abs(cropRect.y2 - cropRect.y1);
+    if (w < 4 || h < 4) {
+      cropRect = null;
+      cropbox.style.display = "none";
+      return;
+    }
+  }
+  if (cropRect) {
+    cropbox.classList.add("adjust");
+    layoutCrop();
+  }
+});
+function applyCrop() {
+  if (!cropRect) return;
+  const x1 = cropRect.x1, y1 = cropRect.y1, x2 = cropRect.x2, y2 = cropRect.y2;
+  cropRect = null;
+  cropbox.style.display = "none";
+  cropbox.classList.remove("adjust");
+  clearSel();
+  api("/api/crop", { x1, y1, x2, y2 }).then(() => {
+    showSaveUndo(true);
+    refreshShot();
+  });
+}
+window.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    const b = document.getElementById("edSave");
+    if (b) b.click();
+    return;
+  }
+  if (e.key === "Enter" && cropRect) {
+    e.preventDefault();
+    applyCrop();
+    cropBtn.textContent = "裁剪";
+    cropBtn.className = "btn ghost";
+    cropOn = false;
+    return;
+  }
+  if (e.key === "Escape" && cropRect) {
+    cropRect = null; cropbox.style.display = "none"; cropbox.classList.remove("adjust");
+    return;
+  }
+  if (!(e.ctrlKey && e.altKey)) return;
+  const map = { Digit0:9, Digit1:0, Digit2:1, Digit3:2, Digit4:3, Digit5:4, Digit6:5, Digit7:6, Digit8:7, Digit9:8 };
+  const i = map[e.code];
+  if (i === undefined) return;
+  e.preventDefault();
+  const px = window._px || {};
+  api("/api/slot", { i, x: px.x || 0, y: px.y || 0 }).then(renderSlots);
+});
+function copyText(t) {
+  if (!t) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(t);
+  }
+}
+function renderSlots(data) {
+  if (!data || !data.slots) return;
+  window._slots = data;
+  const box = document.getElementById("slots");
+  box.innerHTML = "";
+  const slots = data.slots || [];
+  const oxoy = originXY();
+  const ox = oxoy[0], oy = oxoy[1];
+  for (let i = 0; i < 10; i++) {
+    const s = slots[i] || {};
+    const el = document.createElement("div");
+    el.className = "slot";
+    const key = i === 9 ? 0 : i + 1;
+    const sw = s.on ? ("rgb("+s.r+","+s.g+","+s.b+")") : "";
+    if (s.on) {
+      const dx = s.x - ox, dy = s.y - oy;
+      el.innerHTML = '<div class="sw"' + (sw ? ' style="background:' + sw + '"' : "") + '></div><div>' +
+        key + '  <span class="coord">' + dx + ", " + dy + "</span></div>" +
+        '<span class="hexc">' + s.hex + "</span>";
+      el.querySelector(".coord").onclick = (ev) => { ev.stopPropagation(); copyText(dx + ", " + dy); };
+      el.querySelector(".hexc").onclick = (ev) => { ev.stopPropagation(); copyText(s.hex); };
+      el.querySelector(".sw").onclick = (ev) => { ev.stopPropagation(); copyText(s.hex); };
+    } else {
+      el.innerHTML = '<div class="sw"></div><div>' + key + "  空  Ctrl+Alt+" + key + "</div>";
+    }
+    box.appendChild(el);
+  }
+}
+async function tick() {
+  const s = await fetch("/api/status").then(r => r.json()).catch(() => ({}));
+  document.getElementById("stTitle").textContent = s.status || document.getElementById("stTitle").textContent;
+  if (s.ip) {
+    document.getElementById("stSub").textContent = "ip: " + s.ip;
+  } else {
+    document.getElementById("stSub").textContent = s.sub || "";
+  }
+  if (s.newLogs && s.logCount > (window._lc || 0)) {
+    const n = s.logCount - (window._lc || 0);
+    const all = s.newLogs || [];
+    if (!window._lc || n >= all.length) {
+      logEl.innerHTML = "";
+      all.forEach(addLog);
+    } else {
+      all.slice(all.length - n).forEach(addLog);
+    }
+    window._lc = s.logCount;
+    while (logEl.childNodes.length > 200) {
+      logEl.removeChild(logEl.firstChild);
+    }
+  }
+  const rev = Number(s.shotRev) || 0;
+  if (rev && rev !== lastRev) {
+    lastRev = rev;
+    await refreshShot();
+    if (expectingShot) { expectingShot = false; show("grab"); showSaveUndo(false); }
+  }
+  renderSlots(s);
+  renderDevs(s);
+  if (s.notice && s.noticeAt && s.noticeAt !== window._noticeAt) {
+    window._noticeAt = s.noticeAt;
+    toast(s.notice);
+  }
+}
+function renderDevs(s) {
+  const sel = document.getElementById("devSel");
+  const list = Array.isArray(s.devices) ? s.devices : [];
+  const cur = s.selected || "";
+  if (!list.length) {
+    if (sel._sig !== "empty") {
+      sel._sig = "empty";
+      sel.innerHTML = "";
+      const o = document.createElement("option");
+      o.value = "";
+      o.textContent = "等待设备";
+      sel.appendChild(o);
+    }
+    sel.value = "";
+    return;
+  }
+  const sig = cur + "|" + list.map(d => d.id + (d.sel ? "*" : "")).join("|");
+  if (sel._sig === sig) return;
+  sel._sig = sig;
+  sel.innerHTML = "";
+  if (list.length === 1) {
+    const d = list[0];
+    const o = document.createElement("option");
+    o.value = d.id;
+    o.textContent = (d.emu ? "💻  " : "📱  ") + d.name;
+    o.selected = true;
+    sel.appendChild(o);
+    return;
+  }
+  if (!cur) {
+    const ph = document.createElement("option");
+    ph.value = "";
+    ph.textContent = "请选择设备";
+    ph.selected = true;
+    sel.appendChild(ph);
+  }
+  list.forEach(d => {
+    const o = document.createElement("option");
+    o.value = d.id;
+    o.textContent = (d.emu ? "💻  " : "📱  ") + d.name;
+    if (d.id === cur) o.selected = true;
+    sel.appendChild(o);
+  });
+}
+document.getElementById("devSel").onchange = () => {
+  const id = document.getElementById("devSel").value;
+  if (id) api("/api/device", { id });
+};
+document.getElementById("devRef").onclick = () => {
+  document.getElementById("devSel")._sig = "";
+  api("/api/refresh", {});
+};
+setInterval(tick, 800);
+tick();
+(function () {
+  const DEFAULT = 'KeyPress("Home")\nDelay(1000)\nTap(167, 775)\nDelay(2000)\nKeyPress("Back")\nDelay(2000)\n';
+  const cmds = [
+    ["Tap","(x, y)"],["Click","(x, y)"],["Tap2","(x, y)"],["RandomTap","(x, y, r)"],
+    ["LongClick","(x, y)"],["Touch","(x, y)"],["Swipe","(x1,y1,x2,y2,ms)"],
+    ["TouchDown","(x, y)"],["TouchMove","(x, y, ms)"],["TouchUp","()"],
+    ["DrawCircle","(sx,sy,cx,cy,ms)"],["KeyPress","(\"Back\")"],["InputText","(\"字\")"],
+    ["ClickText","(\"确定\")"],["GetPixelColor","(x, y)"],["FindColor","(x1,y1,x2,y2,color,sim)"],
+    ["FindMultiColor","(...)"],["CmpColor","(x, y, color, sim)"],["CmpColorEx","(\"x|y|c\", sim)"],
+    ["WaitColor","(x1,y1,x2,y2,color,ms)"],["KeepScreen","(true)"],["KeepCapture","(true)"],
+    ["SnapShot","()"],["FindPic","(...)"],["OcrText","(x1,y1,x2,y2)"],["ColorDiff","(a, b)"],
+    ["RGB","(r, g, b)"],["TracePrint","(\"msg\")"],["print","(\"msg\")"],["Tip","(\"msg\")"],
+    ["Toast","(\"msg\")"],["Delay","(ms)"],["Sleep","(ms)"],["DelayS","(sec)"],
+    ["ExitScript","()"],["GetScreenX","()"],["GetScreenY","()"],["TickCount","()"],
+    ["KeepAwake","(true)"],["SetScreenAlwaysOn","(true)"],["IsRoot","()"],["Vibrate","(ms)"],
+    ["Rnd","()"],["Randomize","()"],["GetBattery","()"],["GetClip","()"],["SetClip","(\"字\")"],
+    ["RunApp","(\"pkg\")"],["KillApp","(\"pkg\")"],["ReadUIConfig","(key)"],["WriteUIConfig","(key,v)"],
+    ["FileRead","(\"a.txt\")"],["FileWrite","(\"a.txt\", s)"],["Left","(s, n)"],["Right","(s, n)"],
+    ["Mid","(s, i, n)"],["Len","(s)"],["InStr","(s, find)"],["Replace","(s, a, b)"],
+    ["Trim","(s)"],["UCase","(s)"],["LCase","(s)"],["CInt","(s)"],["CDbl","(s)"],["Int","(n)"],
+    ["Now","()"],["IsNull","(v)"],["UBound","(t)"],["Cos","(n)"],["Sin","(n)"],
+    ["GetDeviceID","()"],["GetColorDep","()"],["Play","(name)"],["PutAttachment","(name)"],
+    ["FW","."],["Dialog","."],["Sys","."],["Element","."],["Image","."],["UTF8","."]
+  ];
+  const CMD = {};
+  cmds.forEach((c) => { CMD[c[0]] = c[1]; });
+  const DOCS = {
+    Tap: ["Tap(x, y)", "在屏幕坐标点一下。", "Tap(167, 775)"],
+    Tap2: ["Tap2(x, y)", "同一点连点两次。", "Tap2(540, 1600)"],
+    Delay: ["Delay(ms)", "等待毫秒。", "Delay(1000)"],
+    KeyPress: ["KeyPress(\"Back\")", "系统键：Home / Back / Recents / Power 等。", "KeyPress(\"Home\")"],
+    FindColor: ["FindColor(x1, y1, x2, y2, color, sim, dir)", "矩形内找色，返回 x, y；失败 -1, -1。", "local x, y = FindColor(0, 0, 1080, 2400, \"CC7B00\", 0, 0)"],
+    FindMultiColor: ["FindMultiColor(...)", "多点找色。", "local x, y = FindMultiColor(0,0,1080,2400,\"CC7B00\",\"10|0|FFFFFF\",0,0)"],
+    CmpColor: ["CmpColor(x, y, color, sim)", "判断该点颜色是否匹配。", "if CmpColor(100, 200, \"CC7B00\", 0) then Tip(\"对\") end"],
+    GetPixelColor: ["GetPixelColor(x, y)", "取该点 6 位十六进制颜色。", "local c = GetPixelColor(100, 200)"],
+    Swipe: ["Swipe(x1, y1, x2, y2, ms)", "从起点滑到终点。", "Swipe(800, 1200, 200, 1200, 250)"],
+    TracePrint: ["TracePrint(\"msg\")", "打到电脑日志。", "TracePrint(\"x=\" .. x)"],
+    KeepScreen: ["KeepScreen(true/false)", "冻结画面再连续找色。", "KeepScreen(true)"],
+    OcrText: ["OcrText(x1, y1, x2, y2)", "识别矩形内文字。", "local s = OcrText(80, 200, 1000, 400)"],
+    ExitScript: ["ExitScript()", "结束脚本。", "ExitScript()"],
+    TickCount: ["TickCount()", "开机起毫秒。", "local t0 = TickCount()"]
+  };
+  function indentLua(src) {
+    const lines = src.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    let d = 0;
+    const out = [];
+    for (let raw of lines) {
+      const t = raw.trim();
+      if (!t) continue;
+      const code = t.replace(/--.*$/, "").trim();
+      let dd = d;
+      if (/^(end|until|else|elseif)\b/.test(code)) dd = Math.max(0, d - 1);
+      out.push("  ".repeat(dd) + t);
+      d = dd;
+      if (/^(else|elseif)\b/.test(code)) d++;
+      else if (/\bfunction\b/.test(code) && !/\bend\s*$/.test(code)) d++;
+      else if (/\bthen\s*$/.test(code) || /\bdo\s*$/.test(code) || /\brepeat\s*$/.test(code)) d++;
+    }
+    return out.join("\n");
+  }
+  function spaceLine(line) {
+    const ind = (line.match(/^\s*/) || [""])[0];
+    let s = line.slice(ind.length);
+    if (!s || /^\s*--/.test(s)) return line;
+    const hold = [];
+    s = s.replace(/--.*$/, (m) => { hold.push(m); return "\0C" + (hold.length - 1) + "\0"; });
+    s = s.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, (m) => { hold.push(m); return "\0S" + (hold.length - 1) + "\0"; });
+    s = s.replace(/~=/g, "\u0001").replace(/==/g, "\u0002").replace(/<=/g, "\u0003").replace(/>=/g, "\u0004").replace(/\.\./g, "\u0005");
+    s = s.replace(/\s*=\s*/g, " = ").replace(/\s*<\s*/g, " < ").replace(/\s*>\s*/g, " > ");
+    s = s.replace(/\s*([+*/%^])\s*/g, " $1 ").replace(/\s*-\s*/g, " - ");
+    s = s.replace(/([(\[{,]) - /g, "$1-").replace(/([=+\-*/%^<>]) - /g, "$1 -");
+    s = s.replace(/\b(return|and|or|not|then|else) - /g, "$1 -");
+    s = s.replace(/\u0001/g, "~=").replace(/\u0002/g, "==").replace(/\u0003/g, "<=").replace(/\u0004/g, ">=").replace(/\u0005/g, "..");
+    s = s.replace(/\s*~=\s*/g, " ~= ").replace(/\s*==\s*/g, " == ").replace(/\s*<=\s*/g, " <= ").replace(/\s*>=\s*/g, " >= ").replace(/\s*\.\.\s*/g, " .. ");
+    s = s.replace(/\s*,\s*/g, ", ").replace(/\s*;\s*/g, "; ").replace(/\s*:\s*/g, ":").replace(/\s*#\s*/g, "#");
+    s = s.replace(/\(\s+/g, "(").replace(/\s+\)/g, ")").replace(/\{\s+/g, "{").replace(/\s+\}/g, "}");
+    s = s.replace(/\b(if|elseif|while|until|for|local|function|return|not|and|or|in)\b(?=\S)/g, "$1 ");
+    s = s.replace(/(\S)(?=\b(then|do|end|until|else|elseif|and|or)\b)/g, "$1 ");
+    s = s.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g, (w) => {
+      const hit = cmds.find((c) => c[0].toLowerCase() === w.toLowerCase());
+      return hit ? hit[0] : w;
+    });
+    s = s.replace(/[ \t]{2,}/g, " ").replace(/[ \t]+$/g, "");
+    s = s.replace(/\0[CS](\d+)\0/g, (_, n) => hold[+n]);
+    return ind + s;
+  }
+  function blockKind(t) {
+    if (/\bend\s*$/.test(t) || /\buntil\s+/.test(t)) return "";
+    if (/^if\b/.test(t)) return "if";
+    if (/^elseif\b/.test(t)) return "elseif";
+    if (/^else\s*$/.test(t)) return "else";
+    if (/^for\b/.test(t)) return "for";
+    if (/^while\b/.test(t)) return "while";
+    if (/^(local\s+)?function\b/.test(t)) return "function";
+    if (/^repeat\s*$/.test(t)) return "repeat";
+    if (/^do\s*$/.test(t)) return "do";
+    return "";
+  }
+  function checkLua(src) {
+    const stack = [];
+    const lines = src.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i];
+      let inS = false, q = "", out = "";
+      for (let j = 0; j < raw.length; j++) {
+        const c = raw[j];
+        if (inS) {
+          if (c === "\\") { j++; continue; }
+          if (c === q) inS = false;
+          continue;
+        }
+        if (c === "-" && raw[j + 1] === "-") break;
+        if (c === '"' || c === "'") { inS = true; q = c; continue; }
+        out += c;
+      }
+      if (inS) return { err: "第 " + (i + 1) + " 行：字符串没结束", line: i + 1 };
+      const t = out.trim();
+      if (!t) continue;
+      if (/\b(if|for|while|function)\b/.test(t) && /\bend\s*$/.test(t)) continue;
+      if (/^end\b/.test(t)) {
+        if (!stack.length) return { err: "第 " + (i + 1) + " 行：多余的 end", line: i + 1 };
+        if (stack.pop().k === "repeat") return { err: "第 " + (i + 1) + " 行：repeat 应配 until", line: i + 1 };
+        continue;
+      }
+      if (/^until\b/.test(t)) {
+        if (!stack.length || stack.pop().k !== "repeat") return { err: "第 " + (i + 1) + " 行：until 没有对应 repeat", line: i + 1 };
+        continue;
+      }
+      if (/^(else|elseif)\b/.test(t)) {
+        if (!stack.length || stack[stack.length - 1].k !== "if") return { err: "第 " + (i + 1) + " 行：else 没有对应 if", line: i + 1 };
+        continue;
+      }
+      if (/^(local\s+)?function\b/.test(t)) stack.push({ k: "fn", n: i + 1 });
+      else if (/\bthen\s*$/.test(t)) stack.push({ k: "if", n: i + 1 });
+      else if (/\bdo\s*$/.test(t)) stack.push({ k: "do", n: i + 1 });
+      else if (/^repeat\b/.test(t)) stack.push({ k: "repeat", n: i + 1 });
+    }
+    if (stack.length) {
+      const t = stack[stack.length - 1];
+      return { err: "第 " + t.n + " 行：缺少 end 或 until", line: t.n };
+    }
+    return { ok: true };
+  }
+  function folds(model) {
+    const ranges = [];
+    const stack = [];
+    const n = model.getLineCount();
+    for (let i = 1; i <= n; i++) {
+      let t = model.getLineContent(i).replace(/--.*$/, "").trim();
+      if (!t) continue;
+      if (/\b(if|for|while|function)\b/.test(t) && /\bend\s*$/.test(t)) continue;
+      if (/^(end|until)\b/.test(t)) {
+        if (stack.length) {
+          const s = stack.pop();
+          if (i > s.start) ranges.push({ start: s.start, end: i, kind: monaco.languages.FoldingRangeKind.Region });
+        }
+        continue;
+      }
+      if (/^(else|elseif)\b/.test(t)) continue;
+      if (/^(local\s+)?function\b/.test(t) || /\bthen\s*$/.test(t) || /\bdo\s*$/.test(t) || /^repeat\b/.test(t)) {
+        stack.push({ start: i });
+      }
+    }
+    return ranges;
+  }
+  function smartEnter(ed) {
+    const sel = ed.getSelection();
+    if (!sel.isEmpty()) return false;
+    const pos = sel.getPosition();
+    const model = ed.getModel();
+    const line = model.getLineContent(pos.lineNumber);
+    if (line.slice(pos.column - 1).trim()) return false;
+    const indent = (line.match(/^\s*/) || [""])[0];
+    const spaced = spaceLine(line);
+    const t = spaced.trim();
+    const kind = blockKind(t);
+    const mid = indent + "  ";
+    let insert = spaced + "\n" + indent;
+    let cursorLine = pos.lineNumber + 1;
+    let cursorCol = indent.length + 1;
+    const next = pos.lineNumber < model.getLineCount() ? model.getLineContent(pos.lineNumber + 1).trim() : "";
+    const closer = /^(end|else|elseif|until)\b/.test(next);
+    const hasThen = /\bthen\s*$/.test(t);
+    const hasDo = /\bdo\s*$/.test(t);
+    if (kind === "if") {
+      const head = hasThen ? spaced : (t === "if" ? indent + "if  then" : spaced.replace(/\s*$/, " then"));
+      if (closer && hasThen) {
+        insert = head + "\n" + mid;
+        cursorLine = pos.lineNumber + 1; cursorCol = mid.length + 1;
+      } else {
+        insert = head + "\n" + mid + "\n" + indent + "end";
+        cursorLine = pos.lineNumber + 1; cursorCol = mid.length + 1;
+        if (t === "if") { cursorLine = pos.lineNumber; cursorCol = indent.length + 4; }
+      }
+    } else if (kind === "elseif") {
+      const head = hasThen ? spaced : spaced.replace(/\s*$/, " then");
+      insert = head + "\n" + mid;
+      cursorLine = pos.lineNumber + 1; cursorCol = mid.length + 1;
+    } else if (kind === "else") {
+      insert = spaced + "\n" + mid;
+      cursorLine = pos.lineNumber + 1; cursorCol = mid.length + 1;
+    } else if (kind === "for" || kind === "while") {
+      const head = hasDo ? spaced : spaced.replace(/\s*$/, " do");
+      if (closer && hasDo) {
+        insert = head + "\n" + mid;
+      } else {
+        insert = head + "\n" + mid + "\n" + indent + "end";
+      }
+      cursorLine = pos.lineNumber + 1; cursorCol = mid.length + 1;
+    } else if (kind === "function") {
+      let head = spaced;
+      if (!/\(/.test(t)) head = spaced.replace(/\s*$/, "()");
+      if (closer) insert = head + "\n" + mid;
+      else insert = head + "\n" + mid + "\n" + indent + "end";
+      cursorLine = pos.lineNumber + 1; cursorCol = mid.length + 1;
+    } else if (kind === "repeat") {
+      insert = spaced + "\n" + mid + "\n" + indent + "until ";
+      cursorLine = pos.lineNumber + 2; cursorCol = (indent + "until ").length + 1;
+    } else if (kind === "do") {
+      if (closer) insert = spaced + "\n" + mid;
+      else insert = spaced + "\n" + mid + "\n" + indent + "end";
+      cursorLine = pos.lineNumber + 1; cursorCol = mid.length + 1;
+    } else if (/\b(then|do|repeat|else|function)\s*$/.test(t) || /^(local\s+)?function\b/.test(t)) {
+      insert = spaced + "\n" + mid;
+      cursorLine = pos.lineNumber + 1; cursorCol = mid.length + 1;
+    }
+    const range = new monaco.Range(pos.lineNumber, 1, pos.lineNumber, line.length + 1);
+    ed.executeEdits("smart-enter", [{ range, text: insert, forceMoveMarkers: true }]);
+    ed.setPosition({ lineNumber: cursorLine, column: cursorCol });
+    return true;
+  }
+
+  window.MonacoEnvironment = {
+    getWorkerUrl: function () {
+      const origin = location.origin;
+      return URL.createObjectURL(new Blob([
+        "self.MonacoEnvironment={baseUrl:'" + origin + "/vs/'};",
+        "importScripts('" + origin + "/vs/base/worker/workerMain.js');"
+      ], { type: "text/javascript" }));
+    }
+  };
+  require.config({ paths: { vs: "https://unpkg.com/monaco-editor@0.45.0/min/vs" } });
+  require(["vs/editor/editor.main"], function () {
+    monaco.editor.defineTheme("tap", {
+      base: "vs-dark",
+      inherit: true,
+      rules: [
+        { token: "keyword", foreground: "c4b5fd", fontStyle: "bold" },
+        { token: "string", foreground: "f0b27a" },
+        { token: "comment", foreground: "8b83a0", fontStyle: "italic" },
+        { token: "number", foreground: "7eb6ff" },
+        { token: "predefined", foreground: "5dcea8" }
+      ],
+      colors: {
+        "editor.background": "#1a1628",
+        "editor.foreground": "#e8e4f5",
+        "editorLineNumber.foreground": "#6b6480",
+        "editorLineNumber.activeForeground": "#c4b5fd",
+        "editor.selectionBackground": "#6d5ef566",
+        "editor.lineHighlightBackground": "#2a2440",
+        "editorCursor.foreground": "#e8e4f5",
+        "editorGutter.background": "#151221",
+        "editorWidget.background": "#221c33",
+        "editorSuggestWidget.background": "#221c33",
+        "editorSuggestWidget.selectedBackground": "#3a3160",
+        "editorSuggestWidget.foreground": "#e8e4f5",
+        "editorHoverWidget.background": "#221c33",
+        "editorHoverWidget.foreground": "#e8e4f5",
+        "editorHoverWidget.border": "#3a3160",
+        "editorIndentGuide.background": "#3a3160",
+        "editorFoldBackground": "#2a244088",
+        "editor.foldBackground": "#2a244088"
+      }
+    });
+    monaco.languages.registerCompletionItemProvider("lua", {
+      triggerCharacters: [],
+      provideCompletionItems: function (model, position) {
+        const w = model.getWordUntilPosition(position);
+        const q = (w.word || "").toLowerCase();
+        const KW = {and:1,break:1,do:1,else:1,elseif:1,end:1,false:1,for:1,function:1,goto:1,if:1,in:1,local:1,nil:1,not:1,or:1,repeat:1,return:1,then:1,true:1,until:1,while:1};
+        if (!q || KW[q]) return { suggestions: [] };
+        const range = new monaco.Range(position.lineNumber, w.startColumn, position.lineNumber, w.endColumn);
+        const line = model.getLineContent(position.lineNumber);
+        const after = line.slice(w.endColumn - 1).trimStart()[0] || "";
+        const suggestions = cmds.filter((c) => c[0].toLowerCase().indexOf(q) === 0).map((c) => {
+          const sig = c[1] || "";
+          let insert = c[0];
+          let rules = 0;
+          if (sig === ".") {
+            if (after !== ".") {
+              insert = c[0] + ".$0";
+              rules = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
+            }
+          } else if (sig !== "" && after !== "(") {
+            insert = c[0] + "($0)";
+            rules = monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet;
+          }
+          return {
+            label: c[0],
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: insert,
+            insertTextRules: rules,
+            detail: c[0] + sig,
+            documentation: (DOCS[c[0]] || ["", "触控精灵命令"])[1],
+            range
+          };
+        });
+        return { suggestions };
+      }
+    });
+    monaco.languages.registerHoverProvider("lua", {
+      provideHover: function (model, position) {
+        const w = model.getWordAtPosition(position);
+        if (!w) return null;
+        const d = DOCS[w.word] || (CMD[w.word] ? [w.word + CMD[w.word], "触控精灵命令。", w.word + CMD[w.word]] : null);
+        if (!d) return null;
+        return {
+          range: new monaco.Range(position.lineNumber, w.startColumn, position.lineNumber, w.endColumn),
+          contents: [
+            { value: "```lua\n" + d[0] + "\n```" },
+            { value: d[1] },
+            { value: "```lua\n" + (d[2] || "") + "\n```" }
+          ]
+        };
+      }
+    });
+    monaco.languages.registerFoldingRangeProvider("lua", {
+      provideFoldingRanges: function (model) { return folds(model); }
+    });
+    const ed = monaco.editor.create(document.getElementById("monaco"), {
+      value: DEFAULT,
+      language: "lua",
+      theme: "tap",
+      fontSize: 13,
+      fontFamily: '"Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace',
+      lineNumbers: "on",
+      folding: true,
+      foldingStrategy: "auto",
+      showFoldingControls: "always",
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      automaticLayout: true,
+      tabSize: 2,
+      insertSpaces: true,
+      detectIndentation: false,
+      wordBasedSuggestions: "off",
+      quickSuggestions: { other: true, comments: false, strings: false },
+      suggestOnTriggerCharacters: true,
+      contextmenu: true,
+      renderLineHighlight: "line",
+      padding: { top: 8, bottom: 8 },
+      glyphMargin: false,
+      smoothScrolling: true,
+      mouseWheelZoom: false,
+      fixedOverflowWidgets: true,
+      acceptSuggestionOnEnter: "off",
+      tabCompletion: "off",
+      snippetSuggestions: "none",
+      find: { addExtraSpaceOnTop: false, autoFindInSelection: "never" }
+    });
+    window.ed = ed;
+    ed.addAction({
+      id: "accept-suggest-space",
+      label: "用空格确认补全",
+      keybindings: [monaco.KeyCode.Space],
+      precondition: "suggestWidgetVisible",
+      run: function (ed) {
+        const c = ed.getContribution("editor.contrib.suggestController");
+        if (c) c.acceptSelectedSuggestion(false, false);
+      }
+    });
+    ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, function () {});
+    ed.onKeyDown(function (e) {
+      if (e.keyCode === monaco.KeyCode.Enter && !e.shiftKey && !e.altKey) {
+        const suggest = ed.getContribution("editor.contrib.suggestController");
+        if (suggest && suggest.model && suggest.model.state) return;
+        if (smartEnter(ed)) e.preventDefault();
+      }
+    });
+    document.getElementById("fmtBtn").onclick = function () {
+      const v = indentLua(ed.getValue().split("\n").map(spaceLine).join("\n"));
+      const full = ed.getModel().getFullModelRange();
+      ed.executeEdits("fmt", [{ range: full, text: v }]);
+    };
+    function lineRange() {
+      const s = ed.getSelection();
+      return [s.startLineNumber, s.endLineNumber];
+    }
+    document.getElementById("edCmt").onclick = function () {
+      const model = ed.getModel();
+      const [a, b] = lineRange();
+      const edits = [];
+      for (let i = a; i <= b; i++) {
+        const line = model.getLineContent(i);
+        const ind = (line.match(/^\s*/) || [""])[0];
+        edits.push({ range: new monaco.Range(i, 1, i, line.length + 1), text: ind + "--" + line.slice(ind.length) });
+      }
+      ed.executeEdits("cmt", edits);
+      ed.focus();
+    };
+    document.getElementById("edUnc").onclick = function () {
+      const model = ed.getModel();
+      const [a, b] = lineRange();
+      const edits = [];
+      for (let i = a; i <= b; i++) {
+        const line = model.getLineContent(i);
+        const m = line.match(/^(\s*)--/);
+        if (!m) continue;
+        edits.push({ range: new monaco.Range(i, 1, i, line.length + 1), text: m[1] + line.slice(m[0].length) });
+      }
+      if (edits.length) ed.executeEdits("unc", edits);
+      ed.focus();
+    };
+    document.getElementById("edFind").onclick = function () {
+      ed.focus();
+      ed.getAction("actions.find").run();
+    };
+    document.getElementById("edRep").onclick = function () {
+      ed.focus();
+      ed.getAction("editor.action.startFindReplaceAction").run();
+    };
+    document.getElementById("edSave").onclick = function () {
+      api("/api/savescript", { text: ed.getValue() }).then(function (r) {
+        if (r && r.ok) toast("已保存 " + r.path, "ok");
+        else if (r && r.err && r.err !== "取消") toast(r.err);
+      });
+    };
+    document.getElementById("edChk").onclick = function () {
+      const src = ed.getValue();
+      monaco.editor.setModelMarkers(ed.getModel(), "lua", []);
+      if (typeof luaparse === "undefined") {
+        toast("解析器没加载");
+        return;
+      }
+      try {
+        luaparse.parse(src, { luaVersion: "5.2", comments: true });
+        toast("语法看起来没问题", "ok");
+      } catch (err) {
+        const line = err.line || 1;
+        const col = err.column || 1;
+        const msg = (err.message || String(err)).replace(/^\[.*?\]\s*/, "");
+        monaco.editor.setModelMarkers(ed.getModel(), "lua", [{
+          severity: monaco.MarkerSeverity.Error,
+          startLineNumber: line,
+          startColumn: col,
+          endLineNumber: line,
+          endColumn: col + 8,
+          message: msg
+        }]);
+        toast("第 " + line + " 行：" + msg);
+        ed.revealLineInCenter(line);
+        ed.setPosition({ lineNumber: line, column: col });
+        ed.focus();
+      }
+    };
+    ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function () {
+      document.getElementById("edSave").click();
+    });
+  });
+})();
+(function () {
+  const wrap = document.getElementById("edWrap");
+  const sp = document.getElementById("split");
+  const logBox = document.getElementById("log");
+  const card = wrap.closest(".card");
+  const row = card.querySelector(".row");
+  let ratio = 2 / 3;
+  function space() {
+    const pad = 32;
+    const extra = sp.offsetHeight + 10 + row.offsetHeight + 14 + 12;
+    return Math.max(200, card.clientHeight - pad - extra);
+  }
+  function apply() {
+    const avail = space();
+    const r = Math.min(2 / 3, Math.max(0.35, ratio));
+    const taH = Math.round(avail * r);
+    wrap.style.flex = "none";
+    logBox.style.flex = "none";
+    wrap.style.height = taH + "px";
+    logBox.style.height = (avail - taH) + "px";
+    if (window.ed) window.ed.layout();
+  }
+  apply();
+  requestAnimationFrame(apply);
+  let drag = false, y0 = 0, h0 = 0, avail0 = 0;
+  sp.addEventListener("mousedown", (e) => {
+    drag = true;
+    y0 = e.clientY;
+    h0 = wrap.getBoundingClientRect().height;
+    avail0 = space();
+    e.preventDefault();
+  });
+  window.addEventListener("mousemove", (e) => {
+    if (!drag) return;
+    const minH = Math.round(avail0 * 0.35);
+    const maxH = Math.round(avail0 * 2 / 3);
+    const taH = Math.max(minH, Math.min(maxH, h0 + e.clientY - y0));
+    ratio = taH / avail0;
+    wrap.style.height = taH + "px";
+    logBox.style.height = (avail0 - taH) + "px";
+    if (window.ed) window.ed.layout();
+  });
+  window.addEventListener("mouseup", () => { drag = false; });
+  window.addEventListener("resize", apply);
+  if (window.ResizeObserver) new ResizeObserver(apply).observe(card);
+})();
+function hideCtx() { document.getElementById("ctxm").style.display = "none"; }
+function showGrabMenu(e) {
+  const p = window._px || {};
+  const x = p.x, y = p.y, hex = (p.hex || "").replace("#", "");
+  const m = document.getElementById("ctxm");
+  let html = "";
+  if (x != null) {
+    html += '<b data-a="xy">复制当前坐标(' + x + "," + y + ")</b>";
+    html += '<b data-a="hex">复制当前颜色(' + hex + ")</b><hr>";
+  }
+  for (let i = 1; i <= 10; i++) html += '<b data-a="slot" data-i="' + i + '">加入到"点' + i + '"</b>';
+  m.innerHTML = html;
+  m.style.display = "block";
+  const w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = Math.min(e.clientX, innerWidth - w - 8) + "px";
+  m.style.top = Math.min(e.clientY, innerHeight - h - 8) + "px";
+  m.onclick = (ev) => {
+    const b = ev.target.closest("b");
+    if (!b) return;
+    const a = b.getAttribute("data-a");
+    if (a === "xy") copyText(x + ", " + y);
+    if (a === "hex") copyText(hex);
+    if (a === "slot") {
+      const n = Number(b.getAttribute("data-i"));
+      const i = n === 10 ? 9 : n - 1;
+      api("/api/slot", { i, x: x || 0, y: y || 0 }).then(renderSlots);
+    }
+    hideCtx();
+  };
+}
+document.addEventListener("click", hideCtx);
+document.addEventListener("contextmenu", (e) => {
+  if (e.target.closest(".monaco-editor, .monaco-menu, .shadow-root-host")) return;
+  e.preventDefault();
+  const st = document.getElementById("stage");
+  if (st && st.contains(e.target)) showGrabMenu(e);
+  else hideCtx();
+});
+window.addEventListener("beforeunload", () => { navigator.sendBeacon("/api/quit"); });
+</script>
+</body>
+</html>

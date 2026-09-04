@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.tapsprite.agent'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.tapsprite.agent"
+        minSdk 24
+        targetSdk 34
+        versionCode 84
+        versionName "0.9.59-rebuild"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+        }
+    }
+}
+
+dependencies {
+    implementation 'org.luaj:luaj-jse:3.0.1'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.17.3'
+}
