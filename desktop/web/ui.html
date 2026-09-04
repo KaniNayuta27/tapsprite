@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.74</title>
+<title>触控精灵 v1.1.75</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -65,16 +65,30 @@ aside {
   font-size: 12px; color: var(--muted);
   flex: none;
 }
-.stat b { display: block; color: var(--fg); font-size: 13px; font-weight: 650; margin-bottom: 4px; }
+.stat-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 4px;
+}
+.stat-head b {
+  display: block; color: var(--fg); font-size: 13px; font-weight: 650; margin: 0;
+  min-width: 0; flex: 1;
+}
+.stat-upd {
+  flex: none; width: 24px; height: 24px; border: 0; border-radius: 8px;
+  background: transparent; color: var(--muted);
+  display: grid; place-items: center; padding: 0;
+  margin: -4px -6px 0 0;
+  transition: transform 160ms var(--ease-out), background-color var(--motion), color var(--motion);
+}
+.stat-upd:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .stat-upd:hover { background: #efeaff; color: var(--accent); }
+}
 .stat-line { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .stat-line #stSub { min-width: 0; }
 #stA11y { font-weight: 650; }
 #stA11y.on { color: var(--ok); }
 #stA11y.off { color: #b42318; }
-.btn.mini {
-  height: 28px; line-height: 28px; font-size: 11px; padding: 0 12px; min-width: 0;
-  margin-top: 10px;
-}
 .devbox { margin: 0 0 14px; }
 .devbox label { display: block; font-size: 11px; color: var(--muted); font-weight: 650; letter-spacing: .12em; margin-bottom: 6px; }
 .devrow { display: flex; gap: 8px; align-items: center; }
@@ -189,11 +203,6 @@ textarea {
 .stage {
   background: #111018; overflow: auto; height: calc(100vh - 196px);
   position: relative; cursor: crosshair; border-radius: 0; user-select: none;
-}
-.shot-hint {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
-  z-index: 3; pointer-events: none; padding: 12px 16px; border-radius: 12px;
-  background: #3a1730; color: #ffe8ea; font: 650 13px var(--font); white-space: nowrap;
 }
 #shot { image-rendering: pixelated; transform-origin: 0 0; display: block; -webkit-user-drag: none; user-select: none; pointer-events: none; }
 .slots { display: flex; flex-direction: column; gap: 8px; }
@@ -321,7 +330,7 @@ textarea {
 </head>
 <body>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.74</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.75</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -336,12 +345,16 @@ textarea {
     </div>
   </div>
   <div class="stat">
-    <b id="stTitle">正在连接</b>
+    <div class="stat-head">
+      <b id="stTitle">正在连接</b>
+      <button type="button" class="stat-upd" id="upd" title="检查更新" aria-label="检查更新">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+    </div>
     <div class="stat-line">
       <span id="stSub"></span>
       <span id="stA11y"></span>
     </div>
-    <button type="button" class="btn ghost mini" id="upd">检查更新</button>
   </div>
 </aside>
 <main>
@@ -385,7 +398,7 @@ textarea {
       <button class="btn ghost" id="saveAsBtn" style="display:none">自定义位置</button>
     </div>
     <div class="stage-wrap">
-      <div class="stage" id="stage"><div id="shotHint" class="shot-hint" hidden>未开截屏权限</div><img id="shot" alt=""/><div class="cropbox" id="cropbox">
+      <div class="stage" id="stage"><img id="shot" alt=""/><div class="cropbox" id="cropbox">
         <i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i>
         <i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i>
       </div><div class="selbox" id="selbox"></div></div>
@@ -569,20 +582,13 @@ document.getElementById("upd").onclick = async () => {
     showUpdateBar({ phase: "error", percent: 0, msg: "检查失败 " + (e && e.message ? e.message : e) });
   }
 };
-function showShotPermHint(on) {
-  const el = document.getElementById("shotHint");
-  if (!el) return;
-  el.hidden = !on;
-}
 document.getElementById("shotBtn").onclick = async () => {
   expectingShot = true;
-  showShotPermHint(false);
   const r = await api("/api/shot", {});
   if (r && (r.noperm || r.notice)) {
     expectingShot = false;
     toast(r.notice || "未开截屏权限");
     if (r.noticeAt) window._noticeAt = r.noticeAt;
-    if (r.noperm) showShotPermHint(true);
   }
 };
 document.getElementById("saveBtn").onclick = async () => {
@@ -663,7 +669,6 @@ document.getElementById("rotR").onclick = () => api("/api/rotate", { dir: "cw" }
 async function refreshShot(keepZoom) {
   const s = await fetch("/api/frame").then(r => r.json());
   if (!s.b64) return;
-  showShotPermHint(false);
   shot.src = "data:image/png;base64," + s.b64;
   if (!keepZoom) {
     zoom = 1;

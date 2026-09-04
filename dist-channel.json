@@ -2,8 +2,8 @@
   "versionCode": 90,
   "versionName": "0.9.65",
   "apk_ver": "0.9.65",
-  "exe_ver": "1.1.74",
+  "exe_ver": "1.1.75",
   "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-65.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-74.exe",
-  "notes": "检查更新移到底栏小按钮；局域网 IP 旁实时无障碍状态；抓抓无权限时弹出系统授权；更新后清理 Downloads 旧包；1.1.74 / 0.9.65"
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-75.exe",
+  "notes": "检查更新改为状态卡右上角图标；抓抓无权限只留底栏提示、去掉居中遮罩；1.1.75 / 0.9.65"
 }
