@@ -18,9 +18,9 @@
 - 手机本地控制台 HTTP：**18765**（`ConsoleServer`）
 - 电脑 PC 控制台 HTTP + UDP 发现：**18766**（监听 **`0.0.0.0`**，手机可扫局域网 IP）
 
-## PC 壳：进程内嵌 WebView2（1.1.64-rebuild）
+## PC 壳：进程内嵌 WebView2（1.1.65-rebuild）
 
-Rebuild **1.1.64-rebuild** 使用 [`github.com/jchv/go-webview2`](https://github.com/jchv/go-webview2) **进程内嵌** Microsoft Edge WebView2 窗口（Title=`触控精灵 v1.1.64-rebuild`，1280×800），导航到 `http://127.0.0.1:18766/`，主线程 `Run()` 消息循环。
+Rebuild **1.1.65-rebuild** 使用 [`github.com/jchv/go-webview2`](https://github.com/jchv/go-webview2) **进程内嵌** Microsoft Edge WebView2 窗口（Title=`触控精灵 v1.1.65-rebuild`，1280×800），导航到 `http://127.0.0.1:18766/`，主线程 `Run()` 消息循环。
 
 **硬禁止**（已删除）：`chrome.exe` / `msedge.exe` / `--app=` / `openBrowser` / `rundll32` 开页，以及「已用应用模式打开 …」这类日志。
 
@@ -65,7 +65,7 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-H windowsgui -s -w" 
 - HTTP 绑定 **`0.0.0.0:18766`**，手机可连局域网 IP。
 - UDP `:18766` 收到 `TSHELLO` **立刻**回 `TS?`。
 - `/api/hello` → `{"ok":true}`；`/api/pull` 未知设备 `{"hello":true}`、无命令 `{"cmd":null}`、有命令则**扁平** JSON（含 `type`）。
-- 启动时尽量用 `netsh advfirewall` 放行 TCP/UDP **18766**（失败只记日志，需管理员权限时请手动放行）。
+- **不**再自动改防火墙（避免闪黑窗）。若手机连不上，请手动放行入站 TCP/UDP **18766**。
 
 ### 已实现的核心 API
 

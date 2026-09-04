@@ -3,5 +3,5 @@
 package main
 
 func allowFirewall() {
-	// no-op outside Windows
+	addLog("非 Windows：跳过防火墙提示")
 }

@@ -24,9 +24,11 @@ func runWebView(url string) {
 		},
 	})
 	if w == nil {
-		log.Print("WebView2 创建失败：请安装 Microsoft Edge WebView2 Runtime 后重试")
-		addLog("WebView2 创建失败：需安装 WebView2 Runtime")
-		// Keep HTTP/UDP alive briefly so phones can still connect; then exit.
+		msg := "WebView2 创建失败：请安装 Microsoft Edge WebView2 Runtime 后重试（https://go.microsoft.com/fwlink/p/?LinkId=2124703）"
+		log.Print(msg)
+		addLog(msg)
+		writeStartupLog(msg)
+		// Keep HTTP/UDP so LAN can still work; no MessageBox / no console flash.
 		select {}
 	}
 	webviewInst = w
