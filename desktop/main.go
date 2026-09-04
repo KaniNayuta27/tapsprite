@@ -28,7 +28,7 @@ var webFS embed.FS
 const (
 	httpPort = 18766
 	udpPort  = 18766
-	version  = "1.1.65-rebuild"
+	version  = "1.1.66-rebuild"
 )
 
 type Device struct {
@@ -677,7 +677,7 @@ func stubOK(w http.ResponseWriter, r *http.Request) {
 func addLog(s string) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
-	srv.logs = append(srv.logs, time.Now().Format("15:04:05")+" "+s)
+	srv.logs = append(srv.logs, time.Now().Format("15:04:05.000")+" "+s)
 	if len(srv.logs) > 200 {
 		srv.logs = srv.logs[len(srv.logs)-200:]
 	}
