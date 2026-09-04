@@ -28,7 +28,7 @@ var webFS embed.FS
 const (
 	httpPort = 18766
 	udpPort  = 18766
-	version  = "1.1.70"
+	version  = "1.1.71"
 )
 
 type Device struct {

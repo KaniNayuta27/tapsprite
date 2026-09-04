@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,12 +77,59 @@ func httpClient() *http.Client {
 	return &http.Client{
 		Timeout: 0, // long downloads
 		Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
+			Proxy:                 resolveProxy,
 			TLSHandshakeTimeout:   15 * time.Second,
 			ResponseHeaderTimeout: 30 * time.Second,
 			IdleConnTimeout:       90 * time.Second,
 		},
 	}
+}
+
+// proxyLabel returns a short proxy=… tag for logs / update bar.
+func proxyLabel(req *http.Request) string {
+	if req == nil {
+		return "proxy=direct"
+	}
+	u, err := resolveProxy(req)
+	if err != nil || u == nil {
+		return "proxy=direct"
+	}
+	host := u.Host
+	if host == "" {
+		host = u.String()
+	}
+	scheme := u.Scheme
+	if scheme == "" {
+		scheme = "http"
+	}
+	return "proxy=" + scheme + "://" + host
+}
+
+// shortURLDisp shows host + last path segment (for update bar; full URL goes to desktop log).
+func shortURLDisp(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		if len(raw) > 48 {
+			return raw[:20] + "…" + raw[len(raw)-20:]
+		}
+		return raw
+	}
+	path := u.EscapedPath()
+	base := path
+	if i := strings.LastIndex(path, "/"); i >= 0 && i+1 < len(path) {
+		base = path[i+1:]
+	}
+	if base == "" {
+		base = "/"
+	}
+	if len(base) > 28 {
+		base = "…" + base[len(base)-24:]
+	}
+	return u.Host + "/" + base
 }
 
 type channelInfo struct {
@@ -191,9 +239,13 @@ func fetchChannel() (*channelInfo, error) {
 			continue
 		}
 		req.Header.Set("User-Agent", "TapSprite-PC/"+version)
+		pl := proxyLabel(req)
+		writeDesktopLog(fmt.Sprintf("check channel url=%s %s", u, pl))
+		setUpdate("checking", 0, 0, 0, fmt.Sprintf("检新 %s %s", shortURLDisp(u), pl))
 		resp, err := cli.Do(req)
 		if err != nil {
 			last = err
+			writeDesktopLog(fmt.Sprintf("check channel fail %s %s: %v", shortURLDisp(u), pl, err))
 			continue
 		}
 		if resp.StatusCode >= 400 {
@@ -380,8 +432,13 @@ func downloadFileOnce(url, dest string, progress func(got, total int64)) error {
 		return err
 	}
 	req.Header.Set("User-Agent", "TapSprite-PC/"+version)
+	pl := proxyLabel(req)
+	writeDesktopLog(fmt.Sprintf("download url=%s %s", url, pl))
+	setUpdate("downloading", getUpdate().Percent, getUpdate().Got, getUpdate().Total,
+		fmt.Sprintf("下载 %s %s", shortURLDisp(url), pl))
 	resp, err := cli.Do(req)
 	if err != nil {
+		writeDesktopLog(fmt.Sprintf("download fail %s %s: %v", shortURLDisp(url), pl, err))
 		return err
 	}
 	defer resp.Body.Close()
