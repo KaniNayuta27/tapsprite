@@ -19,7 +19,7 @@ import org.json.JSONObject;
 
 /* loaded from: classes.dex */
 public final class Updater {
-    public static final String MANIFEST = "https://tapsprite.pages.dev/version.json";
+    public static final String MANIFEST = "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/dist-channel.json";
     public static volatile boolean downloading;
     public static volatile long lastGot;
     public static volatile String lastStatus = "";
@@ -57,7 +57,7 @@ public final class Updater {
     }
 
     public static void check(final Activity activity, final boolean z, final Listener listener) {
-        post(activity, listener, "正在检查 https://tapsprite.pages.dev/version.json");
+        post(activity, listener, "正在检查更新通道…");
         new Thread(new Runnable() { // from class: com.tapsprite.agent.Updater.1
             @Override // java.lang.Runnable
             public void run() {

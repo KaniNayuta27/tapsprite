@@ -28,7 +28,7 @@ var webFS embed.FS
 const (
 	httpPort = 18766
 	udpPort  = 18766
-	version  = "1.1.67-rebuild"
+	version  = "1.1.68"
 )
 
 type Device struct {
@@ -109,8 +109,11 @@ func main() {
 	mux.HandleFunc("/api/slot", handleSlot)
 	mux.HandleFunc("/api/undo", handleUndo)
 	mux.HandleFunc("/api/selfupdate", handleSelfUpdate)
+	mux.HandleFunc("/api/updatestatus", handleUpdateStatus)
 	mux.HandleFunc("/api/quit", handleQuit)
-	mux.HandleFunc("/api/fetchapk", stubOK)
+	mux.HandleFunc("/api/fetchapk", handleFetchApk)
+	mux.HandleFunc("/api/apkstatus", handleApkStatus)
+	mux.HandleFunc("/api/apkfile", handleApkFile)
 
 	// Bind all interfaces so phones can reach LAN IP (same as 0.0.0.0:18766).
 	addr := fmt.Sprintf(":%d", httpPort)
@@ -124,6 +127,7 @@ func main() {
 	}
 	srv.mu.Unlock()
 	go allowFirewall()
+	scheduleStartupCleanup()
 
 	uiURL := fmt.Sprintf("http://127.0.0.1%s/", addr)
 	server := &http.Server{Addr: addr, Handler: withCORS(mux)}
@@ -314,6 +318,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		"notice":   srv.notice,
 		"noticeAt": srv.noticeAt,
 		"version":  version,
+		"update":   getUpdate(),
 	})
 }
 
@@ -655,10 +660,6 @@ func handleUndo(w http.ResponseWriter, r *http.Request) {
 		more = len(srv.undoStack) > 0
 	}
 	writeJSON(w, map[string]any{"ok": true, "more": more})
-}
-
-func handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, map[string]any{"ok": true, "msg": "rebuild 版本暂不支持自更新（TODO）"})
 }
 
 func handleQuit(w http.ResponseWriter, r *http.Request) {

@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.67-rebuild</title>
+<title>触控精灵 v1.1.68</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -253,11 +253,30 @@ textarea {
   .btn:active, .nav button:active { transform: none; }
   #toast { transform: translateX(-50%); }
 }
+
+#updateBar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+  display: none; align-items: center; gap: 10px;
+  padding: 6px 16px 8px; pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(243,240,250,.92) 30%);
+  font: 600 12px/1.3 var(--font); color: #1b7a4a;
+}
+#updateBar.on { display: flex; }
+#updateBar .track {
+  flex: 1; max-width: 220px; height: 3px; border-radius: 2px;
+  background: rgba(47,158,107,.18); overflow: hidden;
+}
+#updateBar .fill {
+  height: 100%; width: 0%; background: #2f9e6b; border-radius: 2px;
+  transition: width 160ms ease;
+}
+#updateBar.err { color: #b42318; }
+#updateBar.err .fill { background: #b42318; }
 </style>
 </head>
 <body>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.67-rebuild</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.68</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -340,6 +359,7 @@ textarea {
 </main>
 <div class="hud" id="hud"><canvas id="lens" width="120" height="120"></canvas><div class="t" id="hudTxt"></div></div>
 <div class="ctx" id="ctxm"></div>
+<div id="updateBar" aria-live="polite"><span id="updateBarMsg"></span><div class="track"><div class="fill" id="updateBarFill"></div></div></div>
 <div id="toast" role="status"></div>
 <script src="/luaparse.js"></script>
 <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
@@ -415,14 +435,34 @@ document.getElementById("send").onclick = () => api("/api/script", { script: scr
 document.getElementById("sendRun").onclick = () => api("/api/script", { script: scriptText(), run: true });
 document.getElementById("start").onclick = () => api("/api/control", { action: "start" });
 document.getElementById("stop").onclick = () => api("/api/control", { action: "stop" });
+function showUpdateBar(u) {
+  const bar = document.getElementById("updateBar");
+  const msg = document.getElementById("updateBarMsg");
+  const fill = document.getElementById("updateBarFill");
+  if (!bar || !u) return;
+  const phase = u.phase || "idle";
+  const text = u.msg || "";
+  if (!text || phase === "idle") {
+    if (phase === "idle" && text && text.indexOf("已是最新") >= 0) {
+      bar.className = "on";
+      msg.textContent = text;
+      fill.style.width = "100%";
+      clearTimeout(showUpdateBar._t);
+      showUpdateBar._t = setTimeout(() => { bar.className = ""; }, 4000);
+      return;
+    }
+    if (phase === "idle") { bar.className = ""; return; }
+  }
+  bar.className = "on" + (phase === "error" ? " err" : "");
+  msg.textContent = text || (phase === "checking" ? "正在检测版本" : phase === "downloading" ? ("下载中 " + (u.percent || 0) + "%") : text);
+  fill.style.width = Math.max(0, Math.min(100, Number(u.percent) || 0)) + "%";
+}
 document.getElementById("upd").onclick = async () => {
-  toast("正在检查更新…", "ok");
+  showUpdateBar({ phase: "checking", percent: 0, msg: "正在检测版本" });
   try {
-    const r = await api("/api/selfupdate", {});
-    const msg = (r && r.msg) || "检查完成";
-    toast(msg, r && r.ok ? "ok" : "warn");
+    await api("/api/selfupdate", {});
   } catch (e) {
-    toast("检查失败 " + (e && e.message ? e.message : e), "warn");
+    showUpdateBar({ phase: "error", percent: 0, msg: "检查失败 " + (e && e.message ? e.message : e) });
   }
 };
 document.getElementById("shotBtn").onclick = async () => {
@@ -880,6 +920,7 @@ async function tick() {
     window._noticeAt = s.noticeAt;
     toast(s.notice);
   }
+  if (s.update) showUpdateBar(s.update);
   } finally { _tickBusy = false; }
 }
 function renderDevs(s) {
