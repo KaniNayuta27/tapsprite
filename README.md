@@ -19,13 +19,13 @@
 - 手机本地控制台 HTTP：**18765**（`ConsoleServer`）
 - 电脑 PC 控制台 HTTP + UDP 发现：**18766**（监听 **`0.0.0.0`**，手机可扫局域网 IP）
 
-## PC 壳：进程内嵌 WebView2（1.1.72）
+## PC 壳：进程内嵌 WebView2（1.1.73）
 
 侧栏/status 只展示判定出的**唯一**局域网 IPv4（过滤虚拟网卡 + 默认路由出口 + 手机同 /24 优先）。App 手输 IP「连接」会强制上线并始终 hello。
 
 自动更新 HTTP 客户端在 Windows 上优先读系统/IE 代理（`ProxyEnable`+`ProxyServer`），再环境变量，再探测本机常见代理端口；详见 `desktop/proxy_windows.go`。
 
-Rebuild **1.1.72** 使用 [`github.com/jchv/go-webview2`](https://github.com/jchv/go-webview2) **进程内嵌** Microsoft Edge WebView2 窗口（Title=`触控精灵 v1.1.72`，1280×800），导航到 `http://127.0.0.1:18766/`，主线程 `Run()` 消息循环。
+Rebuild **1.1.73** 使用 [`github.com/jchv/go-webview2`](https://github.com/jchv/go-webview2) **进程内嵌** Microsoft Edge WebView2 窗口（Title=`触控精灵 v1.1.73`，1280×800），导航到 `http://127.0.0.1:18766/`，主线程 `Run()` 消息循环。
 
 **硬禁止**（已删除）：`chrome.exe` / `msedge.exe` / `--app=` / `openBrowser` / `rundll32` 开页，以及「已用应用模式打开 …」这类日志。
 
@@ -77,13 +77,13 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-H windowsgui -s -w" 
 - `/api/hello` `/api/bye` `/api/status` `/api/device` `/api/pull` `/api/notice` `/api/channel`
 - `/api/script` `/api/control`（start/stop/shot）
 - `/api/shot` `/api/frame` `/api/pixel` `/api/pushshot`（`rawz` / `png`）
-- `/api/refresh` `/api/save` `/api/saveas` `/api/savescript` `/api/slot` `/api/undo`
+- `/api/refresh` `/api/save` `/api/saveas` `/api/savescript` `/api/slot` `/api/undo` `/api/crop` `/api/rotate`
 - UDP：`TSHELLO` → `TS?`；并向手机 `18765` 发 `TS?`
 
 ### 仍为 stub / 缺口（PC）
 
 - 需本机已装 **WebView2 Runtime**（未装则无法出窗）
-- `/api/crop` `/api/rotate` 与原版裁剪栈不完全一致（undo 仅简单截图栈）
+- `/api/crop` `/api/rotate` 已实现真裁剪/真旋转（undo 为截图栈）
 - ``/api/selfupdate` `/api/fetchapk` `/api/updatestatus` `/api/apkstatus` `/api/apkfile` 已实现；托盘仍 TODO
 - QOI 截图编码未实现（手机侧主要走 `rawz`/`png`）
 - 抓抓边角 / 命令移植（P1）本轮不做

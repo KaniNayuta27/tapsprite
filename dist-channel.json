@@ -2,8 +2,8 @@
   "versionCode": 89,
   "versionName": "0.9.64",
   "apk_ver": "0.9.64",
-  "exe_ver": "1.1.72",
+  "exe_ver": "1.1.73",
   "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-64.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-72.exe",
-  "notes": "PC 只展示唯一局域网 IPv4；App 手输连接必握手；抓抓 UI；apk 瘦身 abiFilters+minify；1.1.72 / 0.9.64"
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-73.exe",
+  "notes": "PC 真裁剪/真旋转 + 放大镜生命周期 + 取色槽 + 日志降频；apk 沿用 0.9.64；1.1.73 / 0.9.64"
 }

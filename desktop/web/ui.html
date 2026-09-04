@@ -144,7 +144,7 @@ textarea {
 }
 .log * { user-select: text; -webkit-user-select: text; -webkit-user-drag: none; }
 .tools { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-.stage-wrap { display: grid; grid-template-columns: 1.15fr minmax(300px, 380px); gap: 14px; min-height: 0; }
+.stage-wrap { display: grid; grid-template-columns: 1.4fr minmax(260px, 330px); gap: 14px; min-height: 0; }
 .rightcol { display: flex; flex-direction: column; min-height: 0; overflow: auto; gap: 8px; }
 .akey {
   margin-top: 8px; padding: 10px 12px; background: #f7f5ff; border-radius: var(--radius-md);
@@ -171,7 +171,7 @@ textarea {
 .akey-row .btn { height: 28px; line-height: 28px; font-size: 11px; min-width: 44px; padding: 0 10px; }
 .akey-sec { margin-top: 10px; padding-top: 8px; border-top: 1px solid #e4dff2; }
 .akey-sec h4 { margin: 0 0 6px; font-size: 12px; font-weight: 700; color: var(--muted); }
-.akey-result { font: 12px var(--mono); margin-bottom: 6px; min-height: 18px; }
+.akey-result { font: 12px var(--mono); margin-bottom: 6px; min-height: 18px; white-space: nowrap; display: flex; align-items: baseline; gap: 4px; }
 .akey-result b { font-weight: 650; }
 .akey .btn.block { width: 100%; margin-top: 6px; }
 .akey .btn.primary.block { height: 36px; }
@@ -421,8 +421,7 @@ textarea {
             <input class="sim" type="text" id="akSim" value="0.9">
           </div>
           <div class="akey-sec">
-            <h4>结果</h4>
-            <div class="akey-result"><span id="akResult"></span></div>
+            <div class="akey-result"><span>结果：</span><span id="akResult">—</span></div>
             <button class="btn ghost block" type="button" id="akTest">开始测试</button>
           </div>
           <div class="akey-sec">
@@ -501,11 +500,16 @@ function imgXY(e) {
     y: Math.floor((e.clientY - r.top) / r.height * shot.naturalHeight)
   };
 }
+function hideHud() {
+  if (hud) hud.style.display = "none";
+}
 function show(p) {
   document.getElementById("page-home").style.display = p === "home" ? "flex" : "none";
   document.getElementById("page-grab").style.display = p === "grab" ? "block" : "none";
   document.getElementById("navHome").className = p === "home" ? "on" : "";
   document.getElementById("navGrab").className = p === "grab" ? "on" : "";
+  hideHud();
+  hideCtx();
 }
 document.getElementById("navHome").onclick = () => show("home");
 document.getElementById("navGrab").onclick = () => show("grab");
@@ -619,8 +623,14 @@ cropBtn.onclick = (e) => {
   cropBtn.textContent = "确定";
   cropBtn.className = "btn ok";
 };
-document.getElementById("rotL").onclick = () => api("/api/rotate", { dir: "ccw" }).then(refreshShot);
-document.getElementById("rotR").onclick = () => api("/api/rotate", { dir: "cw" }).then(refreshShot);
+document.getElementById("rotL").onclick = () => api("/api/rotate", { dir: "ccw" }).then((r) => {
+  if (r && r.ok) { showSaveUndo(true); refreshShot(); }
+  else if (r && r.msg) toast(r.msg);
+});
+document.getElementById("rotR").onclick = () => api("/api/rotate", { dir: "cw" }).then((r) => {
+  if (r && r.ok) { showSaveUndo(true); refreshShot(); }
+  else if (r && r.msg) toast(r.msg);
+});
 async function refreshShot(keepZoom) {
   const s = await fetch("/api/frame").then(r => r.json());
   if (!s.b64) return;
@@ -827,7 +837,7 @@ stage.addEventListener("mousemove", async (e) => {
   hudTxt.textContent = p.x + "," + p.y + "  " + p.hex + "\nRGB(" + p.r + "," + p.g + "," + p.b + ")";
   window._px = p;
 });
-stage.addEventListener("mouseleave", () => { if (!cropOn && !cropRect) hud.style.display = "none"; });
+stage.addEventListener("mouseleave", () => { hideHud(); });
 stage.addEventListener("mousedown", (e) => {
   e.preventDefault();
   hud.style.display = "none";
@@ -857,6 +867,7 @@ stage.addEventListener("mousedown", (e) => {
   cropbox.style.display = "none";
 });
 window.addEventListener("mouseup", () => {
+  hideHud();
   if (dragMode === "seldraw") {
     if (!selMoved) {
       if (selRect) {
@@ -894,9 +905,14 @@ function applyCrop() {
   cropbox.style.display = "none";
   cropbox.classList.remove("adjust");
   clearSel();
-  api("/api/crop", { x1, y1, x2, y2 }).then(() => {
-    showSaveUndo(true);
-    refreshShot();
+  hideHud();
+  api("/api/crop", { x1, y1, x2, y2 }).then((r) => {
+    if (r && r.ok) {
+      showSaveUndo(true);
+      refreshShot();
+    } else if (r && r.msg) {
+      toast(r.msg);
+    }
   });
 }
 window.addEventListener("keydown", (e) => {
@@ -916,16 +932,20 @@ window.addEventListener("keydown", (e) => {
   }
   if (e.key === "Escape" && cropRect) {
     cropRect = null; cropbox.style.display = "none"; cropbox.classList.remove("adjust");
+    hideHud();
     return;
   }
   if (!(e.ctrlKey && e.altKey)) return;
-  const map = { Digit0:9, Digit1:0, Digit2:1, Digit3:2, Digit4:3, Digit5:4, Digit6:5, Digit7:6, Digit8:7, Digit9:8 };
+  const map = { Digit0:9, Digit1:0, Digit2:1, Digit3:2, Digit4:3, Digit5:4, Digit6:5, Digit7:6, Digit8:7, Digit9:8,
+    Numpad0:9, Numpad1:0, Numpad2:1, Numpad3:2, Numpad4:3, Numpad5:4, Numpad6:5, Numpad7:6, Numpad8:7, Numpad9:8 };
   const i = map[e.code];
   if (i === undefined) return;
   e.preventDefault();
+  e.stopPropagation();
   const px = window._px || {};
-  api("/api/slot", { i, x: px.x || 0, y: px.y || 0 }).then(renderSlots);
-});
+  if (px.x == null || px.y == null) { toast("请先在预览区取色"); return; }
+  api("/api/slot", { i, x: px.x|0, y: px.y|0 }).then((r) => { if (r) renderSlots(r); });
+}, true);
 function copyText(t) {
   if (!t) return;
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -1570,12 +1590,23 @@ document.getElementById("devRef").onclick = () => {
   if (window.ResizeObserver) new ResizeObserver(apply).observe(card);
 })();
 function hideCtx() { document.getElementById("ctxm").style.display = "none"; }
-function showGrabMenu(e) {
-  const p = window._px || {};
+async function showGrabMenu(e) {
+  hideHud();
+  const pt = imgXY(e);
+  let p = window._px || {};
+  if (pt) {
+    try {
+      const q = await fetch("/api/pixel?x=" + pt.x + "&y=" + pt.y).then(r => r.json());
+      if (q && q.ok) { p = q; window._px = q; }
+      else { p = { x: pt.x, y: pt.y, hex: (p.hex || "") }; }
+    } catch (_) {
+      p = { x: pt.x, y: pt.y, hex: (p.hex || "") };
+    }
+  }
   const x = p.x, y = p.y, hex = (p.hex || "").replace("#", "");
   const m = document.getElementById("ctxm");
   let html = "";
-  if (x != null) {
+  if (x != null && y != null) {
     html += '<b data-a="xy">复制当前坐标(' + x + "," + y + ")</b>";
     html += '<b data-a="hex">复制当前颜色(' + hex + ")</b><hr>";
   }
@@ -1588,24 +1619,32 @@ function showGrabMenu(e) {
   m.onclick = (ev) => {
     const b = ev.target.closest("b");
     if (!b) return;
+    ev.preventDefault();
+    ev.stopPropagation();
     const a = b.getAttribute("data-a");
     if (a === "xy") copyText(x + ", " + y);
     if (a === "hex") copyText(hex);
     if (a === "slot") {
       const n = Number(b.getAttribute("data-i"));
       const i = n === 10 ? 9 : n - 1;
-      api("/api/slot", { i, x: x || 0, y: y || 0 }).then(renderSlots);
+      if (x == null || y == null) { toast("无像素坐标"); hideCtx(); return; }
+      api("/api/slot", { i, x: x|0, y: y|0 }).then((r) => { if (r) renderSlots(r); });
     }
     hideCtx();
   };
 }
 document.addEventListener("click", hideCtx);
 document.addEventListener("contextmenu", (e) => {
-  if (e.target.closest(".monaco-editor, .monaco-menu, .shadow-root-host")) return;
+  if (e.target.closest(".monaco-editor, .monaco-menu, .shadow-root-host, .ctx")) return;
   e.preventDefault();
+  e.stopPropagation();
   const st = document.getElementById("stage");
-  if (st && st.contains(e.target)) showGrabMenu(e);
+  if (st && (st === e.target || st.contains(e.target))) showGrabMenu(e);
   else hideCtx();
+}, true);
+window.addEventListener("blur", () => { hideHud(); hideCtx(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { hideHud(); hideCtx(); }
 });
 window.addEventListener("beforeunload", () => { navigator.sendBeacon("/api/quit"); });
 

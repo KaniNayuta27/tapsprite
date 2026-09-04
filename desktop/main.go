@@ -28,7 +28,7 @@ var webFS embed.FS
 const (
 	httpPort = 18766
 	udpPort  = 18766
-	version  = "1.1.72"
+	version  = "1.1.73"
 )
 
 type Device struct {
@@ -71,7 +71,7 @@ type Server struct {
 	shotW    int
 	shotH    int
 	shotRev  int64
-	slots    [8]Slot
+	slots    [10]Slot
 	status   string
 	sub      string
 	lanIP    string // single preferred LAN IPv4 for UI (never a Join of all NICs)
@@ -102,8 +102,8 @@ func main() {
 	mux.HandleFunc("/api/pixel", handlePixel)
 	mux.HandleFunc("/api/pushshot", handlePushShot)
 	mux.HandleFunc("/api/refresh", handleRefresh)
-	mux.HandleFunc("/api/crop", stubOK)
-	mux.HandleFunc("/api/rotate", stubOK)
+	mux.HandleFunc("/api/crop", handleCrop)
+	mux.HandleFunc("/api/rotate", handleRotate)
 	mux.HandleFunc("/api/save", handleSave)
 	mux.HandleFunc("/api/saveas", handleSave)
 	mux.HandleFunc("/api/savescript", handleSaveScript)
@@ -184,7 +184,7 @@ func listenUDP() {
 			// Reply immediately so the phone learns our IP (must not delay).
 			_, _ = conn.WriteToUDP([]byte("TS?"), addr)
 			ip := addr.IP.String()
-			addLog("UDP 发现手机 " + ip)
+			addLogDedup("udp:"+ip, "UDP 发现手机 "+ip, 45*time.Second)
 			// also probe phone console port
 			go func(ip string) {
 				c, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP(ip), Port: 18765})
@@ -254,6 +254,8 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
 	srv.mu.Lock()
+	prev, had := srv.devices[id]
+	fresh := !had || time.Since(prev.Seen) > 60*time.Second || !prev.Online
 	d := &Device{ID: id, Name: name, A11y: a11y, Cap: capv, Emu: emu, IPs: ips, Online: online, Gen: gen, Host: host, Seen: time.Now()}
 	srv.devices[id] = d
 	if srv.selected == "" {
@@ -263,7 +265,9 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	srv.mu.Unlock()
 	// Re-pick display LAN IP now that a phone Host is known (same-/24 preference).
 	refreshLANSub(preferredLocalIPv4())
-	addLog("hello " + name + " (" + id + ") from " + host)
+	if fresh {
+		addLog("hello " + name + " (" + id + ") from " + host)
+	}
 	writeJSON(w, map[string]any{"ok": true})
 }
 
@@ -297,8 +301,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 			"a11y": d.A11y, "cap": d.Cap,
 		})
 	}
-	slots := make([]Slot, len(srv.slots))
-	copy(slots, srv.slots[:])
+	slots := exportSlotsLocked()
 	ip := ""
 	if d := srv.devices[srv.selected]; d != nil {
 		ip = d.Host
@@ -375,6 +378,10 @@ func handleNotice(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = readJSON(r, &body)
 	if body.Msg != "" {
+		if isNoisyDeviceLog(body.Msg) {
+			writeJSON(w, map[string]any{"ok": true})
+			return
+		}
 		if body.Kind == "trace" {
 			addLog(body.Msg)
 		} else {
@@ -622,13 +629,8 @@ func handleSlot(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = readJSON(r, &body)
 	hex := "000000"
-	// sample from current frame if possible
 	srv.mu.Lock()
 	pngBytes := append([]byte{}, srv.shotPNG...)
-	if body.I >= 0 && body.I < len(srv.slots) {
-		srv.slots[body.I] = Slot{X: body.X, Y: body.Y, Hex: hex}
-	}
-	slotsCopy := srv.slots
 	srv.mu.Unlock()
 	if len(pngBytes) > 0 {
 		if img, err := png.Decode(bytes.NewReader(pngBytes)); err == nil {
@@ -636,17 +638,16 @@ func handleSlot(w http.ResponseWriter, r *http.Request) {
 			if body.X >= b.Min.X && body.Y >= b.Min.Y && body.X < b.Max.X && body.Y < b.Max.Y {
 				rr, gg, bb, _ := img.At(body.X, body.Y).RGBA()
 				hex = fmt.Sprintf("%02X%02X%02X", rr>>8, gg>>8, bb>>8)
-				srv.mu.Lock()
-				if body.I >= 0 && body.I < len(srv.slots) {
-					srv.slots[body.I].Hex = hex
-					slotsCopy = srv.slots
-				}
-				srv.mu.Unlock()
 			}
 		}
 	}
-	_ = slotsCopy
-	writeJSON(w, map[string]any{"ok": true, "slots": slotsCopy[:]})
+	srv.mu.Lock()
+	if body.I >= 0 && body.I < len(srv.slots) {
+		srv.slots[body.I] = Slot{X: body.X, Y: body.Y, Hex: hex}
+	}
+	slots := exportSlotsLocked()
+	srv.mu.Unlock()
+	writeJSON(w, map[string]any{"ok": true, "slots": slots})
 }
 
 
@@ -724,6 +725,10 @@ func handleUndo(w http.ResponseWriter, r *http.Request) {
 		srv.shotPNG = srv.undoStack[n-1]
 		srv.undoStack = srv.undoStack[:n-1]
 		srv.shotRev++
+		if img, err := png.Decode(bytes.NewReader(srv.shotPNG)); err == nil {
+			b := img.Bounds()
+			srv.shotW, srv.shotH = b.Dx(), b.Dy()
+		}
 		more = len(srv.undoStack) > 0
 	}
 	writeJSON(w, map[string]any{"ok": true, "more": more})
@@ -738,8 +743,180 @@ func handleQuit(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-func stubOK(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, map[string]any{"ok": true, "todo": true, "path": r.URL.Path})
+func handleCrop(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		X1 int `json:"x1"`
+		Y1 int `json:"y1"`
+		X2 int `json:"x2"`
+		Y2 int `json:"y2"`
+	}
+	if err := readJSON(r, &body); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "msg": "bad json"})
+		return
+	}
+	srv.mu.Lock()
+	pngBytes := append([]byte{}, srv.shotPNG...)
+	srv.mu.Unlock()
+	if len(pngBytes) == 0 {
+		writeJSON(w, map[string]any{"ok": false, "msg": "无截图"})
+		return
+	}
+	img, err := png.Decode(bytes.NewReader(pngBytes))
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "msg": "截图解码失败"})
+		return
+	}
+	b := img.Bounds()
+	x1, x2 := body.X1, body.X2
+	y1, y2 := body.Y1, body.Y2
+	if x1 > x2 {
+		x1, x2 = x2, x1
+	}
+	if y1 > y2 {
+		y1, y2 = y2, y1
+	}
+	if x1 < b.Min.X {
+		x1 = b.Min.X
+	}
+	if y1 < b.Min.Y {
+		y1 = b.Min.Y
+	}
+	if x2 > b.Max.X {
+		x2 = b.Max.X
+	}
+	if y2 > b.Max.Y {
+		y2 = b.Max.Y
+	}
+	cw, ch := x2-x1, y2-y1
+	if cw < 2 || ch < 2 {
+		writeJSON(w, map[string]any{"ok": false, "msg": "裁剪区域过小"})
+		return
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, cw, ch))
+	for y := 0; y < ch; y++ {
+		for x := 0; x < cw; x++ {
+			dst.Set(x, y, img.At(b.Min.X+x1+x, b.Min.Y+y1+y))
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, dst); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "msg": "编码失败"})
+		return
+	}
+	commitShot(buf.Bytes(), cw, ch)
+	writeJSON(w, map[string]any{"ok": true, "w": cw, "h": ch})
+}
+
+func handleRotate(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Dir string `json:"dir"`
+	}
+	_ = readJSON(r, &body)
+	dir := strings.ToLower(strings.TrimSpace(body.Dir))
+	if dir != "cw" && dir != "ccw" {
+		writeJSON(w, map[string]any{"ok": false, "msg": "dir 需为 cw/ccw"})
+		return
+	}
+	srv.mu.Lock()
+	pngBytes := append([]byte{}, srv.shotPNG...)
+	srv.mu.Unlock()
+	if len(pngBytes) == 0 {
+		writeJSON(w, map[string]any{"ok": false, "msg": "无截图"})
+		return
+	}
+	img, err := png.Decode(bytes.NewReader(pngBytes))
+	if err != nil {
+		writeJSON(w, map[string]any{"ok": false, "msg": "截图解码失败"})
+		return
+	}
+	b := img.Bounds()
+	sw, sh := b.Dx(), b.Dy()
+	var dst *image.RGBA
+	if dir == "cw" {
+		dst = image.NewRGBA(image.Rect(0, 0, sh, sw))
+		for y := 0; y < sh; y++ {
+			for x := 0; x < sw; x++ {
+				dst.Set(sh-1-y, x, img.At(b.Min.X+x, b.Min.Y+y))
+			}
+		}
+	} else {
+		dst = image.NewRGBA(image.Rect(0, 0, sh, sw))
+		for y := 0; y < sh; y++ {
+			for x := 0; x < sw; x++ {
+				dst.Set(y, sw-1-x, img.At(b.Min.X+x, b.Min.Y+y))
+			}
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, dst); err != nil {
+		writeJSON(w, map[string]any{"ok": false, "msg": "编码失败"})
+		return
+	}
+	nw, nh := dst.Bounds().Dx(), dst.Bounds().Dy()
+	commitShot(buf.Bytes(), nw, nh)
+	writeJSON(w, map[string]any{"ok": true, "w": nw, "h": nh, "dir": dir})
+}
+
+func commitShot(pngBytes []byte, w, h int) {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	if len(srv.shotPNG) > 0 {
+		srv.undoStack = append(srv.undoStack, srv.shotPNG)
+		if len(srv.undoStack) > 8 {
+			srv.undoStack = srv.undoStack[len(srv.undoStack)-8:]
+		}
+	}
+	srv.shotPNG = pngBytes
+	srv.shotW, srv.shotH = w, h
+	srv.shotRev++
+}
+
+func exportSlotsLocked() []map[string]any {
+	out := make([]map[string]any, len(srv.slots))
+	for i, s := range srv.slots {
+		on := s.Hex != ""
+		r8, g8, b8 := 0, 0, 0
+		if on && len(s.Hex) >= 6 {
+			fmt.Sscanf(s.Hex[:6], "%02X%02X%02X", &r8, &g8, &b8)
+		}
+		out[i] = map[string]any{
+			"x": s.X, "y": s.Y, "hex": s.Hex,
+			"on": on, "r": r8, "g": g8, "b": b8,
+		}
+	}
+	return out
+}
+
+var (
+	logDedupMu sync.Mutex
+	logDedupAt = map[string]time.Time{}
+)
+
+func addLogDedup(key, s string, window time.Duration) {
+	logDedupMu.Lock()
+	last, ok := logDedupAt[key]
+	if ok && time.Since(last) < window {
+		logDedupMu.Unlock()
+		return
+	}
+	logDedupAt[key] = time.Now()
+	logDedupMu.Unlock()
+	addLog(s)
+}
+
+func isNoisyDeviceLog(s string) bool {
+	low := strings.ToLower(s)
+	keys := []string{
+		"握手", "探测", "hello", "tshello", "ts?", "keepalive",
+		"udp 发现", "发现手机", "handshake", "probe", "ping pc",
+		"联机探测", "心跳",
+	}
+	for _, k := range keys {
+		if strings.Contains(low, k) {
+			return true
+		}
+	}
+	return false
 }
 
 func addLog(s string) {
