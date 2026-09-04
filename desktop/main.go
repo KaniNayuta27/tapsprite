@@ -15,9 +15,7 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,7 +28,7 @@ var webFS embed.FS
 const (
 	httpPort = 18766
 	udpPort  = 18766
-	version  = "1.1.62-rebuild"
+	version  = "1.1.63-rebuild"
 )
 
 type Device struct {
@@ -114,13 +112,21 @@ func main() {
 	mux.HandleFunc("/api/quit", handleQuit)
 	mux.HandleFunc("/api/fetchapk", stubOK)
 
+	// Bind all interfaces so phones can reach LAN IP (same as 0.0.0.0:18766).
 	addr := fmt.Sprintf(":%d", httpPort)
-	log.Printf("tapsprite desktop %s listening on http://127.0.0.1%s", version, addr)
+	lan := localIPv4s()
+	log.Printf("tapsprite desktop %s listening on http://0.0.0.0%s (lan=%v)", version, addr, lan)
 	srv.mu.Lock()
-	srv.sub = fmt.Sprintf("http://127.0.0.1%s", addr)
+	if len(lan) > 0 {
+		srv.sub = fmt.Sprintf("http://%s%s · 本机 %s", lan[0], addr, strings.Join(lan, ", "))
+	} else {
+		srv.sub = fmt.Sprintf("http://0.0.0.0%s", addr)
+	}
 	srv.mu.Unlock()
-	go openBrowser(fmt.Sprintf("http://127.0.0.1%s", addr))
-	if err := http.ListenAndServe(addr, withCORS(mux)); err != nil {
+	go allowFirewall()
+	go openAppWindow(fmt.Sprintf("http://127.0.0.1%s", addr))
+	server := &http.Server{Addr: addr, Handler: withCORS(mux)}
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -153,8 +159,10 @@ func listenUDP() {
 		}
 		msg := string(buf[:n])
 		if strings.HasPrefix(msg, "TSHELLO") {
-			// any reply lets the phone learn our IP
+			// Reply immediately so the phone learns our IP (must not delay).
 			_, _ = conn.WriteToUDP([]byte("TS?"), addr)
+			ip := addr.IP.String()
+			addLog("UDP 发现手机 " + ip)
 			// also probe phone console port
 			go func(ip string) {
 				c, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP(ip), Port: 18765})
@@ -162,8 +170,7 @@ func listenUDP() {
 					_, _ = c.Write([]byte("TS?"))
 					_ = c.Close()
 				}
-			}(addr.IP.String())
-			addLog("UDP 发现手机 " + addr.IP.String())
+			}(ip)
 		}
 	}
 }
@@ -663,17 +670,42 @@ func readWeb(path string) ([]byte, error) {
 	return b, err
 }
 
-func openBrowser(url string) {
-	time.Sleep(400 * time.Millisecond)
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	case "darwin":
-		cmd = exec.Command("open", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
+func localIPv4s() []string {
+	out := []string{}
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return out
 	}
-	_ = cmd.Start()
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			var ip net.IP
+			switch v := a.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+			ip = ip.To4()
+			if ip == nil {
+				continue
+			}
+			s := ip.String()
+			if strings.HasPrefix(s, "169.254.") {
+				continue
+			}
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
