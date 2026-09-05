@@ -1,9 +1,9 @@
 {
-  "versionCode": 97,
-  "versionName": "0.9.72",
-  "apk_ver": "0.9.72",
-  "exe_ver": "1.1.83",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-72.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-83.exe",
-  "notes": "Lua Thread.Start / Thread.Stop。PC 1.1.83 / App 0.9.72（versionCode 97）"
+  "versionCode": 98,
+  "versionName": "0.9.73",
+  "apk_ver": "0.9.73",
+  "exe_ver": "1.1.84",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-73.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-84.exe",
+  "notes": "真并行 Lua Thread + ShareVar。PC 1.1.84 / App 0.9.73（versionCode 98）"
 }

@@ -20,12 +20,14 @@ public final class Sprite {
     }
 
     public static boolean tap(float f, float f2) {
-        AutoService autoService = AppState.auto;
-        if (autoService != null) {
-            return autoService.tap(f, f2);
+        synchronized (DeviceGate.LOCK) {
+            AutoService autoService = AppState.auto;
+            if (autoService != null) {
+                return autoService.tap(f, f2);
+            }
+            AppState.log("无障碍未连，改用 input tap");
+            return ShellInput.tap(f, f2);
         }
-        AppState.log("无障碍未连，改用 input tap");
-        return ShellInput.tap(f, f2);
     }
 
     public static boolean tap2(float f, float f2) {
@@ -44,67 +46,79 @@ public final class Sprite {
     }
 
     public static boolean touch(float f, float f2, int i) {
-        AutoService autoService = AppState.auto;
-        if (autoService != null) {
-            return autoService.touch(f, f2, i);
+        synchronized (DeviceGate.LOCK) {
+            AutoService autoService = AppState.auto;
+            if (autoService != null) {
+                return autoService.touch(f, f2, i);
+            }
+            return ShellInput.tap(f, f2);
         }
-        return ShellInput.tap(f, f2);
     }
 
     public static boolean swipe(float f, float f2, float f3, float f4, int i) {
-        AutoService autoService = AppState.auto;
-        if (autoService != null) {
-            if (i <= 0) {
-                i = 300;
+        synchronized (DeviceGate.LOCK) {
+            AutoService autoService = AppState.auto;
+            if (autoService != null) {
+                if (i <= 0) {
+                    i = 300;
+                }
+                return autoService.swipe(f, f2, f3, f4, i);
             }
-            return autoService.swipe(f, f2, f3, f4, i);
+            AppState.log("无障碍未连，改用 input swipe");
+            return ShellInput.swipe(f, f2, f3, f4, i);
         }
-        AppState.log("无障碍未连，改用 input swipe");
-        return ShellInput.swipe(f, f2, f3, f4, i);
     }
 
     public static boolean touchDown(float f, float f2) {
-        AutoService autoService = AppState.auto;
-        return autoService != null && autoService.touchDown(f, f2);
+        synchronized (DeviceGate.LOCK) {
+            AutoService autoService = AppState.auto;
+            return autoService != null && autoService.touchDown(f, f2);
+        }
     }
 
     public static boolean touchMove(float f, float f2, int i) {
-        AutoService autoService = AppState.auto;
-        if (autoService != null) {
-            if (i <= 0) {
-                i = 50;
+        synchronized (DeviceGate.LOCK) {
+            AutoService autoService = AppState.auto;
+            if (autoService != null) {
+                if (i <= 0) {
+                    i = 50;
+                }
+                if (autoService.touchMove(f, f2, i)) {
+                    return true;
+                }
             }
-            if (autoService.touchMove(f, f2, i)) {
-                return true;
-            }
+            return false;
         }
-        return false;
     }
 
     public static boolean touchUp(int i) {
-        AutoService autoService = AppState.auto;
-        return autoService != null && autoService.touchUp();
+        synchronized (DeviceGate.LOCK) {
+            AutoService autoService = AppState.auto;
+            return autoService != null && autoService.touchUp();
+        }
     }
 
     public static void keyPress(String str) {
-        if (str == null) {
-            str = "back";
-        }
-        String lowerCase = str.toLowerCase(Locale.US);
-        if (lowerCase.equals("volumeup") || lowerCase.equals("volup")) {
-            DeviceApi.volume(1);
-            return;
-        }
-        if (lowerCase.equals("volumedown") || lowerCase.equals("voldown")) {
-            DeviceApi.volume(-1);
-            return;
-        }
-        AutoService autoService = AppState.auto;
-        if (autoService != null) {
-            autoService.pressKey(lowerCase);
-        } else {
-            AppState.log("无障碍未连，改用 input keyevent");
-            ShellInput.key(lowerCase);
+        synchronized (DeviceGate.LOCK) {
+            if (str == null) {
+                str = "back";
+            }
+            String lowerCase = str.toLowerCase(Locale.US);
+            if (lowerCase.equals("volumeup") || lowerCase.equals("volup")) {
+                DeviceApi.volume(1);
+                return;
+            }
+            if (lowerCase.equals("volumedown") || lowerCase.equals("voldown")) {
+                DeviceApi.volume(-1);
+                return;
+            }
+            AutoService autoService = AppState.auto;
+            if (autoService != null) {
+                autoService.pressKey(lowerCase);
+            } else {
+                AppState.log("无障碍未连，改用 input keyevent");
+                ShellInput.key(lowerCase);
+            }
         }
     }
 
@@ -113,7 +127,9 @@ public final class Sprite {
     }
 
     public static String getPixelColor(int i, int i2) {
-        return ScreenApi.getPixelColor(i, i2);
+        synchronized (DeviceGate.LOCK) {
+            return ScreenApi.getPixelColor(i, i2);
+        }
     }
 
     public static String getPixelColorA11y(int i, int i2) {
@@ -130,35 +146,49 @@ public final class Sprite {
     }
 
     public static boolean findColor(int i, int i2, int i3, int i4, String str, float f, int i5) {
-        return ScreenApi.findColor(i, i2, i3, i4, str, f, i5);
+        synchronized (DeviceGate.LOCK) {
+            return ScreenApi.findColor(i, i2, i3, i4, str, f, i5);
+        }
     }
 
     public static boolean findMultiColor(int i, int i2, int i3, int i4, String str, String str2, float f, int i5) {
-        return ScreenApi.findMultiColor(i, i2, i3, i4, str, str2, f, i5);
+        synchronized (DeviceGate.LOCK) {
+            return ScreenApi.findMultiColor(i, i2, i3, i4, str, str2, f, i5);
+        }
     }
 
     public static boolean cmpColorEx(String str, float f) {
-        return ScreenApi.cmpColorEx(str, f);
+        synchronized (DeviceGate.LOCK) {
+            return ScreenApi.cmpColorEx(str, f);
+        }
     }
 
     public static void keepScreen(boolean z) {
-        ScreenApi.keepScreen(z);
+        synchronized (DeviceGate.LOCK) {
+            ScreenApi.keepScreen(z);
+        }
     }
 
     public static void snapShot() {
-        ScreenApi.snapShot();
+        synchronized (DeviceGate.LOCK) {
+            ScreenApi.snapShot();
+        }
     }
 
     public static String ocrText(int i, int i2, int i3, int i4) {
-        return ScreenApi.ocrText(i, i2, i3, i4);
+        synchronized (DeviceGate.LOCK) {
+            return ScreenApi.ocrText(i, i2, i3, i4);
+        }
     }
 
     public static boolean a11yShot() {
-        AutoService autoService = AppState.auto;
-        if (autoService == null || Build.VERSION.SDK_INT < 30) {
-            return false;
+        synchronized (DeviceGate.LOCK) {
+            AutoService autoService = AppState.auto;
+            if (autoService == null || Build.VERSION.SDK_INT < 30) {
+                return false;
+            }
+            return autoService.takeA11yShot();
         }
-        return autoService.takeA11yShot();
     }
 
     public static void tracePrint(String str) {

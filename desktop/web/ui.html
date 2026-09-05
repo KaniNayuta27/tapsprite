@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.83</title>
+<title>触控精灵 v1.1.84</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -389,7 +389,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.83</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.84</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -404,7 +404,7 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.83</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.84</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -1401,7 +1401,8 @@ document.getElementById("devRef").onclick = () => {
     ["Now","()"],["IsNull","(v)"],["UBound","(t)"],["Cos","(n)"],["Sin","(n)"],
     ["GetDeviceID","()"],["GetColorDep","()"],["Play","(name)"],["PutAttachment","(name)"],
     ["FW","."],["Dialog","."],["Sys","."],["Element","."],["Image","."],["UTF8","."],
-    ["Thread","."],["Thread.Start","(fn, ...)"],["Thread.Stop","(id)"]
+    ["Thread","."],["Thread.Start","(fn, ...)"],["Thread.Stop","(id)"],
+    ["Thread.SetShareVar","(name, v)"],["Thread.GetShareVar","(name)"]
   ];
   const CMD = {};
   cmds.forEach((c) => { CMD[c[0]] = c[1]; });
@@ -1420,9 +1421,11 @@ document.getElementById("devRef").onclick = () => {
     OcrText: ["OcrText(x1, y1, x2, y2)", "识别矩形内文字。", "local s = OcrText(80, 200, 1000, 400)"],
     ExitScript: ["ExitScript()", "结束脚本。", "ExitScript()"],
     TickCount: ["TickCount()", "开机起毫秒。", "local t0 = TickCount()"],
-    Thread: ["Thread.Start(fn, ...)", "后台启动函数，返回线程 id；Stop(id) 结束。主脚本停止时子线程一并结束。", "local id = Thread.Start(worker, 1, 2)\nThread.Stop(id)"],
-    "Thread.Start": ["Thread.Start(fn|name, ...)", "后台跑函数或全局函数名，立刻返回线程 id。子线程 TracePrint 进同一日志。", "local id = Thread.Start(worker, 1, 2)"],
-    "Thread.Stop": ["Thread.Stop(id)", "结束 Thread.Start 返回的线程。", "Thread.Stop(id)"]
+    Thread: ["Thread.Start(fn, ...)", "真并行后台线程，返回 id。子线程独立 Lua 环境，普通全局不共享；用 SetShareVar/GetShareVar 传 number/string/bool/nil。主脚本停止时子线程一并结束。", "Thread.SetShareVar(\"aa\", 0)\nlocal id = Thread.Start(worker, \"你\", \"好\")\nThread.Stop(id)"],
+    "Thread.Start": ["Thread.Start(fn|name, ...)", "真并行：独立 LuaJ 环境 + Java 线程。立刻返回 id。函数写在同一脚本，Start 放循环外。子线程 TracePrint 进同一日志。", "local id = Thread.Start(test_thread, \"你\", \"好\")"],
+    "Thread.Stop": ["Thread.Stop(id)", "结束 Thread.Start 返回的线程。", "Thread.Stop(id)"],
+    "Thread.SetShareVar": ["Thread.SetShareVar(name, value)", "线程间共享变量。value 仅 number/string/bool/nil；nil 删除。普通 Lua 全局不共享。", "Thread.SetShareVar(\"aa\", 1)"],
+    "Thread.GetShareVar": ["Thread.GetShareVar(name)", "读取 SetShareVar 的值，没有则 nil。", "local aa = Thread.GetShareVar(\"aa\") or 0"]
   };
   function indentLua(src) {
     const lines = src.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");

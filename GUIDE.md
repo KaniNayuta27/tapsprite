@@ -106,8 +106,10 @@ sim：`0`/`1` = 精确；`0.9` = 允许约 10%；`3`/`4` = 允许 3、4 级通�
 | `TracePrint("msg")` / `print("msg")` | 打到电脑日志 |
 | `Tip("msg")` | 屏幕底部 5 行滚动，同时打日志。**不再弹窗** |
 | `Delay(ms)` / `Sleep(ms)` | 等待，可被停止打断 |
-| `Thread.Start(fn|name, ...)` | 后台跑函数，立刻返回线程 id。子线程 TracePrint 进同一日志 |
+| `Thread.Start(fn|name, ...)` | 真并行后台线程，立刻返回 id。每个子线程独立 Lua 环境；普通全局**不共享**。`Start` 写在循环外，函数定义在同一脚本。子线程 TracePrint 进同一日志 |
 | `Thread.Stop(id)` | 结束该线程；主脚本停止时子线程一并结束 |
+| `Thread.SetShareVar(name, v)` | 进程内共享变量。`v` 仅 number / string / bool / nil（nil 删除）。线程安全 |
+| `Thread.GetShareVar(name)` | 读取共享变量，没有则 nil。典型：主线程 Set，子线程 Get |
 | `ExitScript()` | 结束脚本 |
 | `IsRoot()` | 这里表示是否模拟器 |
 | `GetScreenX()` `GetScreenY()` | 宽高 |

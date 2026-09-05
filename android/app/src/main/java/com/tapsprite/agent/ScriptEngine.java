@@ -310,23 +310,13 @@ public final class ScriptEngine {
     }
 
     private static void sleep(long j) throws InterruptedException {
-        boolean held = LuaThreadHost.isHeldByCurrentThread();
-        if (held) {
-            LuaThreadHost.leaveVm();
-        }
-        try {
-            while (j > 0) {
-                if (isStopRequested()) {
-                    throw new InterruptedException();
-                }
-                long min = Math.min(j, 120L);
-                Thread.sleep(min);
-                j -= min;
+        while (j > 0) {
+            if (isStopRequested()) {
+                throw new InterruptedException();
             }
-        } finally {
-            if (held) {
-                LuaThreadHost.enterVm();
-            }
+            long min = Math.min(j, 120L);
+            Thread.sleep(min);
+            j -= min;
         }
     }
 

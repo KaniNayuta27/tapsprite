@@ -31,23 +31,24 @@ public final class LuaEngine {
     }
 
     public static void run(String str) {
-        Globals standardGlobals = JsePlatform.standardGlobals();
-        bind(standardGlobals);
-        standardGlobals.set("print", standardGlobals.get("TracePrint"));
+        Globals standardGlobals = newGlobals();
         LuaThreadHost.begin(standardGlobals);
         try {
-            LuaThreadHost.enterVm();
-            try {
-                standardGlobals.load(str, "script").call();
-            } finally {
-                LuaThreadHost.leaveVm();
-            }
+            standardGlobals.load(str, "script").call();
         } catch (LuaError e) {
             AppState.log("Lua 错误：" + e.getMessage());
             throw e;
         } finally {
             LuaThreadHost.end();
         }
+    }
+
+    /** Fresh LuaJ Globals with TapSprite APIs. Each Thread.Start uses its own copy. */
+    static Globals newGlobals() {
+        Globals g = JsePlatform.standardGlobals();
+        bind(g);
+        g.set("print", g.get("TracePrint"));
+        return g;
     }
 
     /* JADX INFO: Access modifiers changed from: private */
@@ -219,10 +220,12 @@ public final class LuaEngine {
             public Varargs invoke(Varargs varargs) {
                 LuaEngine.checkStop();
                 float[] dirSim = LuaEngine.dirSim(varargs.optdouble(6, 0.0d), varargs.optdouble(7, 0.0d));
-                if (!Sprite.findColor(varargs.arg(1).toint(), varargs.arg(2).toint(), varargs.arg(3).toint(), varargs.arg(4).toint(), varargs.optjstring(5, "000000"), dirSim[0], (int) dirSim[1])) {
-                    return varargsOf(valueOf(-1), valueOf(-1));
+                synchronized (DeviceGate.LOCK) {
+                    if (!Sprite.findColor(varargs.arg(1).toint(), varargs.arg(2).toint(), varargs.arg(3).toint(), varargs.arg(4).toint(), varargs.optjstring(5, "000000"), dirSim[0], (int) dirSim[1])) {
+                        return varargsOf(valueOf(-1), valueOf(-1));
+                    }
+                    return varargsOf(valueOf(Sprite.intXY.x), valueOf(Sprite.intXY.y));
                 }
-                return varargsOf(valueOf(Sprite.intXY.x), valueOf(Sprite.intXY.y));
             }
         });
         globals.set("FindMultiColor", new VarArgFunction() { // from class: com.tapsprite.agent.LuaEngine.14
@@ -230,17 +233,21 @@ public final class LuaEngine {
             public Varargs invoke(Varargs varargs) {
                 LuaEngine.checkStop();
                 float[] dirSim = LuaEngine.dirSim(varargs.optdouble(7, 0.0d), varargs.optdouble(8, 0.0d));
-                if (!Sprite.findMultiColor(varargs.arg(1).toint(), varargs.arg(2).toint(), varargs.arg(3).toint(), varargs.arg(4).toint(), varargs.optjstring(5, "000000"), varargs.optjstring(6, ""), dirSim[0], (int) dirSim[1])) {
-                    return varargsOf(valueOf(-1), valueOf(-1));
+                synchronized (DeviceGate.LOCK) {
+                    if (!Sprite.findMultiColor(varargs.arg(1).toint(), varargs.arg(2).toint(), varargs.arg(3).toint(), varargs.arg(4).toint(), varargs.optjstring(5, "000000"), varargs.optjstring(6, ""), dirSim[0], (int) dirSim[1])) {
+                        return varargsOf(valueOf(-1), valueOf(-1));
+                    }
+                    return varargsOf(valueOf(Sprite.intXY.x), valueOf(Sprite.intXY.y));
                 }
-                return varargsOf(valueOf(Sprite.intXY.x), valueOf(Sprite.intXY.y));
             }
         });
         globals.set("CmpColor", new VarArgFunction() { // from class: com.tapsprite.agent.LuaEngine.15
             @Override // org.luaj.vm2.lib.VarArgFunction, org.luaj.vm2.lib.LibFunction, org.luaj.vm2.LuaValue
             public Varargs invoke(Varargs varargs) {
                 LuaEngine.checkStop();
-                return ScreenApi.cmpColor(varargs.arg(1).toint(), varargs.arg(2).toint(), varargs.optjstring(3, "000000"), (float) varargs.optdouble(4, 0.0d)) ? TRUE : FALSE;
+                synchronized (DeviceGate.LOCK) {
+                    return ScreenApi.cmpColor(varargs.arg(1).toint(), varargs.arg(2).toint(), varargs.optjstring(3, "000000"), (float) varargs.optdouble(4, 0.0d)) ? TRUE : FALSE;
+                }
             }
         });
         globals.set("CmpColorEx", new TwoArgFunction() { // from class: com.tapsprite.agent.LuaEngine.16
@@ -263,11 +270,13 @@ public final class LuaEngine {
             @Override // org.luaj.vm2.lib.VarArgFunction, org.luaj.vm2.lib.LibFunction, org.luaj.vm2.LuaValue
             public Varargs invoke(Varargs varargs) {
                 LuaEngine.checkStop();
-                String optjstring = varargs.optjstring(1, "");
-                if (optjstring.length() == 0) {
-                    return valueOf(ScreenApi.snapShot());
+                synchronized (DeviceGate.LOCK) {
+                    String optjstring = varargs.optjstring(1, "");
+                    if (optjstring.length() == 0) {
+                        return valueOf(ScreenApi.snapShot());
+                    }
+                    return valueOf(ScreenApi.snapShotTo(optjstring));
                 }
-                return valueOf(ScreenApi.snapShotTo(optjstring));
             }
         });
         globals.set("A11yShot", new ZeroArgFunction() { // from class: com.tapsprite.agent.LuaEngine.19
@@ -297,10 +306,12 @@ public final class LuaEngine {
                         }
                     }
                 }
-                if (!ScreenApi.findPic(varargs.arg(1).toint(), varargs.arg(2).toint(), varargs.arg(3).toint(), varargs.arg(4).toint(), varargs.optjstring(5, ""), sim)) {
-                    return varargsOf(valueOf(-1), valueOf(-1));
+                synchronized (DeviceGate.LOCK) {
+                    if (!ScreenApi.findPic(varargs.arg(1).toint(), varargs.arg(2).toint(), varargs.arg(3).toint(), varargs.arg(4).toint(), varargs.optjstring(5, ""), sim)) {
+                        return varargsOf(valueOf(-1), valueOf(-1));
+                    }
+                    return varargsOf(valueOf(Sprite.intXY.x), valueOf(Sprite.intXY.y));
                 }
-                return varargsOf(valueOf(Sprite.intXY.x), valueOf(Sprite.intXY.y));
             }
         });
         globals.set("WaitColor", new VarArgFunction() { // from class: com.tapsprite.agent.LuaEngine.21
@@ -310,45 +321,29 @@ public final class LuaEngine {
                 if (!ExtraApi.waitColor(varargs.arg(1).toint(), varargs.arg(2).toint(), varargs.arg(3).toint(), varargs.arg(4).toint(), varargs.optjstring(5, "000000"), varargs.optint(6, 5000), (float) varargs.optdouble(7, 0.0d))) {
                     return varargsOf(valueOf(-1), valueOf(-1));
                 }
-                return varargsOf(valueOf(Sprite.intXY.x), valueOf(Sprite.intXY.y));
+                synchronized (DeviceGate.LOCK) {
+                    return varargsOf(valueOf(Sprite.intXY.x), valueOf(Sprite.intXY.y));
+                }
             }
         });
         globals.set("TracePrint", new OneArgFunction() { // from class: com.tapsprite.agent.LuaEngine.22
             @Override // org.luaj.vm2.lib.OneArgFunction, org.luaj.vm2.lib.LibFunction, org.luaj.vm2.LuaValue
             public LuaValue call(LuaValue luaValue) {
-                final String msg = luaValue.isnil() ? "" : luaValue.tojstring();
-                LuaThreadHost.unlocked(new Runnable() {
-                    @Override
-                    public void run() {
-                        Sprite.tracePrint(msg);
-                    }
-                });
+                Sprite.tracePrint(luaValue.isnil() ? "" : luaValue.tojstring());
                 return NIL;
             }
         });
         globals.set("Tip", new OneArgFunction() { // from class: com.tapsprite.agent.LuaEngine.23
             @Override // org.luaj.vm2.lib.OneArgFunction, org.luaj.vm2.lib.LibFunction, org.luaj.vm2.LuaValue
             public LuaValue call(LuaValue luaValue) {
-                final String msg = luaValue.isnil() ? "" : luaValue.tojstring();
-                LuaThreadHost.unlocked(new Runnable() {
-                    @Override
-                    public void run() {
-                        Sprite.tip(msg);
-                    }
-                });
+                Sprite.tip(luaValue.isnil() ? "" : luaValue.tojstring());
                 return TRUE;
             }
         });
         globals.set("Toast", new OneArgFunction() { // from class: com.tapsprite.agent.LuaEngine.24
             @Override // org.luaj.vm2.lib.OneArgFunction, org.luaj.vm2.lib.LibFunction, org.luaj.vm2.LuaValue
             public LuaValue call(LuaValue luaValue) {
-                final String msg = luaValue.isnil() ? "" : luaValue.tojstring();
-                LuaThreadHost.unlocked(new Runnable() {
-                    @Override
-                    public void run() {
-                        Sprite.tip(msg);
-                    }
-                });
+                Sprite.tip(luaValue.isnil() ? "" : luaValue.tojstring());
                 return TRUE;
             }
         });
@@ -934,6 +929,21 @@ public final class LuaEngine {
                     return FALSE;
                 }
                 return LuaThreadHost.stop(luaValue.toint()) ? TRUE : FALSE;
+            }
+        });
+        t.set("SetShareVar", new TwoArgFunction() {
+            @Override
+            public LuaValue call(LuaValue luaValue, LuaValue luaValue2) {
+                LuaEngine.checkStop();
+                LuaThreadHost.setShareVar(luaValue, luaValue2);
+                return TRUE;
+            }
+        });
+        t.set("GetShareVar", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue luaValue) {
+                LuaEngine.checkStop();
+                return LuaThreadHost.getShareVar(luaValue);
             }
         });
         globals.set("Thread", t);

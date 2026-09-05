@@ -29,7 +29,7 @@ const (
 	httpPort = 18766
 	udpPort  = 18766
 	phoneUDP = 18765
-	version  = "1.1.83"
+	version  = "1.1.84"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 )
