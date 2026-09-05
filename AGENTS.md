@@ -37,6 +37,23 @@ Language in CLI logs/replies may be English. Keep code identifiers, error string
 - PC LAN IP UI: show **one** correct IPv4 (probe/filter virtual NICs; do not dump a list or blindly take the last entry).
 - Prefer fixing real bugs over stubs; mark remaining stubs in the gaps section.
 
+## Environment / 跨平台
+
+Pin these on **every** machine (Bot box, web Grok Build, Windows, Linux). **Never commit absolute machine paths** (`/workspace/…`, `C:\Users\…`). Always **`git pull` once after a platform switch**; **commit + push before leaving**. Use **relative paths** inside the repo. `android/local.properties` is gitignored — copy `android/local.properties.example` or run `./scripts/setup-env.sh`.
+
+| Tool | Required | Pin |
+|------|----------|-----|
+| Go | ≥ 1.22 | **1.24.4** (`go1.24.4 linux/amd64` on steward box) |
+| JDK | 17 | Temurin or any JDK 17 — `app/build.gradle` is `JavaVersion.VERSION_17` |
+| Android SDK | platforms **android-34**, build-tools **34.0.0**, platform-tools | via `ANDROID_HOME` or gitignored `sdk.dir` |
+| compileSdk / targetSdk | 34 | `android/app/build.gradle` |
+| minSdk | 24 | same |
+| Gradle / AGP | wrapper **8.5** / AGP **8.2.2** | committed under `android/gradle/` |
+
+SDK/JDK/Go installs are **outside git**. Steward box *today* uses `/workspace/jdk-17` and `/workspace/android-sdk` — those paths are local only; do not copy them into committed gradle/scripts.
+
+Details + switching protocol: `docs/TOOLCHAIN.md`. Helper: `./scripts/setup-env.sh` (optional `--install-sdk`). Optional reproduce: `Dockerfile` / `.devcontainer/`.
+
 ## Safety / never
 
 - No external posts/emails; no payments; no deleting unrelated user data; no production deploys; no signed store release without explicit ask; no force-push to main without ask.

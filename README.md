@@ -8,11 +8,15 @@
 
 | 路径 | 说明 |
 |------|------|
-| `android/` | Android Gradle 工程（`applicationId=com.tapsprite.agent`，`0.9.64` / versionCode **89**） |
+| `android/` | Android Gradle 工程（`applicationId=com.tapsprite.agent`；version 见 `app/build.gradle` / `dist-channel.json`） |
 | `desktop/` | Go 模块 PC 控制台（HTTP/UDP `0.0.0.0:18766`，内嵌 `web/ui.html` + **WebView2** 窗） |
 | `public/` | 文档站 + 历史 apk/exe + `public/ocr/*.onnx` |
 | `GUIDE.md` / `version.json` | 产品文档与版本清单 |
 | `dist-channel.json` | 分支检新清单（PC/App 自更新；**不**覆盖 `public/version.json`） |
+| `docs/TOOLCHAIN.md` | 跨平台工具链：git 同步什么、每台机器装什么、换机协议 |
+| `scripts/setup-env.sh` | 检查 Go/JDK 17/SDK 34 并写入 gitignored `android/local.properties` |
+
+换机器（Bot box ↔ web Grok Build 等）前先 **commit + push**，到达后先 **`git pull` 一次**。不要把 `android/local.properties` 拷到另一台机器。详见 `docs/TOOLCHAIN.md` 与 `AGENTS.md`「Environment / 跨平台」。
 
 ## 端口
 
@@ -35,35 +39,52 @@ Rebuild **1.1.73** 使用 [`github.com/jchv/go-webview2`](https://github.com/jch
 
 ## 安卓：编译与安装
 
-1. 安装 **Android Studio**（或 cmdline-tools），SDK **34**，JDK **17**。
-2. 打开目录 `android/`（或用命令行）：
+从**仓库根目录**（相对路径）。每台机器自己的 SDK/JDK，不要把 `/workspace` 写进已提交文件。
+
+1. 安装 **JDK 17** 与 Android SDK：**platform-34**、**build-tools 34.0.0**、platform-tools（compileSdk/targetSdk 34，minSdk 24）。
+2. 配置 SDK 路径（二选一）：
 
 ```bash
-cd android
-# 可选：cp local.properties.example local.properties 并填写 sdk.dir=
-./gradlew :app:assembleDebug
-# APK: android/app/build/outputs/apk/debug/app-debug.apk
+# A) helper（推荐）：根据 ANDROID_HOME 或本机探测写入 gitignored local.properties
+export JAVA_HOME=/path/to/jdk-17            # 本机路径
+export ANDROID_HOME=/path/to/Android/Sdk    # 本机路径
+./scripts/setup-env.sh
+# 缺包时： ./scripts/setup-env.sh --install-sdk
+
+# B) 手工
+cp android/local.properties.example android/local.properties
+# 编辑 sdk.dir=（正斜杠即可；Windows 例 C:/Users/you/AppData/Local/Android/Sdk）
 ```
 
-仓内现成 debug 包：`android/dist/tapsprite0-9-64.apk`（含 GetPixelColorA11y）。
+3. 编译 APK：
 
-3. 依赖（已写在 `app/build.gradle`）：
+```bash
+# 仓库根目录
+./android/gradlew -p android :app:assembleDebug
+cp android/app/build/outputs/apk/debug/app-debug.apk android/dist/tapsprite0-9-xx.apk
+```
+
+仓内现成 debug 包：`android/dist/`（文件名跟 `dist-channel.json` 的 `apk_ver`）。
+
+4. 依赖（已写在 `app/build.gradle`）：
    - `org.luaj:luaj-jse:3.0.1`
    - `com.microsoft.onnxruntime:onnxruntime-android:1.17.3`
-4. OCR 模型已固化在 `android/app/src/main/assets/ocr/`。
-5. **换签说明**：重建包使用 debug/新签名，**无法覆盖安装**原商店/原签名包；需先卸载旧包。
+5. OCR 模型已固化在 `android/app/src/main/assets/ocr/`。
+6. **换签说明**：重建包使用 debug/新签名，**无法覆盖安装**原商店/原签名包；需先卸载旧包。
 
 ## PC：编译与运行
 
+交叉编译 **不需要 CGO**，也不需要本机构建机安装 WebView2。
+
 ```bash
+# 仓库根目录
 cd desktop
 go test ./...
-go build -o dist/tapsprite .
-# Windows 成品（本机 Linux 可交叉）：
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-H windowsgui -s -w" -o dist/tapsprite1-1-72.exe .
+# Windows 成品（Linux/macOS 可交叉）：
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-H windowsgui -s -w" -o dist/tapsprite1-1-xx.exe .
 ```
 
-产物：`desktop/dist/tapsprite1-1-72.exe`（**不会**覆盖 `public/` 下历史 exe）。
+产物：`desktop/dist/tapsprite1-1-xx.exe`（**不会**覆盖 `public/` 下历史 exe）。目标 Windows 仍需已装 [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)。
 
 ### 联机要点
 
@@ -98,9 +119,9 @@ GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-H windowsgui -s -w" 
 
 ## 测试步骤
 
-1. PC 运行 `tapsprite1-1-72.exe` → 应弹出 **内嵌 WebView2 独立窗**（不是 Chrome/Edge `--app=`，也不是普通浏览器标签）。
+1. PC 运行 `desktop/dist/` 下当前 `tapsprite1-1-xx.exe` → 应弹出 **内嵌 WebView2 独立窗**（不是 Chrome/Edge `--app=`，也不是普通浏览器标签）。
 2. 若首次启动，确认已装 WebView2 Runtime；确认 Windows 防火墙允许 18766；侧栏状态栏会显示本机局域网 IP。
-3. 手机装 `android/dist/tapsprite0-9-64.apk`，开无障碍等权限，打开「电脑联机」（可手动填 PC IP）。
+3. 手机装 `android/dist/` 下当前 `tapsprite0-9-xx.apk`，开无障碍等权限，打开「电脑联机」（可手动填 PC IP）。
 4. 设备出现在 PC 下拉框后，下发脚本 / 点截图，确认画面刷新。
 5. 联机失败：查防火墙、同一 WiFi、PC 日志里的 UDP/hello。
 

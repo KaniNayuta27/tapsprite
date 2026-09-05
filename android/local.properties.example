@@ -1,2 +1,12 @@
-## Copy to local.properties and set your SDK path
+## Copy to local.properties (gitignored) and set THIS machine's SDK path.
+## Do not commit local.properties. Do not copy another host's path.
+##
+##   cp android/local.properties.example android/local.properties
+##   # or:  ./scripts/setup-env.sh
+##
+## Linux/macOS:  sdk.dir=/home/you/Android/Sdk
+## Windows:      sdk.dir=C:/Users/you/AppData/Local/Android/Sdk
+## Or set ANDROID_HOME / ANDROID_SDK_ROOT and run scripts/setup-env.sh
+##
+## Required packages: platforms;android-34  build-tools;34.0.0  platform-tools
 sdk.dir=/path/to/Android/Sdk
