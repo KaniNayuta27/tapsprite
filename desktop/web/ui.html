@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.90</title>
+<title>触控精灵 v1.1.91</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -134,7 +134,7 @@ aside {
 .devrow .btn.icon { width: 38px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
 main { padding: 28px 24px; overflow: hidden; display: flex; flex-direction: column; min-height: 0; height: 100%; }
 h1 { margin: 0 0 6px; font-size: 28px; font-weight: 650; letter-spacing: -.03em; text-wrap: balance; }
-#page-home > h1 { margin-bottom: 16px; }
+#page-home > h1, #page-grab > h1 { margin-bottom: 16px; }
 h1 em { font-style: normal; font-size: 14px; color: var(--muted); font-weight: 500; margin-left: 10px; }
 .lede { color: var(--muted); margin: 0 0 22px; font-size: 14px; text-wrap: pretty; }
 .card {
@@ -384,6 +384,8 @@ textarea {
   transform: translateX(-50%) translateY(0) scale(1);
 }
 #toast.ok { background: #173a2a; color: #e8fff4; }
+#toast.warn { background: #3d2a12; color: #fff4e0; }
+#toast.danger { background: #3a1717; color: #ffe8ea; }
 @media (prefers-reduced-motion: reduce) {
   .btn, .nav button, #toast { transition: opacity 160ms ease; }
   .btn:active, .nav button:active { transform: none; }
@@ -412,7 +414,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.90</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.91</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -427,7 +429,7 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.90</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.91</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -488,7 +490,6 @@ textarea {
   </section>
   <section id="page-grab">
     <h1>抓抓</h1>
-    <p class="lede">拖出选区后可调框，回车确认裁剪。保存只在裁剪后出现。</p>
     <div class="tools">
       <button class="btn primary" id="shotBtn">截屏</button>
       <button class="btn ghost" id="cropBtn">裁剪</button>
@@ -589,6 +590,15 @@ textarea {
       </div>
       <div class="card lib-edcard">
         <div class="script-wrap" id="libWrap">
+      <div class="edtools">
+        <button type="button" id="libEdSave" title="保存 (Ctrl+S)" aria-label="保存"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></button>
+        <button type="button" class="cmt" id="libEdCmt" title="注释" aria-label="注释" style="font:700 13px/1 var(--mono)">//</button>
+        <button type="button" class="unc" id="libEdUnc" title="取消注释" aria-label="取消注释" style="font:700 16px/1 var(--font)">×</button>
+        <button type="button" id="libEdFind" title="查找 (Ctrl+F)" aria-label="查找"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg></button>
+        <button type="button" id="libEdRep" title="替换 (Ctrl+H)" aria-label="替换"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3 21 7l-4 4"/><path d="M21 7H8"/><path d="m7 21-4-4 4-4"/><path d="M3 17h13"/></svg></button>
+        <button type="button" id="libEdChk" title="语法检测" aria-label="语法检测"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></button>
+        <button type="button" id="libFmtBtn" title="整理缩进" aria-label="缩进"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M3 12h12"/><path d="M3 18h18"/></svg></button>
+      </div>
           <div class="edcode"><div id="libMonaco"></div></div>
         </div>
         <div class="row">
@@ -654,12 +664,13 @@ function toast(msg, kind, ms) {
   if (!el || !msg) return;
   toast._last = msg;
   el.textContent = msg;
-  el.className = kind || "warn";
+  el.className = "";
+  if (kind) el.classList.add(kind);
   el.classList.add("on");
   clearTimeout(toast._t);
   let dur = ms;
   if (dur == null) {
-    if (kind === "ok" || msg.indexOf("请去 App 里更新") >= 0) dur = 2500;
+    if (kind === "ok" || kind === "warn" || kind === "danger" || msg.indexOf("请去 App 里更新") >= 0) dur = 2500;
     else dur = 12000;
   }
   toast._t = setTimeout(() => el.classList.remove("on"), dur);
@@ -780,8 +791,16 @@ document.getElementById("navLib").onclick = () => show("lib");
     window._libRunning = cur;
     paintLibRunning();
   }
+  window.saveLibCurrent = function () {
+    const n = current;
+    api("/api/library", { name: n, script: libText() }).then((r) => {
+      if (r && r.ok !== false) toast("已保存 " + n, "ok");
+      else if (r && (r.err || r.msg)) toast(r.err || r.msg);
+    });
+  };
   function startLib(name) {
     const n = name || current;
+    toast(n + " 已开始", "ok");
     const send = (script) => {
       api("/api/library", { name: n, script }).catch(() => {});
       api("/api/script", { script, run: true, library: true, persist: false, name: n });
@@ -797,10 +816,12 @@ document.getElementById("navLib").onclick = () => show("lib");
   }
   function stopLib(name) {
     const n = name || current;
+    toast(n + " 已停止", "warn");
     api("/api/control", { action: "libstop", name: n, library: true });
     markLocal(n, false);
   }
   function stopAllLib() {
+    toast("全部脚本已停止", "danger");
     api("/api/control", { action: "libstopall", library: true });
     window._libRunning = [];
     paintLibRunning();
@@ -993,16 +1014,45 @@ cropBtn.onclick = (e) => {
   cropBtn.className = "btn ok";
 };
 document.getElementById("rotL").onclick = () => api("/api/rotate", { dir: "ccw" }).then((r) => {
-  if (r && r.ok) { showSaveUndo(true); refreshShot(); }
+  if (r && r.ok) refreshShot();
   else if (r && r.msg) toast(r.msg);
 });
 document.getElementById("rotR").onclick = () => api("/api/rotate", { dir: "cw" }).then((r) => {
-  if (r && r.ok) { showSaveUndo(true); refreshShot(); }
+  if (r && r.ok) refreshShot();
   else if (r && r.msg) toast(r.msg);
 });
+let shotPix = null;
+function hex2(n) {
+  return ("0" + (n & 255).toString(16)).slice(-2).toUpperCase();
+}
+function cacheShotPixels() {
+  shotPix = null;
+  const w = shot.naturalWidth, h = shot.naturalHeight;
+  if (!w || !h) return;
+  try {
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(shot, 0, 0);
+    shotPix = { canvas: c, data: ctx.getImageData(0, 0, w, h).data, w: w, h: h };
+  } catch (_) {
+    shotPix = null;
+  }
+}
+function sampleShot(x, y) {
+  if (!shotPix || x < 0 || y < 0 || x >= shotPix.w || y >= shotPix.h) return null;
+  const i = (y * shotPix.w + x) * 4;
+  const r = shotPix.data[i], g = shotPix.data[i + 1], b = shotPix.data[i + 2];
+  return { ok: true, x: x, y: y, r: r, g: g, b: b, hex: hex2(r) + hex2(g) + hex2(b) };
+}
+shot.addEventListener("load", cacheShotPixels);
 async function refreshShot(keepZoom) {
   const s = await fetch("/api/frame").then(r => r.json());
   if (!s.b64) return;
+  shotPix = null;
   shot.src = "data:image/png;base64," + s.b64;
   if (!keepZoom) {
     zoom = 1;
@@ -1153,7 +1203,8 @@ function layoutCrop() {
   cropbox.style.width = ((x2 - x1) / shot.naturalWidth * r.width) + "px";
   cropbox.style.height = ((y2 - y1) / shot.naturalHeight * r.height) + "px";
 }
-stage.addEventListener("mousemove", async (e) => {
+let hudMove = null, hudRaf = 0;
+stage.addEventListener("mousemove", (e) => {
   if (dragMode === "seldraw" && selStart) {
     const pt = imgXY(e);
     if (pt) {
@@ -1165,12 +1216,14 @@ stage.addEventListener("mousemove", async (e) => {
         fillMeas();
       }
     }
+    hudMove = null;
     hud.style.display = "none";
     return;
   }
   if (dragMode && cropRect) {
     const pt = imgXY(e);
     if (pt) {
+      hudMove = null;
       hud.style.display = "none";
       if (dragMode === "draw" || dragMode === "move") {
         if (dragMode === "draw") { cropRect.x2 = pt.x; cropRect.y2 = pt.y; }
@@ -1189,24 +1242,33 @@ stage.addEventListener("mousemove", async (e) => {
     }
     return;
   }
+  hudMove = e;
+  if (hudRaf) return;
+  hudRaf = requestAnimationFrame(paintHud);
+});
+function paintHud() {
+  hudRaf = 0;
+  const e = hudMove;
+  if (!e) return;
   const pt = imgXY(e);
   if (!pt) { hud.style.display = "none"; return; }
   const z = lens.getContext("2d");
   z.imageSmoothingEnabled = false;
   z.fillStyle = "#222";
   z.fillRect(0, 0, 120, 120);
-  z.drawImage(shot, pt.x - 6, pt.y - 6, 13, 13, 0, 0, 120, 120);
+  const src = (shotPix && shotPix.canvas) ? shotPix.canvas : shot;
+  z.drawImage(src, pt.x - 6, pt.y - 6, 13, 13, 0, 0, 120, 120);
   z.fillStyle = "#f33";
   z.fillRect(58, 58, 4, 4);
-  const p = await fetch("/api/pixel?x=" + pt.x + "&y=" + pt.y).then(r => r.json());
-  if (!p.ok) { hud.style.display = "none"; return; }
+  const p = sampleShot(pt.x, pt.y);
+  if (!p) { hud.style.display = "none"; return; }
+  window._px = p;
   hud.style.display = "block";
   hud.style.left = Math.min(e.clientX + 18, innerWidth - 140) + "px";
   hud.style.top = Math.min(e.clientY + 18, innerHeight - 160) + "px";
   hudTxt.textContent = p.x + "," + p.y + "  " + p.hex + "\nRGB(" + p.r + "," + p.g + "," + p.b + ")";
-  window._px = p;
-});
-stage.addEventListener("mouseleave", () => { hideHud(); });
+}
+stage.addEventListener("mouseleave", () => { hudMove = null; hideHud(); });
 stage.addEventListener("mousedown", (e) => {
   e.preventDefault();
   hud.style.display = "none";
@@ -1287,7 +1349,9 @@ function applyCrop() {
 window.addEventListener("keydown", (e) => {
   if (e.ctrlKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === "s") {
     e.preventDefault();
-    const b = document.getElementById("edSave");
+    const libPage = document.getElementById("page-lib");
+    const onLib = libPage && libPage.style.display !== "none";
+    const b = document.getElementById(onLib ? "libEdSave" : "edSave");
     if (b) b.click();
     return;
   }
@@ -1917,85 +1981,103 @@ document.getElementById("devRef").onclick = () => {
         if (smartEnter(ed)) e.preventDefault();
       }
     });
-    document.getElementById("fmtBtn").onclick = function () {
-      const v = indentLua(ed.getValue().split("\n").map(spaceLine).join("\n"));
-      const full = ed.getModel().getFullModelRange();
-      ed.executeEdits("fmt", [{ range: full, text: v }]);
-    };
-    function lineRange() {
-      const s = ed.getSelection();
-      return [s.startLineNumber, s.endLineNumber];
+    function bindEdTools(target, ids) {
+      function lineRange() {
+        const s = target.getSelection();
+        return [s.startLineNumber, s.endLineNumber];
+      }
+      const fmtEl = document.getElementById(ids.fmt);
+      if (fmtEl) fmtEl.onclick = function () {
+        const v = indentLua(target.getValue().split("\n").map(spaceLine).join("\n"));
+        const full = target.getModel().getFullModelRange();
+        target.executeEdits("fmt", [{ range: full, text: v }]);
+      };
+      const cmtEl = document.getElementById(ids.cmt);
+      if (cmtEl) cmtEl.onclick = function () {
+        const model = target.getModel();
+        const [a, b] = lineRange();
+        const edits = [];
+        for (let i = a; i <= b; i++) {
+          const line = model.getLineContent(i);
+          const ind = (line.match(/^\s*/) || [""])[0];
+          edits.push({ range: new monaco.Range(i, 1, i, line.length + 1), text: ind + "--" + line.slice(ind.length) });
+        }
+        target.executeEdits("cmt", edits);
+        target.focus();
+      };
+      const uncEl = document.getElementById(ids.unc);
+      if (uncEl) uncEl.onclick = function () {
+        const model = target.getModel();
+        const [a, b] = lineRange();
+        const edits = [];
+        for (let i = a; i <= b; i++) {
+          const line = model.getLineContent(i);
+          const m = line.match(/^(\s*)--/);
+          if (!m) continue;
+          edits.push({ range: new monaco.Range(i, 1, i, line.length + 1), text: m[1] + line.slice(m[0].length) });
+        }
+        if (edits.length) target.executeEdits("unc", edits);
+        target.focus();
+      };
+      const findEl = document.getElementById(ids.find);
+      if (findEl) findEl.onclick = function () {
+        target.focus();
+        target.getAction("actions.find").run();
+      };
+      const repEl = document.getElementById(ids.rep);
+      if (repEl) repEl.onclick = function () {
+        target.focus();
+        target.getAction("editor.action.startFindReplaceAction").run();
+      };
+      const chkEl = document.getElementById(ids.chk);
+      if (chkEl) chkEl.onclick = function () {
+        const src = target.getValue();
+        monaco.editor.setModelMarkers(target.getModel(), "lua", []);
+        if (typeof luaparse === "undefined") {
+          toast("解析器没加载");
+          return;
+        }
+        try {
+          luaparse.parse(src, { luaVersion: "5.2", comments: true });
+          toast("语法看起来没问题", "ok");
+        } catch (err) {
+          const line = err.line || 1;
+          const col = err.column || 1;
+          const msg = (err.message || String(err)).replace(/^\[.*?\]\s*/, "");
+          monaco.editor.setModelMarkers(target.getModel(), "lua", [{
+            severity: monaco.MarkerSeverity.Error,
+            startLineNumber: line,
+            startColumn: col,
+            endLineNumber: line,
+            endColumn: col + 8,
+            message: msg
+          }]);
+          toast("第 " + line + " 行：" + msg);
+          target.revealLineInCenter(line);
+          target.setPosition({ lineNumber: line, column: col });
+          target.focus();
+        }
+      };
     }
-    document.getElementById("edCmt").onclick = function () {
-      const model = ed.getModel();
-      const [a, b] = lineRange();
-      const edits = [];
-      for (let i = a; i <= b; i++) {
-        const line = model.getLineContent(i);
-        const ind = (line.match(/^\s*/) || [""])[0];
-        edits.push({ range: new monaco.Range(i, 1, i, line.length + 1), text: ind + "--" + line.slice(ind.length) });
-      }
-      ed.executeEdits("cmt", edits);
-      ed.focus();
-    };
-    document.getElementById("edUnc").onclick = function () {
-      const model = ed.getModel();
-      const [a, b] = lineRange();
-      const edits = [];
-      for (let i = a; i <= b; i++) {
-        const line = model.getLineContent(i);
-        const m = line.match(/^(\s*)--/);
-        if (!m) continue;
-        edits.push({ range: new monaco.Range(i, 1, i, line.length + 1), text: m[1] + line.slice(m[0].length) });
-      }
-      if (edits.length) ed.executeEdits("unc", edits);
-      ed.focus();
-    };
-    document.getElementById("edFind").onclick = function () {
-      ed.focus();
-      ed.getAction("actions.find").run();
-    };
-    document.getElementById("edRep").onclick = function () {
-      ed.focus();
-      ed.getAction("editor.action.startFindReplaceAction").run();
-    };
+    bindEdTools(ed, { fmt: "fmtBtn", cmt: "edCmt", unc: "edUnc", find: "edFind", rep: "edRep", chk: "edChk" });
     document.getElementById("edSave").onclick = function () {
       api("/api/savescript", { text: ed.getValue() }).then(function (r) {
         if (r && r.ok) toast("已保存 " + r.path, "ok");
         else if (r && r.err && r.err !== "取消") toast(r.err);
       });
     };
-    document.getElementById("edChk").onclick = function () {
-      const src = ed.getValue();
-      monaco.editor.setModelMarkers(ed.getModel(), "lua", []);
-      if (typeof luaparse === "undefined") {
-        toast("解析器没加载");
-        return;
-      }
-      try {
-        luaparse.parse(src, { luaVersion: "5.2", comments: true });
-        toast("语法看起来没问题", "ok");
-      } catch (err) {
-        const line = err.line || 1;
-        const col = err.column || 1;
-        const msg = (err.message || String(err)).replace(/^\[.*?\]\s*/, "");
-        monaco.editor.setModelMarkers(ed.getModel(), "lua", [{
-          severity: monaco.MarkerSeverity.Error,
-          startLineNumber: line,
-          startColumn: col,
-          endLineNumber: line,
-          endColumn: col + 8,
-          message: msg
-        }]);
-        toast("第 " + line + " 行：" + msg);
-        ed.revealLineInCenter(line);
-        ed.setPosition({ lineNumber: line, column: col });
-        ed.focus();
-      }
-    };
     ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function () {
       document.getElementById("edSave").click();
     });
+    if (window.libEd) {
+      bindEdTools(window.libEd, { fmt: "libFmtBtn", cmt: "libEdCmt", unc: "libEdUnc", find: "libEdFind", rep: "libEdRep", chk: "libEdChk" });
+      document.getElementById("libEdSave").onclick = function () {
+        if (typeof window.saveLibCurrent === "function") window.saveLibCurrent();
+      };
+      window.libEd.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function () {
+        document.getElementById("libEdSave").click();
+      });
+    }
   });
 })();
 (function () {
@@ -2048,8 +2130,8 @@ function hideCtx() { document.getElementById("ctxm").style.display = "none"; }
 async function showGrabMenu(e) {
   hideHud();
   const pt = imgXY(e);
-  let p = window._px || {};
-  if (pt) {
+  let p = (pt && sampleShot(pt.x, pt.y)) || window._px || {};
+  if (pt && !p.hex) {
     try {
       const q = await fetch("/api/pixel?x=" + pt.x + "&y=" + pt.y).then(r => r.json());
       if (q && q.ok) { p = q; window._px = q; }
@@ -2057,6 +2139,8 @@ async function showGrabMenu(e) {
     } catch (_) {
       p = { x: pt.x, y: pt.y, hex: (p.hex || "") };
     }
+  } else if (p && p.ok) {
+    window._px = p;
   }
   const x = p.x, y = p.y, hex = (p.hex || "").replace("#", "");
   const m = document.getElementById("ctxm");

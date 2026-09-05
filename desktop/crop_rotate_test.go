@@ -26,6 +26,7 @@ func setTestShot(t *testing.T, w, h int) {
 	}
 	srv.mu.Lock()
 	srv.shotPNG = buf.Bytes()
+	srv.shotImg = nil
 	srv.shotW, srv.shotH = w, h
 	srv.undoStack = nil
 	srv.shotRev = 1
@@ -71,6 +72,7 @@ func TestCropAndRotate(t *testing.T) {
 	// no shot
 	srv.mu.Lock()
 	srv.shotPNG = nil
+	srv.shotImg = nil
 	srv.mu.Unlock()
 	handleRotate(rr, req)
 	var fail map[string]any
@@ -94,5 +96,49 @@ func TestSlotExportTen(t *testing.T) {
 	}
 	if out[1]["on"] != false {
 		t.Fatalf("slot1 should be empty: %v", out[1])
+	}
+}
+
+func TestPixelUsesDecodedCache(t *testing.T) {
+	setTestShot(t, 8, 6)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/pixel?x=2&y=3", nil)
+	handlePixel(rr, req)
+	var first map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &first); err != nil {
+		t.Fatal(err)
+	}
+	if first["ok"] != true {
+		t.Fatalf("pixel: %v", first)
+	}
+	if int(first["r"].(float64)) != 2 || int(first["g"].(float64)) != 3 || int(first["b"].(float64)) != 40 {
+		t.Fatalf("color got %v", first)
+	}
+	if first["hex"] != "020328" {
+		t.Fatalf("hex got %v", first["hex"])
+	}
+	srv.mu.Lock()
+	if srv.shotImg == nil {
+		srv.mu.Unlock()
+		t.Fatal("expected decoded shot cache after first pixel")
+	}
+	srv.mu.Unlock()
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/pixel?x=2&y=3", nil)
+	handlePixel(rr, req)
+	var second map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &second)
+	if second["ok"] != true || second["hex"] != "020328" {
+		t.Fatalf("cached pixel: %v", second)
+	}
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/pixel?x=99&y=0", nil)
+	handlePixel(rr, req)
+	var miss map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &miss)
+	if miss["ok"] != false {
+		t.Fatalf("want miss, got %v", miss)
 	}
 }

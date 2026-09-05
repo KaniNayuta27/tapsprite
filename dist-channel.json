@@ -1,9 +1,9 @@
 {
-  "versionCode": 104,
-  "versionName": "0.9.79",
-  "apk_ver": "0.9.79",
-  "exe_ver": "1.1.90",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-79.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-90.exe",
-  "notes": "脚本库列表去行内开始/停止、名后运行中、全部停止；手机断电后已连接及时清除。PC 1.1.90 / App 0.9.79（versionCode 104）"
+  "versionCode": 105,
+  "versionName": "0.9.80",
+  "apk_ver": "0.9.80",
+  "exe_ver": "1.1.91",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-80.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-91.exe",
+  "notes": "脚本库开始/停止/全部停止 toast；库编辑器左侧工具栏；抓抓去掉说明且旋转不弹出回退保存；放大镜本地采样防卡顿。PC 1.1.91 / App 0.9.80（versionCode 105）"
 }

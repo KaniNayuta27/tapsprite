@@ -41,6 +41,36 @@ func TestUIHasScriptLibrary(t *testing.T) {
 	}
 }
 
+func TestUILibraryToolbarToastsAndGrab(t *testing.T) {
+	b, err := readWeb("ui.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+	for _, s := range []string{
+		`id="libEdSave"`, `id="libEdCmt"`, `id="libEdUnc"`, `id="libEdFind"`,
+		`id="libEdRep"`, `id="libEdChk"`, `id="libFmtBtn"`,
+		`toast(n + " 已开始", "ok")`,
+		`toast(n + " 已停止", "warn")`,
+		`toast("全部脚本已停止", "danger")`,
+		`cacheShotPixels`,
+		`sampleShot`,
+		`bindEdTools(window.libEd`,
+	} {
+		if !strings.Contains(html, s) {
+			t.Fatalf("ui.html missing %q", s)
+		}
+	}
+	for _, s := range []string{
+		`拖出选区后`,
+		`{ showSaveUndo(true); refreshShot(); }`,
+	} {
+		if strings.Contains(html, s) {
+			t.Fatalf("ui.html must not contain %q", s)
+		}
+	}
+}
+
 func TestUIMonacoIndentAndFoldAssets(t *testing.T) {
 	b, err := readWeb("ui.html")
 	if err != nil {

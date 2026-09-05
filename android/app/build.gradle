@@ -10,8 +10,8 @@ android {
         applicationId "com.tapsprite.agent"
         minSdk 24
         targetSdk 34
-        versionCode 104
-        versionName "0.9.79"
+        versionCode 105
+        versionName "0.9.80"
 
         // Drop x86/x86_64 emulator ABIs — real devices use arm*; big win vs libonnxruntime*.so ×4.
         ndk {

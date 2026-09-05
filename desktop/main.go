@@ -30,7 +30,7 @@ const (
 	httpPort = 18766
 	udpPort  = 18766
 	phoneUDP = 18765
-	version  = "1.1.90"
+	version  = "1.1.91"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 	// After this silence, TCP-probe phone:18765; failure drops connected UI immediately.
@@ -78,6 +78,7 @@ type Server struct {
 	notice      string
 	noticeAt    int64
 	shotPNG     []byte
+	shotImg     image.Image // decoded cache; invalidated whenever shotPNG changes
 	shotW       int
 	shotH       int
 	shotRev     int64
@@ -783,27 +784,39 @@ func handleFrame(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func cachedShotLocked() image.Image {
+	if srv.shotImg != nil {
+		return srv.shotImg
+	}
+	if len(srv.shotPNG) == 0 {
+		return nil
+	}
+	img, err := png.Decode(bytes.NewReader(srv.shotPNG))
+	if err != nil {
+		return nil
+	}
+	srv.shotImg = img
+	return img
+}
+
 func handlePixel(w http.ResponseWriter, r *http.Request) {
 	x, _ := strconv.Atoi(r.URL.Query().Get("x"))
 	y, _ := strconv.Atoi(r.URL.Query().Get("y"))
 	srv.mu.Lock()
-	pngBytes := append([]byte{}, srv.shotPNG...)
-	srv.mu.Unlock()
-	if len(pngBytes) == 0 {
-		writeJSON(w, map[string]any{"ok": false})
-		return
-	}
-	img, err := png.Decode(bytes.NewReader(pngBytes))
-	if err != nil {
+	img := cachedShotLocked()
+	if img == nil {
+		srv.mu.Unlock()
 		writeJSON(w, map[string]any{"ok": false})
 		return
 	}
 	b := img.Bounds()
 	if x < b.Min.X || y < b.Min.Y || x >= b.Max.X || y >= b.Max.Y {
+		srv.mu.Unlock()
 		writeJSON(w, map[string]any{"ok": false})
 		return
 	}
 	rr, gg, bb, _ := img.At(x, y).RGBA()
+	srv.mu.Unlock()
 	r8, g8, b8 := int(rr>>8), int(gg>>8), int(bb>>8)
 	hex := fmt.Sprintf("%02X%02X%02X", r8, g8, b8)
 	writeJSON(w, map[string]any{"ok": true, "x": x, "y": y, "r": r8, "g": g8, "b": b8, "hex": hex})
@@ -853,6 +866,7 @@ func handlePushShot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	srv.shotPNG = pngBytes
+	srv.shotImg = nil
 	srv.shotW, srv.shotH = ww, hh
 	srv.shotRev++
 	srv.mu.Unlock()
@@ -1187,7 +1201,9 @@ func handleUndo(w http.ResponseWriter, r *http.Request) {
 		srv.shotPNG = srv.undoStack[n-1]
 		srv.undoStack = srv.undoStack[:n-1]
 		srv.shotRev++
+		srv.shotImg = nil
 		if img, err := png.Decode(bytes.NewReader(srv.shotPNG)); err == nil {
+			srv.shotImg = img
 			b := img.Bounds()
 			srv.shotW, srv.shotH = b.Dx(), b.Dy()
 		}
@@ -1329,6 +1345,7 @@ func commitShot(pngBytes []byte, w, h int) {
 		}
 	}
 	srv.shotPNG = pngBytes
+	srv.shotImg = nil
 	srv.shotW, srv.shotH = w, h
 	srv.shotRev++
 }
