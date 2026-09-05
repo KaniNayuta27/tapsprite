@@ -221,12 +221,24 @@ public class ConsoleServer {
                 write(outputStream, 400, "application/json; charset=utf-8", "{\"ok\":false,\"error\":" + jsonStr(parse.error) + "}");
                 return;
             }
-            AppState.script = extractScript;
-            AppState.pcScript = extractScript;
-            AppState.scriptTab = 2;
-            AppState.log("已从电脑接收脚本 " + extractScript.length() + " 字" + (LuaEngine.looksLikeLua(extractScript) ? "（Lua）" : ""));
-            if (str4.contains("\"run\":true") || str4.contains("\"run\": true")) {
-                ScriptEngine.start();
+            boolean persist = LanLink.jsonFlag(str4, "persist", true);
+            if (LanLink.jsonFlag(str4, "library", false)) {
+                persist = false;
+            }
+            boolean run = str4.contains("\"run\":true") || str4.contains("\"run\": true");
+            if (persist) {
+                AppState.script = extractScript;
+                AppState.pcScript = extractScript;
+                AppState.scriptTab = 2;
+                AppState.log("已从电脑接收脚本 " + extractScript.length() + " 字" + (LuaEngine.looksLikeLua(extractScript) ? "（Lua）" : ""));
+                if (run) {
+                    ScriptEngine.start();
+                }
+            } else {
+                AppState.log("脚本库运行 " + extractScript.length() + " 字");
+                if (run) {
+                    ScriptEngine.start(extractScript);
+                }
             }
             write(outputStream, 200, "application/json; charset=utf-8", "{\"ok\":true}");
             return;

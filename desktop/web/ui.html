@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.80</title>
+<title>触控精灵 v1.1.81</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -323,6 +323,29 @@ textarea {
 .sw { width: 28px; height: 18px; border-radius: 6px; background: #ddd; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
 #page-home { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; overflow: hidden; }
 #page-grab { display: none; flex: 1; min-height: 0; height: 100%; }
+#page-lib { display: none; flex-direction: column; flex: 1; min-height: 0; height: 100%; overflow: hidden; }
+.lib-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex: none; }
+.lib-head h1 { margin: 0; }
+.lib-split { display: grid; grid-template-columns: 200px 1fr; gap: 14px; flex: 1; min-height: 0; }
+.lib-list {
+  background: var(--bg-elev); border-radius: var(--radius-xl); padding: 10px;
+  box-shadow: var(--shadow); overflow: auto; min-height: 0;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.lib-file {
+  text-align: left; border: 0; background: transparent; color: var(--muted);
+  padding: 10px 12px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600;
+  width: 100%;
+  transition: transform 160ms var(--ease-out), background-color var(--motion), color var(--motion);
+}
+.lib-file:active { transform: scale(0.97); }
+.lib-file.on { background: var(--accent-soft); color: var(--fg); }
+@media (hover: hover) and (pointer: fine) {
+  .lib-file:hover { background: #f6f3ff; color: var(--fg); }
+}
+#page-lib .lib-edcard { flex: 1; min-height: 0; padding: var(--space-4); }
+#page-lib .script-wrap { flex: 1; height: auto; min-height: 0; }
+#libMonaco { position: absolute; inset: 0; }
 #toast {
   position: fixed; left: 50%; bottom: 28px; z-index: 50;
   max-width: min(440px, 86vw); padding: 12px 16px; border-radius: 14px;
@@ -366,7 +389,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.80</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.81</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -381,10 +404,11 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.80</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.81</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
+    <button id="navLib">脚本库</button>
   </div>
   <div class="devbox">
     <label>设备</label>
@@ -521,6 +545,22 @@ textarea {
       </div>
     </div>
   </section>
+  <section id="page-lib">
+    <div class="lib-head">
+      <h1>脚本库</h1>
+      <button class="btn primary" id="libStart">开始</button>
+    </div>
+    <div class="lib-split">
+      <div class="lib-list" id="libList">
+        <button type="button" class="lib-file on" data-name="test.lua">test.lua</button>
+      </div>
+      <div class="card lib-edcard">
+        <div class="script-wrap" id="libWrap">
+          <div class="edcode"><div id="libMonaco"></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
 </main>
 <div class="hud" id="hud"><canvas id="lens" width="120" height="120"></canvas><div class="t" id="hudTxt"></div></div>
 <div class="ctx" id="ctxm"></div>
@@ -595,13 +635,96 @@ function hideHud() {
 function show(p) {
   document.getElementById("page-home").style.display = p === "home" ? "flex" : "none";
   document.getElementById("page-grab").style.display = p === "grab" ? "block" : "none";
+  document.getElementById("page-lib").style.display = p === "lib" ? "flex" : "none";
   document.getElementById("navHome").className = p === "home" ? "on" : "";
   document.getElementById("navGrab").className = p === "grab" ? "on" : "";
+  document.getElementById("navLib").className = p === "lib" ? "on" : "";
   hideHud();
   hideCtx();
+  if (p === "lib") {
+    if (typeof window.loadLib === "function") window.loadLib();
+    if (window.libEd) window.libEd.layout();
+  }
+  if (p === "home" && window.ed) window.ed.layout();
 }
 document.getElementById("navHome").onclick = () => show("home");
 document.getElementById("navGrab").onclick = () => show("grab");
+document.getElementById("navLib").onclick = () => show("lib");
+(function setupLib() {
+  const DEFAULT = 'KeyPress("Home")\nDelay(1000)\nTap(167, 775)\nDelay(2000)\nKeyPress("Back")\nDelay(2000)\n';
+  let current = "test.lua";
+  let loaded = false;
+  window._libPending = DEFAULT;
+  function libText() {
+    if (window.libEd) return window.libEd.getValue();
+    return typeof window._libPending === "string" ? window._libPending : DEFAULT;
+  }
+  function setLibText(s) {
+    if (window.libEd) window.libEd.setValue(s == null ? "" : s);
+    else window._libPending = s;
+  }
+  function renderList(files) {
+    const box = document.getElementById("libList");
+    if (!box) return;
+    box.innerHTML = "";
+    (files || []).forEach((f) => {
+      const name = f.name || f;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "lib-file" + (name === current ? " on" : "");
+      b.setAttribute("data-name", name);
+      b.textContent = name;
+      b.onclick = () => selectFile(name);
+      box.appendChild(b);
+    });
+  }
+  function selectFile(name) {
+    const prev = current;
+    const go = () => {
+      current = name;
+      document.querySelectorAll("#libList .lib-file").forEach((el) => {
+        el.classList.toggle("on", el.getAttribute("data-name") === name);
+      });
+      api("/api/library?name=" + encodeURIComponent(name)).then((r) => {
+        if (r && r.ok) setLibText(r.script || "");
+        if (window.libEd) window.libEd.layout();
+      });
+    };
+    if (window.libEd && prev && prev !== name) {
+      api("/api/library", { name: prev, script: libText() }).finally(go);
+    } else {
+      go();
+    }
+  }
+  window.loadLib = function () {
+    if (loaded) {
+      if (window.libEd) window.libEd.layout();
+      return;
+    }
+    loaded = true;
+    api("/api/library").then((r) => {
+      const files = (r && r.files && r.files.length) ? r.files : [{ name: "test.lua" }];
+      if (!files.some((f) => (f.name || f) === current)) current = files[0].name || files[0];
+      renderList(files);
+      return api("/api/library?name=" + encodeURIComponent(current));
+    }).then((r) => {
+      if (r && r.ok) setLibText(r.script == null ? DEFAULT : r.script);
+      else setLibText(DEFAULT);
+      if (window.libEd) window.libEd.layout();
+    }).catch(() => {
+      renderList([{ name: "test.lua" }]);
+      setLibText(DEFAULT);
+    });
+  };
+  const startBtn = document.getElementById("libStart");
+  if (startBtn) {
+    startBtn.onclick = () => {
+      const script = libText();
+      api("/api/library", { name: current, script }).catch(() => {});
+      api("/api/script", { script, run: true, persist: false, library: true });
+    };
+  }
+})();
 (function setupCaption() {
   const el = document.getElementById("caption");
   if (!el) return;
@@ -1616,6 +1739,42 @@ document.getElementById("devRef").onclick = () => {
       find: { addExtraSpaceOnTop: false, autoFindInSelection: "never" }
     });
     window.ed = ed;
+    const libHost = document.getElementById("libMonaco");
+    if (libHost) {
+      const libEd = monaco.editor.create(libHost, {
+        value: typeof window._libPending === "string" ? window._libPending : DEFAULT,
+        language: "lua",
+        theme: "tap",
+        fontSize: 13,
+        fontFamily: '"Cascadia Mono", Consolas, "Microsoft YaHei UI", monospace',
+        lineNumbers: "on",
+        folding: true,
+        foldingStrategy: "auto",
+        showFoldingControls: "always",
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        automaticLayout: true,
+        tabSize: 2,
+        insertSpaces: true,
+        detectIndentation: false,
+        wordBasedSuggestions: "off",
+        quickSuggestions: { other: true, comments: false, strings: false },
+        suggestOnTriggerCharacters: true,
+        contextmenu: true,
+        renderLineHighlight: "line",
+        padding: { top: 8, bottom: 8 },
+        glyphMargin: false,
+        smoothScrolling: true,
+        mouseWheelZoom: false,
+        fixedOverflowWidgets: true,
+        acceptSuggestionOnEnter: "off",
+        tabCompletion: "off",
+        snippetSuggestions: "none",
+        find: { addExtraSpaceOnTop: false, autoFindInSelection: "never" }
+      });
+      window.libEd = libEd;
+      window._libPending = null;
+    }
     ed.addAction({
       id: "accept-suggest-space",
       label: "用空格确认补全",

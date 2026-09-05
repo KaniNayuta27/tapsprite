@@ -14,7 +14,11 @@ public final class ScriptEngine {
     private ScriptEngine() {
     }
 
-    public static synchronized boolean start() {
+    public static boolean start() {
+        return start(AppState.script);
+    }
+
+    public static synchronized boolean start(final String src) {
         synchronized (ScriptEngine.class) {
             if (AppState.running) {
                 return false;
@@ -24,7 +28,7 @@ public final class ScriptEngine {
             } else {
                 AppState.log("无障碍已连接");
             }
-            final String str = AppState.script == null ? "" : AppState.script;
+            final String str = src == null ? "" : src;
             AppState.log("准备运行 " + str.length() + " 字  开头：" + str.replace("\n", " ").trim().substring(0, Math.min(40, str.trim().length())));
             stop.set(false);
             AppState.running = true;

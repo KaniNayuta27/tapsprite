@@ -607,17 +607,28 @@ public final class LanLink {
                     if (extractString2 == null || extractString2.trim().length() == 0) {
                         return;
                     }
+                    boolean persist = jsonFlag(str, "persist", true);
+                    if (jsonFlag(str, "library", false)) {
+                        persist = false;
+                    }
+                    boolean z = str.contains("\"run\":true") || str.contains("\"run\": true");
+                    if (!persist) {
+                        AppState.log("脚本库运行 " + extractString2.length() + " 字");
+                        LanLink.startOverlay();
+                        if (z) {
+                            ScriptEngine.start(extractString2);
+                        }
+                        return;
+                    }
                     AppState.script = extractString2;
                     AppState.pcScript = extractString2;
                     AppState.scriptTab = 2;
                     AppState.log("已接收脚本 " + extractString2.length() + " 字");
                     MainActivity.ping();
                     ScriptActivity.ping();
-                    boolean z = str.contains("\"run\":true") || str.contains("\"run\": true");
                     LanLink.startOverlay();
                     if (z) {
                         ScriptEngine.start();
-                        return;
                     }
                     return;
                 }
@@ -720,6 +731,28 @@ public final class LanLink {
                 httpURLConnection.disconnect();
             }
         }
+    }
+
+    static boolean jsonFlag(String json, String key, boolean def) {
+        if (json == null || key == null) {
+            return def;
+        }
+        String k = "\"" + key + "\":";
+        int at = json.indexOf(k);
+        if (at < 0) {
+            return def;
+        }
+        int i = at + k.length();
+        while (i < json.length() && Character.isWhitespace(json.charAt(i))) {
+            i++;
+        }
+        if (json.startsWith("true", i)) {
+            return true;
+        }
+        if (json.startsWith("false", i)) {
+            return false;
+        }
+        return def;
     }
 
     /* JADX INFO: Access modifiers changed from: private */

@@ -29,7 +29,7 @@ const (
 	httpPort = 18766
 	udpPort  = 18766
 	phoneUDP = 18765
-	version  = "1.1.80"
+	version  = "1.1.81"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 )
@@ -103,6 +103,7 @@ func main() {
 	mux.HandleFunc("/api/pull", handlePull)
 	mux.HandleFunc("/api/notice", handleNotice)
 	mux.HandleFunc("/api/script", handleScript)
+	mux.HandleFunc("/api/library", handleLibrary)
 	mux.HandleFunc("/api/control", handleControl)
 	mux.HandleFunc("/api/shot", handleShot)
 	mux.HandleFunc("/api/frame", handleFrame)
@@ -479,17 +480,37 @@ func handleNotice(w http.ResponseWriter, r *http.Request) {
 
 func handleScript(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Script string `json:"script"`
-		Run    bool   `json:"run"`
+		Script  string `json:"script"`
+		Run     bool   `json:"run"`
+		Persist *bool  `json:"persist"`
+		Library bool   `json:"library"`
 	}
 	_ = readJSON(r, &body)
+	persist := true
+	if body.Persist != nil {
+		persist = *body.Persist
+	}
+	if body.Library {
+		persist = false
+	}
+	cmd := map[string]any{"type": "script", "script": body.Script, "run": body.Run}
+	if !persist {
+		cmd["persist"] = false
+		cmd["library"] = true
+	}
 	srv.mu.Lock()
-	srv.script = body.Script
+	if persist {
+		srv.script = body.Script
+	}
 	id := srv.selected
 	srv.mu.Unlock()
-	enqueue(id, map[string]any{"type": "script", "script": body.Script, "run": body.Run})
-	addLog(fmt.Sprintf("下发脚本 %d 字 run=%v", len(body.Script), body.Run))
-	writeJSON(w, map[string]any{"ok": true})
+	enqueue(id, cmd)
+	if persist {
+		addLog(fmt.Sprintf("下发脚本 %d 字 run=%v", len(body.Script), body.Run))
+	} else {
+		addLog(fmt.Sprintf("脚本库运行 %d 字", len(body.Script)))
+	}
+	writeJSON(w, map[string]any{"ok": true, "persist": persist})
 }
 
 func handleControl(w http.ResponseWriter, r *http.Request) {
