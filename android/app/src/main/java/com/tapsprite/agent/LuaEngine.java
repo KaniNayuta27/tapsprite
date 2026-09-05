@@ -32,14 +32,14 @@ public final class LuaEngine {
 
     public static void run(String str) {
         Globals standardGlobals = newGlobals();
-        LuaThreadHost.begin(standardGlobals);
+        LuaThreadHost.Session host = LuaThreadHost.begin(standardGlobals);
         try {
             standardGlobals.load(str, "script").call();
         } catch (LuaError e) {
             AppState.log("Lua 错误：" + e.getMessage());
             throw e;
         } finally {
-            LuaThreadHost.end();
+            LuaThreadHost.end(host);
         }
     }
 
@@ -48,7 +48,31 @@ public final class LuaEngine {
         Globals g = JsePlatform.standardGlobals();
         bind(g);
         g.set("print", g.get("TracePrint"));
+        installStopHook(g);
         return g;
+    }
+
+    /** Count hook so tight loops still honor stop / generation change. */
+    private static void installStopHook(Globals g) {
+        try {
+            g.load(new org.luaj.vm2.lib.DebugLib());
+            LuaValue dbg = g.get("debug");
+            if (dbg == null || dbg.isnil()) {
+                return;
+            }
+            dbg.get("sethook").invoke(LuaValue.varargsOf(new LuaValue[] {
+                new ZeroArgFunction() {
+                    @Override
+                    public LuaValue call() {
+                        LuaEngine.checkStop();
+                        return NIL;
+                    }
+                },
+                LuaValue.valueOf(""),
+                LuaValue.valueOf(500)
+            }));
+        } catch (Throwable ignored) {
+        }
     }
 
     /* JADX INFO: Access modifiers changed from: private */

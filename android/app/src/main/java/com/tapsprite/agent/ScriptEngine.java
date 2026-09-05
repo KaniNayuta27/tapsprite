@@ -1,5 +1,6 @@
 package com.tapsprite.agent;
 
+import android.os.Looper;
 import android.os.PowerManager;
 import com.tapsprite.agent.ScriptParser;
 import java.util.List;
@@ -9,7 +10,9 @@ import org.luaj.vm2.LuaError;
 /* loaded from: classes.dex */
 public final class ScriptEngine {
     private static final AtomicBoolean stop = new AtomicBoolean(false);
+    private static final ThreadLocal<Integer> CURRENT_GEN = new ThreadLocal<>();
     private static volatile Thread worker;
+    private static volatile int runGen;
 
     private ScriptEngine() {
     }
@@ -20,22 +23,33 @@ public final class ScriptEngine {
 
     public static synchronized boolean start(final String src) {
         synchronized (ScriptEngine.class) {
-            if (AppState.running) {
-                return false;
+            final String str = src == null ? "" : src;
+            Thread prev = worker;
+            if (AppState.running || (prev != null && prev.isAlive())) {
+                stopRunningLocked("停止旧脚本，运行新脚本 " + str.length() + " 字");
+                if (AppState.running) {
+                    AppState.log("无法运行：脚本仍在运行");
+                    return false;
+                }
             }
             if (AppState.auto == null) {
                 AppState.log("无障碍未连接，本次用 input。点「需重开」只尝试打开，不会再关掉服务。");
             } else {
                 AppState.log("无障碍已连接");
             }
-            final String str = src == null ? "" : src;
             AppState.log("准备运行 " + str.length() + " 字  开头：" + str.replace("\n", " ").trim().substring(0, Math.min(40, str.trim().length())));
             stop.set(false);
             AppState.running = true;
+            final int gen = ++runGen;
             worker = new Thread(new Runnable() { // from class: com.tapsprite.agent.ScriptEngine.1
                 @Override // java.lang.Runnable
                 public void run() {
-                    ScriptEngine.runLua(LuaPrep.toLua(str));
+                    CURRENT_GEN.set(Integer.valueOf(gen));
+                    try {
+                        ScriptEngine.runLua(LuaPrep.toLua(str), gen);
+                    } finally {
+                        CURRENT_GEN.remove();
+                    }
                 }
             }, "tapsprite-script");
             worker.start();
@@ -45,6 +59,41 @@ public final class ScriptEngine {
             }
             return true;
         }
+    }
+
+    /** Caller must hold ScriptEngine.class. */
+    private static void stopRunningLocked(String why) {
+        if (why != null && why.length() > 0) {
+            AppState.log(why);
+        }
+        stop.set(true);
+        Thread thread = worker;
+        if (thread != null) {
+            thread.interrupt();
+        }
+        LuaThreadHost.requestStopAll();
+        if (thread != null && thread != Thread.currentThread() && thread.isAlive()) {
+            long waitMs = 800L;
+            try {
+                if (Looper.myLooper() == Looper.getMainLooper()) {
+                    waitMs = 200L;
+                }
+            } catch (Throwable t) {
+                waitMs = 400L;
+            }
+            try {
+                thread.join(waitMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        if (thread != null && thread.isAlive()) {
+            AppState.log("旧脚本线程未结束，仍启动新脚本");
+        }
+        runGen++;
+        AppState.running = false;
+        worker = null;
+        AppState.currentStep = "已停止";
     }
 
     public static synchronized void requestStop() {
@@ -59,6 +108,10 @@ public final class ScriptEngine {
     }
 
     public static boolean isStopRequested() {
+        Integer g = CURRENT_GEN.get();
+        if (g != null && g.intValue() != runGen) {
+            return true;
+        }
         return stop.get() || LuaThreadHost.isCurrentStopped();
     }
 
@@ -236,73 +289,64 @@ public final class ScriptEngine {
         }
     }
 
+    private static boolean isCurrent(int gen) {
+        return runGen == gen;
+    }
+
+    private static void finishRun(int gen) {
+        if (!isCurrent(gen)) {
+            return;
+        }
+        AppState.running = false;
+        OverlayService overlayService = AppState.overlay;
+        if (overlayService != null) {
+            overlayService.refreshBubble();
+        }
+    }
+
     /* JADX INFO: Access modifiers changed from: private */
-    public static void runLua(String str) {
-        OverlayService overlayService;
+    public static void runLua(String str, int gen) {
         PowerManager.WakeLock wakeLock = null;
         try {
-            try {
-                PowerManager powerManager = (PowerManager) App.ctx.getSystemService("power");
-                if (powerManager != null) {
-                    wakeLock = powerManager.newWakeLock(1, "tapsprite:lua");
-                    wakeLock.setReferenceCounted(false);
-                    wakeLock.acquire(600000L);
-                }
+            PowerManager powerManager = (PowerManager) App.ctx.getSystemService("power");
+            if (powerManager != null) {
+                wakeLock = powerManager.newWakeLock(1, "tapsprite:lua");
+                wakeLock.setReferenceCounted(false);
+                wakeLock.acquire(600000L);
+            }
+            if (isCurrent(gen)) {
                 AppState.currentStep = "Lua 运行中";
                 AppState.log("Lua 脚本开始");
-                LuaEngine.run(str);
-                if (!stop.get()) {
-                    AppState.currentStep = "已完成";
-                    AppState.log("脚本结束");
-                }
-                AppState.running = false;
-                if (wakeLock != null && wakeLock.isHeld()) {
-                    try {
-                        wakeLock.release();
-                    } catch (Exception e) {
-                    }
-                }
-                overlayService = AppState.overlay;
-                if (overlayService == null) {
-                    return;
-                }
-            } finally {
+            }
+            LuaEngine.run(str);
+            if (isCurrent(gen) && !stop.get()) {
+                AppState.currentStep = "已完成";
+                AppState.log("脚本结束");
             }
         } catch (LuaError e2) {
-            if (stop.get()) {
-                AppState.currentStep = "已停止";
-                AppState.log("脚本被停止");
-            } else {
-                AppState.currentStep = "出错";
-                AppState.log("Lua 错误：" + e2.getMessage());
-            }
-            AppState.running = false;
-            if (wakeLock != null && wakeLock.isHeld()) {
-                try {
-                    wakeLock.release();
-                } catch (Exception e3) {
+            if (isCurrent(gen)) {
+                if (stop.get()) {
+                    AppState.currentStep = "已停止";
+                    AppState.log("脚本被停止");
+                } else {
+                    AppState.currentStep = "出错";
+                    AppState.log("Lua 错误：" + e2.getMessage());
                 }
-            }
-            overlayService = AppState.overlay;
-            if (overlayService == null) {
-                return;
             }
         } catch (Exception e4) {
-            AppState.currentStep = "出错";
-            AppState.log("运行出错：" + e4.getMessage());
-            AppState.running = false;
+            if (isCurrent(gen)) {
+                AppState.currentStep = "出错";
+                AppState.log("运行出错：" + e4.getMessage());
+            }
+        } finally {
             if (wakeLock != null && wakeLock.isHeld()) {
                 try {
                     wakeLock.release();
-                } catch (Exception e5) {
+                } catch (Exception e) {
                 }
             }
-            overlayService = AppState.overlay;
-            if (overlayService == null) {
-                return;
-            }
+            finishRun(gen);
         }
-        overlayService.refreshBubble();
     }
 
     static void sleepMs(long j) throws InterruptedException {

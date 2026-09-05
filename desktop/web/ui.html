@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.85</title>
+<title>触控精灵 v1.1.86</title>
 <link rel="stylesheet" href="https://unpkg.com/monaco-editor@0.45.0/min/vs/editor/editor.main.css" crossorigin="anonymous"/>
 <style>
 :root {
@@ -390,7 +390,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.85</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.86</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -405,7 +405,7 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.85</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.86</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -612,7 +612,7 @@ function addLog(s) {
 function api(path, body) {
   return fetch(path, { method: body ? "POST" : "GET", headers: body ? {"Content-Type":"application/json"} : {}, body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
 }
-function toast(msg, kind) {
+function toast(msg, kind, ms) {
   const el = document.getElementById("toast");
   if (!el || !msg) return;
   toast._last = msg;
@@ -620,7 +620,12 @@ function toast(msg, kind) {
   el.className = kind || "warn";
   el.classList.add("on");
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => el.classList.remove("on"), 12000);
+  let dur = ms;
+  if (dur == null) {
+    if (kind === "ok" || msg.indexOf("请去 App 里更新") >= 0) dur = 2500;
+    else dur = 12000;
+  }
+  toast._t = setTimeout(() => el.classList.remove("on"), dur);
 }
 function imgXY(e) {
   const r = shot.getBoundingClientRect();
@@ -769,34 +774,25 @@ function showUpdateBar(u) {
   const phase = u.phase || "idle";
   const text = u.msg || "";
   if (phase === "idle") {
-    if (text) {
-      const apkDone = text.indexOf("APK 下载完成") >= 0;
-      if (apkDone) {
-        if (showUpdateBar._apkDoneKey !== text) {
-          showUpdateBar._apkDoneKey = text;
-          bar.className = "on";
-          msg.textContent = text;
-          fill.style.width = "100%";
-          clearTimeout(showUpdateBar._apkT);
-          showUpdateBar._apkT = setTimeout(() => { bar.className = ""; }, 10000);
-        }
-        return;
-      }
-      showUpdateBar._apkDoneKey = "";
-      bar.className = "on";
-      msg.textContent = text;
-      fill.style.width = "100%";
-      clearTimeout(showUpdateBar._t);
-      const ms = text.indexOf("已是最新") >= 0 ? 4000 : 6000;
-      showUpdateBar._t = setTimeout(() => { bar.className = ""; }, ms);
-      if (text.indexOf("请去 App 里更新") >= 0) toast("请去 App 里更新", "ok");
+    if (!text) {
+      bar.className = "";
+      showUpdateBar._lastKey = "";
       return;
     }
-    bar.className = "";
-    showUpdateBar._apkDoneKey = "";
+    const key = phase + "\0" + text;
+    if (showUpdateBar._lastKey === key) {
+      return;
+    }
+    showUpdateBar._lastKey = key;
+    bar.className = "on";
+    msg.textContent = text;
+    fill.style.width = "100%";
+    clearTimeout(showUpdateBar._t);
+    showUpdateBar._t = setTimeout(() => { bar.className = ""; }, 2500);
+    if (text.indexOf("请去 App 里更新") >= 0) toast("请去 App 里更新", "ok");
     return;
   }
-  showUpdateBar._apkDoneKey = "";
+  showUpdateBar._lastKey = "";
   bar.className = "on" + (phase === "error" ? " err" : "");
   msg.textContent = text || (phase === "checking" ? "正在检测版本" : phase === "downloading" ? ("下载中 " + (u.percent || 0) + "%") : text);
   fill.style.width = Math.max(0, Math.min(100, Number(u.percent) || 0)) + "%";

@@ -58,27 +58,46 @@ final class LuaThreadHost {
         }
     }
 
-    static void begin(Globals globals) {
+    static Session begin(Globals globals) {
         if (globals == null) {
             throw new LuaError("Thread: 无运行环境");
         }
+        Session prev = session;
+        if (prev != null) {
+            stopSession(prev);
+        }
         SHARE.clear();
-        session = new Session();
+        Session s = new Session();
+        session = s;
         CURRENT.remove();
+        return s;
     }
 
     static void end() {
-        requestStopAll();
-        Session s = session;
-        if (s != null) {
-            joinWorkers(s, 2500L);
+        end(session);
+    }
+
+    static void end(Session mine) {
+        if (mine == null) {
+            return;
         }
-        session = null;
+        stopSession(mine);
+        joinWorkers(mine, 2500L);
+        if (session == mine) {
+            session = null;
+        }
         CURRENT.remove();
     }
 
     static void requestStopAll() {
         Session s = session;
+        if (s == null) {
+            return;
+        }
+        stopSession(s);
+    }
+
+    private static void stopSession(Session s) {
         if (s == null) {
             return;
         }
