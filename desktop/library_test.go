@@ -24,6 +24,29 @@ func TestUIHasScriptLibrary(t *testing.T) {
 	}
 }
 
+func TestUIMonacoIndentAndFoldAssets(t *testing.T) {
+	b, err := readWeb("ui.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+	if strings.Contains(html, `href="/vs/editor/editor.main.css"`) {
+		t.Fatal("local /vs/editor/editor.main.css must not be referenced (not shipped)")
+	}
+	for _, s := range []string{
+		"https://unpkg.com/monaco-editor@0.45.0/min/vs/editor/editor.main.css",
+		`.monaco-editor .codicon { font-family: codicon !important; }`,
+		"out.push(\"\");",
+		`foldingStrategy: "auto"`,
+		`showFoldingControls: "always"`,
+		`kind: monaco.languages.FoldingRangeKind.Region`,
+	} {
+		if !strings.Contains(html, s) {
+			t.Fatalf("ui.html missing %q", s)
+		}
+	}
+}
+
 func TestLibraryListsTestLua(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/library", handleLibrary)

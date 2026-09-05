@@ -2,8 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.84</title>
-<link rel="stylesheet" href="/vs/editor/editor.main.css"/>
+<title>触控精灵 v1.1.85</title>
+<link rel="stylesheet" href="https://unpkg.com/monaco-editor@0.45.0/min/vs/editor/editor.main.css" crossorigin="anonymous"/>
 <style>
 :root {
   --bg: #f3f0fa;
@@ -180,6 +180,7 @@ textarea {
 .monaco-editor, .monaco-editor textarea {
   user-select: text !important; -webkit-user-select: text !important;
 }
+.monaco-editor .codicon { font-family: codicon !important; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 .btn {
   border: 0; height: 40px; min-width: 44px; padding: 0 18px; border-radius: 999px;
@@ -389,7 +390,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.84</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.85</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -404,7 +405,7 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.84</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.85</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -1433,7 +1434,10 @@ document.getElementById("devRef").onclick = () => {
     const out = [];
     for (let raw of lines) {
       const t = raw.trim();
-      if (!t) continue;
+      if (!t) {
+        out.push("");
+        continue;
+      }
       const code = t.replace(/--.*$/, "").trim();
       let dd = d;
       if (/^(end|until|else|elseif)\b/.test(code)) dd = Math.max(0, d - 1);
@@ -1619,10 +1623,10 @@ document.getElementById("devRef").onclick = () => {
 
   window.MonacoEnvironment = {
     getWorkerUrl: function () {
-      const origin = location.origin;
+      const vs = "https://unpkg.com/monaco-editor@0.45.0/min/vs";
       return URL.createObjectURL(new Blob([
-        "self.MonacoEnvironment={baseUrl:'" + origin + "/vs/'};",
-        "importScripts('" + origin + "/vs/base/worker/workerMain.js');"
+        "self.MonacoEnvironment={baseUrl:'" + vs + "/'};",
+        "importScripts('" + vs + "/base/worker/workerMain.js');"
       ], { type: "text/javascript" }));
     }
   };
