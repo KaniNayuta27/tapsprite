@@ -2,8 +2,8 @@
   "versionCode": 92,
   "versionName": "0.9.67",
   "apk_ver": "0.9.67",
-  "exe_ver": "1.1.77",
+  "exe_ver": "1.1.78",
   "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-67.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-77.exe",
-  "notes": "App 打开时若电脑已下好安装包则询问是否更新；PC 自更新通过 --rejoin 把手机 IP 交给新进程主动探测；1.1.77 / 0.9.67"
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-78.exe",
+  "notes": "PC 标题栏加高贴近 Win11 标准窗；APK 下载完成条 10 秒后消失并写入桌面日志；1.1.78 / 0.9.67"
 }

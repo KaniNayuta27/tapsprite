@@ -12,6 +12,7 @@ import (
 // runWebView creates an in-process WebView2 window and blocks the main thread
 // until the window is closed (or Terminate). Requires WebView2 Runtime.
 func runWebView(url string) {
+	setProcessDPIAware()
 	title := "触控精灵 v" + version
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		Debug:     false,
@@ -36,6 +37,7 @@ func runWebView(url string) {
 		w.Destroy()
 		os.Exit(0)
 	}()
+	applyWindowChrome(uintptr(w.Window()))
 	w.Navigate(url)
 	addLog("已打开内嵌 WebView2 窗口")
 	log.Printf("WebView2 ready → %s", url)

@@ -291,9 +291,39 @@ func TestApkUpdateEnqueuesWhenNewer(t *testing.T) {
 	if !ready || code != 91 {
 		t.Fatalf("want ready versionCode 91, got ready=%v code=%d", ready, code)
 	}
+	if !logsContain("开始下载 APK") {
+		t.Fatal("want desktop log on apk download start")
+	}
+	if !logsContain("APK 下载完成") {
+		t.Fatal("want desktop log on apk download complete")
+	}
+	if !logsContain("0.9.66") && !logsContain("tapsprite0-9-66") {
+		t.Fatal("want apk version in desktop log")
+	}
+}
+
+func logsContain(substr string) bool {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	for _, s := range srv.logs {
+		if strings.Contains(s, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestApkDownloadLabel(t *testing.T) {
+	if g := apkDownloadLabel("0.9.66"); g != "tapsprite0-9-66.apk (0.9.66)" {
+		t.Fatalf("got %s", g)
+	}
+	if g := apkDownloadLabel("tapsprite0-9-66.apk"); g != "tapsprite0-9-66.apk" {
+		t.Fatalf("got %s", g)
+	}
 }
 
 func TestFetchApkReusesExistingFile(t *testing.T) {
+	resetSrv()
 	resetUpdateState()
 	dir := t.TempDir()
 	withDownloads(t, dir, filepath.Join(dir, "tapsprite1-1-76.exe"))
@@ -313,7 +343,9 @@ func TestFetchApkReusesExistingFile(t *testing.T) {
 		path := apkState.Path
 		busy := apkState.Busy
 		apkMu.Unlock()
-		if ready && path == dest && !busy {
+		if ready && path == dest && !busy &&
+			logsContain("开始下载 APK") && logsContain("APK 下载完成") &&
+			(logsContain("tapsprite0-9-66.apk") || logsContain("0.9.66")) {
 			return
 		}
 		time.Sleep(15 * time.Millisecond)
@@ -321,6 +353,26 @@ func TestFetchApkReusesExistingFile(t *testing.T) {
 	apkMu.Lock()
 	defer apkMu.Unlock()
 	t.Fatalf("want reuse ready file, got busy=%v ready=%v path=%s", apkState.Busy, apkState.Ready, apkState.Path)
+}
+
+func TestHandleWin(t *testing.T) {
+	rr := httptest.NewRecorder()
+	handleWin(rr, httptest.NewRequest(http.MethodGet, "/api/win", nil))
+	var st map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st["ok"] != true {
+		t.Fatalf("got %+v", st)
+	}
+	rr = httptest.NewRecorder()
+	handleWin(rr, httptest.NewRequest(http.MethodPost, "/api/win", strings.NewReader(`{"action":"drag"}`)))
+	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st["ok"] != true {
+		t.Fatalf("post got %+v", st)
+	}
 }
 
 func TestParseRejoinHosts(t *testing.T) {

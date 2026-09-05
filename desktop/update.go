@@ -376,6 +376,30 @@ func apkFileName(name string) string {
 	return fname
 }
 
+func apkDownloadLabel(name string) string {
+	name = strings.TrimSpace(name)
+	fname := apkFileName(name)
+	if name == "" || strings.EqualFold(name, "update") {
+		return fname
+	}
+	if strings.EqualFold(name, fname) {
+		return fname
+	}
+	return fname + " (" + name + ")"
+}
+
+func logApkDownloadStart(name string) {
+	msg := "开始下载 APK " + apkDownloadLabel(name)
+	addLog(msg)
+	writeDesktopLog(msg)
+}
+
+func logApkDownloadDone(name string) {
+	msg := "APK 下载完成 " + apkDownloadLabel(name)
+	addLog(msg)
+	writeDesktopLog(msg)
+}
+
 func markApkReady(dest, name string, size int64, verCode int) {
 	apkMu.Lock()
 	apkState.Path = dest
@@ -482,7 +506,9 @@ func runApkUpdate() {
 	if fi, e := os.Stat(dest); e == nil && fi.Size() >= 10000 {
 		size = fi.Size()
 		markApkReady(dest, remoteName, size, remoteCode)
+		logApkDownloadDone(remoteName)
 	} else {
+		logApkDownloadStart(remoteName)
 		setUpdate("downloading", 0, 0, 0, "发现 App "+remoteName+"，开始下载")
 		if err := downloadFile(ch.Apk, dest, func(got, total int64) {
 			pct := 0
@@ -501,6 +527,7 @@ func runApkUpdate() {
 			size = fi.Size()
 		}
 		markApkReady(dest, remoteName, size, remoteCode)
+		logApkDownloadDone(remoteName)
 		cleanupOldDownloads("apk", dest)
 	}
 
@@ -700,9 +727,11 @@ func handleFetchApk(w http.ResponseWriter, r *http.Request) {
 		name := body.Name
 		fname := apkFileName(name)
 		dest := filepath.Join(downloadsDir(), fname)
+		logApkDownloadStart(name)
 		if fi, e := os.Stat(dest); e == nil && fi.Size() >= 10000 {
 			markApkReady(dest, name, fi.Size(), 0)
 			setUpdate("idle", 100, fi.Size(), fi.Size(), "APK 下载完成")
+			logApkDownloadDone(name)
 			return
 		}
 		setApkProgress(0, 0, false, "", "电脑下载中")
@@ -712,6 +741,7 @@ func handleFetchApk(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			setApkProgress(0, 0, false, shortNetErr(err), "下载失败")
 			writeDesktopLog("fetchapk: " + shortNetErr(err))
+			addLog("APK 下载失败 " + apkDownloadLabel(name) + "：" + shortNetErr(err))
 			return
 		}
 		var size int64
@@ -720,6 +750,7 @@ func handleFetchApk(w http.ResponseWriter, r *http.Request) {
 		}
 		markApkReady(dest, name, size, 0)
 		setUpdate("idle", 100, size, size, "APK 下载完成")
+		logApkDownloadDone(name)
 		cleanupOldDownloads("apk", dest)
 	}()
 }

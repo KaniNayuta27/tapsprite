@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.77</title>
+<title>触控精灵 v1.1.78</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -35,8 +35,35 @@ html, body { margin: 0; height: 100%; overflow: hidden; }
 html { -webkit-font-smoothing: antialiased; }
 body {
   background: var(--bg); color: var(--fg); font-family: var(--font);
-  display: grid; grid-template-columns: 268px 1fr; height: 100%;
+  display: grid; grid-template-columns: 268px 1fr; grid-template-rows: 40px 1fr; height: 100%;
 }
+#caption {
+  grid-column: 1 / -1;
+  height: 40px; min-height: 40px; flex: none;
+  display: flex; align-items: center;
+  background: var(--bg-elev);
+  box-shadow: 0 1px 0 rgba(26,20,48,.06);
+  z-index: 20; cursor: default;
+}
+.caption-title {
+  padding: 0 16px;
+  font-size: 13px; font-weight: 600; letter-spacing: -.01em;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  pointer-events: none;
+}
+.caption-btns {
+  margin-left: auto; display: flex; height: 100%; flex: none;
+}
+.caption-btns button {
+  width: 46px; height: 100%; border: 0; border-radius: 0; padding: 0;
+  background: transparent; color: var(--fg);
+  display: grid; place-items: center;
+}
+.caption-btns button:hover { background: rgba(26,20,48,.07); }
+.caption-btns button#winClose:hover { background: #c42b1c; color: #fff; }
+.caption-btns button.restore .i-max { display: none; }
+.caption-btns button .i-restore { display: none; }
+.caption-btns button.restore .i-restore { display: block; }
 button { font-family: inherit; cursor: pointer; }
 button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
 aside {
@@ -338,8 +365,23 @@ textarea {
 </style>
 </head>
 <body>
+<div id="caption">
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.78</span>
+  <div class="caption-btns">
+    <button type="button" id="winMin" title="最小化" aria-label="最小化">
+      <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
+    </button>
+    <button type="button" id="winMax" title="最大化" aria-label="最大化">
+      <svg class="i-max" width="10" height="10" viewBox="0 0 10 10"><path fill="none" stroke="currentColor" stroke-width="1.1" d="M2.2 2.2h5.6v5.6H2.2z"/></svg>
+      <svg class="i-restore" width="10" height="10" viewBox="0 0 10 10"><path fill="none" stroke="currentColor" stroke-width="1.1" d="M3.1 3.6h4.3v4.3H3.1zM2.6 6.4V2.6h3.8"/></svg>
+    </button>
+    <button type="button" id="winClose" title="关闭" aria-label="关闭">
+      <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M2.1 1.4 5 4.3l2.9-2.9.7.7L5.7 5l2.9 2.9-.7.7L5 5.7 2.1 8.6l-.7-.7L4.3 5 1.4 2.1z"/></svg>
+    </button>
+  </div>
+</div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.77</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.78</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -560,6 +602,37 @@ function show(p) {
 }
 document.getElementById("navHome").onclick = () => show("home");
 document.getElementById("navGrab").onclick = () => show("grab");
+(function setupCaption() {
+  const el = document.getElementById("caption");
+  if (!el) return;
+  const act = (a) => api("/api/win", { action: a }).then((r) => {
+    const b = document.getElementById("winMax");
+    if (b && r && typeof r.maximized === "boolean") {
+      b.classList.toggle("restore", r.maximized);
+      b.title = r.maximized ? "还原" : "最大化";
+      b.setAttribute("aria-label", b.title);
+    }
+  }).catch(() => {});
+  el.addEventListener("dblclick", (e) => {
+    if (e.target.closest(".caption-btns")) return;
+    act("max");
+  });
+  el.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest(".caption-btns")) return;
+    if (e.detail > 1) return;
+    act("drag");
+  });
+  const bind = (id, action) => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.addEventListener("click", (e) => { e.stopPropagation(); act(action); });
+    b.addEventListener("mousedown", (e) => e.stopPropagation());
+  };
+  bind("winMin", "min");
+  bind("winMax", "max");
+  bind("winClose", "close");
+})();
 document.getElementById("send").onclick = () => api("/api/script", { script: scriptText(), run: false });
 document.getElementById("sendRun").onclick = () => api("/api/script", { script: scriptText(), run: true });
 document.getElementById("start").onclick = () => api("/api/control", { action: "start" });
@@ -573,6 +646,19 @@ function showUpdateBar(u) {
   const text = u.msg || "";
   if (phase === "idle") {
     if (text) {
+      const apkDone = text.indexOf("APK 下载完成") >= 0;
+      if (apkDone) {
+        if (showUpdateBar._apkDoneKey !== text) {
+          showUpdateBar._apkDoneKey = text;
+          bar.className = "on";
+          msg.textContent = text;
+          fill.style.width = "100%";
+          clearTimeout(showUpdateBar._apkT);
+          showUpdateBar._apkT = setTimeout(() => { bar.className = ""; }, 10000);
+        }
+        return;
+      }
+      showUpdateBar._apkDoneKey = "";
       bar.className = "on";
       msg.textContent = text;
       fill.style.width = "100%";
@@ -583,8 +669,10 @@ function showUpdateBar(u) {
       return;
     }
     bar.className = "";
+    showUpdateBar._apkDoneKey = "";
     return;
   }
+  showUpdateBar._apkDoneKey = "";
   bar.className = "on" + (phase === "error" ? " err" : "");
   msg.textContent = text || (phase === "checking" ? "正在检测版本" : phase === "downloading" ? ("下载中 " + (u.percent || 0) + "%") : text);
   fill.style.width = Math.max(0, Math.min(100, Number(u.percent) || 0)) + "%";
@@ -1049,6 +1137,14 @@ async function tick() {
     const sm = document.querySelector(".brand small");
     if (sm) sm.textContent = "TAPSPRITE PC · v" + s.version;
     document.title = "触控精灵 v" + s.version;
+    const cap = document.getElementById("captionTitle");
+    if (cap) cap.textContent = "触控精灵 v" + s.version;
+  }
+  const maxBtn = document.getElementById("winMax");
+  if (maxBtn && typeof s.winMax === "boolean") {
+    maxBtn.classList.toggle("restore", s.winMax);
+    maxBtn.title = s.winMax ? "还原" : "最大化";
+    maxBtn.setAttribute("aria-label", maxBtn.title);
   }
   if (s.lanIP) {
     document.getElementById("stSub").textContent = s.lanIP;

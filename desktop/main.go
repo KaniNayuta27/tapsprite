@@ -29,7 +29,7 @@ const (
 	httpPort = 18766
 	udpPort  = 18766
 	phoneUDP = 18765
-	version  = "1.1.77"
+	version  = "1.1.78"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 )
@@ -63,23 +63,23 @@ type Slot struct {
 }
 
 type Server struct {
-	mu       sync.Mutex
-	devices  map[string]*Device
-	selected string
-	queues   map[string][]json.RawMessage // per device id
-	script   string
-	logs     []string
-	logCount int
-	notice   string
-	noticeAt int64
-	shotPNG  []byte
-	shotW    int
-	shotH    int
-	shotRev  int64
-	slots    [10]Slot
-	status   string
-	sub      string
-	lanIP    string // single preferred LAN IPv4 for UI (never a Join of all NICs)
+	mu          sync.Mutex
+	devices     map[string]*Device
+	selected    string
+	queues      map[string][]json.RawMessage // per device id
+	script      string
+	logs        []string
+	logCount    int
+	notice      string
+	noticeAt    int64
+	shotPNG     []byte
+	shotW       int
+	shotH       int
+	shotRev     int64
+	slots       [10]Slot
+	status      string
+	sub         string
+	lanIP       string // single preferred LAN IPv4 for UI (never a Join of all NICs)
 	undoStack   [][]byte
 	rejoinHosts []string
 }
@@ -125,6 +125,7 @@ func main() {
 	mux.HandleFunc("/api/fetchapk", handleFetchApk)
 	mux.HandleFunc("/api/apkstatus", handleApkStatus)
 	mux.HandleFunc("/api/apkfile", handleApkFile)
+	mux.HandleFunc("/api/win", handleWin)
 
 	// Bind all interfaces so phones can reach LAN IP (same as 0.0.0.0:18766).
 	addr := fmt.Sprintf(":%d", httpPort)
@@ -349,6 +350,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		"noticeAt": srv.noticeAt,
 		"version":  version,
 		"update":   getUpdate(),
+		"winMax":   winIsMaximized(),
 	})
 }
 
@@ -873,7 +875,6 @@ func handleSlot(w http.ResponseWriter, r *http.Request) {
 	srv.mu.Unlock()
 	writeJSON(w, map[string]any{"ok": true, "slots": slots})
 }
-
 
 func handleFindTest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodOptions {
@@ -1405,4 +1406,3 @@ func localIPv4s() []string {
 	}
 	return out
 }
-
