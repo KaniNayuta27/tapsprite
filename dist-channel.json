@@ -1,9 +1,9 @@
 {
-  "versionCode": 105,
-  "versionName": "0.9.80",
-  "apk_ver": "0.9.80",
-  "exe_ver": "1.1.91",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-80.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-91.exe",
-  "notes": "脚本库开始/停止/全部停止 toast；库编辑器左侧工具栏；抓抓去掉说明且旋转不弹出回退保存；放大镜本地采样防卡顿。PC 1.1.91 / App 0.9.80（versionCode 105）"
+  "versionCode": 106,
+  "versionName": "0.9.81",
+  "apk_ver": "0.9.81",
+  "exe_ver": "1.1.92",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-81.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-92.exe",
+  "notes": "抓抓手机→电脑改为 TSB1 二进制帧（rawz 无损，不再 Base64）；投影无帧则失败、不回退 screencap。PC 1.1.92 / App 0.9.81（versionCode 106）"
 }

@@ -7,7 +7,6 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Point;
 import android.hardware.display.VirtualDisplay;
 import android.media.Image;
@@ -19,7 +18,6 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.SystemClock;
-import android.util.Base64;
 import android.util.DisplayMetrics;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -331,44 +329,49 @@ public class CaptureService extends Service {
         }
     }
 
-    public static String[] pngBase64() {
-        Bitmap bitmap;
-        Bitmap bitmap2;
-        String str;
+    /** Packed grab-to-PC shot: raw bytes (rawz preferred), never Base64. */
+    public static final class PackedShot {
+        public final int width;
+        public final int height;
+        public final String mime;
+        public final byte[] data;
+
+        PackedShot(int width, int height, String mime, byte[] data) {
+            this.width = width;
+            this.height = height;
+            this.mime = mime;
+            this.data = data;
+        }
+    }
+
+    /**
+     * Pack the latest MediaProjection frame for 抓抓 (phone→PC).
+     * Projection only: if copyLatest is null, fail — do not fall back to screencap.
+     */
+    public static PackedShot packShot() {
         CaptureService captureService = instance;
-        if (captureService == null) {
-            bitmap = null;
-        } else {
-            bitmap = captureService.copyLatest();
-        }
-        byte[] screencapPng = screencapPng();
-        Bitmap decodeByteArray = screencapPng != null ? BitmapFactory.decodeByteArray(screencapPng, 0, screencapPng.length) : null;
-        if (bitmap != null) {
-            bitmap2 = bitmap;
-        } else {
-            bitmap2 = decodeByteArray;
-        }
-        if (bitmap2 == null) {
+        Bitmap bitmap = captureService == null ? null : captureService.copyLatest();
+        if (bitmap == null) {
+            AppState.log("抓抓失败：投影无帧（未回退 screencap）");
             return null;
         }
-        int width = bitmap == null ? 0 : bitmap.getWidth();
-        int width2 = decodeByteArray != null ? decodeByteArray.getWidth() : 0;
-        Bitmap upscaleHalf = upscaleHalf(bitmap2);
-        int width3 = upscaleHalf.getWidth();
-        int height = upscaleHalf.getHeight();
+        Bitmap upscaled = upscaleHalf(bitmap);
+        int width = upscaled.getWidth();
+        int height = upscaled.getHeight();
         long uptimeMillis = SystemClock.uptimeMillis();
-        byte[] packLossless = packLossless(upscaleHalf);
-        if (packLossless == null || packLossless.length < 32) {
+        String mime;
+        byte[] packed = packLossless(upscaled);
+        if (packed == null || packed.length < 32) {
             ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-            upscaleHalf.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
-            packLossless = byteArrayOutputStream.toByteArray();
-            str = "png";
+            upscaled.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+            packed = byteArrayOutputStream.toByteArray();
+            mime = "png";
         } else {
-            str = "rawz";
+            mime = "rawz";
         }
-        lastSrc = upscaleHalf;
-        AppState.log("抓抓截图 " + width3 + "x" + height + "  " + str + " " + (packLossless.length / 1024) + "KB  " + (SystemClock.uptimeMillis() - uptimeMillis) + "ms" + (width > 0 ? " mp=" + width : "") + (width2 > 0 ? " sc=" + width2 : ""));
-        return new String[]{String.valueOf(width3), String.valueOf(height), Base64.encodeToString(packLossless, 2), str};
+        lastSrc = upscaled;
+        AppState.log("抓抓截图 " + width + "x" + height + "  " + mime + " bin " + (packed.length / 1024) + "KB  " + (SystemClock.uptimeMillis() - uptimeMillis) + "ms mp=" + width);
+        return new PackedShot(width, height, mime, packed);
     }
 
     static byte[] packLossless(Bitmap bitmap) {

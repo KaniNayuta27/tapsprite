@@ -50,14 +50,16 @@ public final class LanPush {
             httpURLConnection.setReadTimeout(700);
             httpURLConnection.setRequestMethod("POST");
             httpURLConnection.setDoOutput(true);
-            httpURLConnection.setFixedLengthStreamingMode(bArr.length);
+            if (str2 == null || str2.length() == 0) {
+                str2 = "rawz";
+            }
+            byte[] framed = frameTsb1(bArr, i, i2, str2);
+            httpURLConnection.setFixedLengthStreamingMode(framed.length);
             httpURLConnection.setRequestProperty("Content-Type", "application/octet-stream");
             httpURLConnection.setRequestProperty("X-Ts-W", String.valueOf(i));
             httpURLConnection.setRequestProperty("X-Ts-H", String.valueOf(i2));
-            if (str2 == null) {
-                str2 = "rawz";
-            }
             httpURLConnection.setRequestProperty("X-Ts-Mime", str2);
+            httpURLConnection.setRequestProperty("X-Ts-Bin", "1");
             if (AppState.deviceId != null) {
                 httpURLConnection.setRequestProperty("X-Ts-Id", AppState.deviceId);
             }
@@ -72,11 +74,11 @@ public final class LanPush {
             }
             httpURLConnection.setRequestProperty("X-Ts-Cap", str3);
             OutputStream outputStream = httpURLConnection.getOutputStream();
-            outputStream.write(bArr);
+            outputStream.write(framed);
             outputStream.flush();
             int responseCode = httpURLConnection.getResponseCode();
             if (responseCode >= 200 && responseCode < 300) {
-                AppState.log("局域网成功 " + str + " " + (bArr.length / 1024) + "KB");
+                AppState.log("局域网成功 " + str + " bin " + str2 + " tsb1 " + (bArr.length / 1024) + "KB");
                 return true;
             }
             AppState.log("局域网 " + str + " HTTP " + responseCode);
@@ -89,6 +91,40 @@ public final class LanPush {
                 httpURLConnection.disconnect();
             }
         }
+    }
+
+    /** TSB1 frame: magic(4) + w(u32be) + h(u32be) + mime(4) + payload. */
+    static byte[] frameTsb1(byte[] payload, int w, int h, String mime) {
+        if (payload == null) {
+            payload = new byte[0];
+        }
+        byte[] out = new byte[16 + payload.length];
+        out[0] = 'T';
+        out[1] = 'S';
+        out[2] = 'B';
+        out[3] = '1';
+        putU32be(out, 4, w);
+        putU32be(out, 8, h);
+        if ("rawz".equals(mime)) {
+            out[12] = 'r';
+            out[13] = 'a';
+            out[14] = 'w';
+            out[15] = 'z';
+        } else {
+            out[12] = 'p';
+            out[13] = 'n';
+            out[14] = 'g';
+            out[15] = 0;
+        }
+        System.arraycopy(payload, 0, out, 16, payload.length);
+        return out;
+    }
+
+    private static void putU32be(byte[] b, int off, int v) {
+        b[off] = (byte) ((v >>> 24) & 255);
+        b[off + 1] = (byte) ((v >>> 16) & 255);
+        b[off + 2] = (byte) ((v >>> 8) & 255);
+        b[off + 3] = (byte) (v & 255);
     }
 
     private static List<String> candidates() {

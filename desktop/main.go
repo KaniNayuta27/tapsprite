@@ -5,6 +5,7 @@ import (
 	"compress/zlib"
 	"embed"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -30,7 +31,7 @@ const (
 	httpPort = 18766
 	udpPort  = 18766
 	phoneUDP = 18765
-	version  = "1.1.91"
+	version  = "1.1.92"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 	// After this silence, TCP-probe phone:18765; failure drops connected UI immediately.
@@ -744,6 +745,10 @@ func libRunningSliceLocked() []string {
 }
 
 func handleShot(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost && incomingShotBody(r) {
+		handlePushShot(w, r)
+		return
+	}
 	srv.mu.Lock()
 	id := srv.selected
 	d := srv.devices[id]
@@ -822,6 +827,13 @@ func handlePixel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true, "x": x, "y": y, "r": r8, "g": g8, "b": b8, "hex": hex})
 }
 
+func incomingShotBody(r *http.Request) bool {
+	if r.Header.Get("X-Ts-Bin") != "" || r.Header.Get("X-Ts-Mime") != "" || r.Header.Get("X-Ts-W") != "" {
+		return true
+	}
+	return strings.Contains(r.Header.Get("Content-Type"), "octet-stream")
+}
+
 func handlePushShot(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(r.Body, 40<<20))
@@ -829,36 +841,47 @@ func handlePushShot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "read", 400)
 		return
 	}
-	ww, _ := strconv.Atoi(r.Header.Get("X-Ts-W"))
-	hh, _ := strconv.Atoi(r.Header.Get("X-Ts-H"))
-	mime := r.Header.Get("X-Ts-Mime")
-	if mime == "" {
-		mime = "rawz"
+	hdrW, _ := strconv.Atoi(r.Header.Get("X-Ts-W"))
+	hdrH, _ := strconv.Atoi(r.Header.Get("X-Ts-H"))
+	hdrMime := r.Header.Get("X-Ts-Mime")
+	payload, ww, hh, mime, via, err := decodeIncomingShot(data, hdrW, hdrH, hdrMime)
+	if err != nil {
+		addLog("shot decode: " + err.Error())
+		http.Error(w, "decode", 400)
+		return
 	}
 	var pngBytes []byte
 	switch mime {
 	case "png":
-		pngBytes = data
+		pngBytes = payload
 	case "rawz":
-		pngBytes, err = rawzToPNG(data, ww, hh)
+		pngBytes, err = rawzToPNG(payload, ww, hh)
 		if err != nil {
 			addLog("rawz decode: " + err.Error())
 			http.Error(w, "decode", 400)
 			return
 		}
 	default:
-		// try png magic
-		if len(data) > 8 && bytes.Equal(data[:8], []byte{137, 80, 78, 71, 13, 10, 26, 10}) {
-			pngBytes = data
+		if isPNGMagic(payload) {
+			pngBytes = payload
+			mime = "png"
 		} else {
-			pngBytes, err = rawzToPNG(data, ww, hh)
+			pngBytes, err = rawzToPNG(payload, ww, hh)
 			if err != nil {
 				http.Error(w, "unsupported", 415)
 				return
 			}
+			mime = "rawz"
 		}
 	}
+	applyShotPNG(pngBytes, ww, hh)
+	addLog(fmt.Sprintf("收到截图 %dx%d %s %s bin %dKB", ww, hh, mime, via, len(payload)/1024))
+	writeJSON(w, map[string]any{"ok": true, "w": ww, "h": hh, "mime": mime, "via": via})
+}
+
+func applyShotPNG(pngBytes []byte, ww, hh int) {
 	srv.mu.Lock()
+	defer srv.mu.Unlock()
 	if len(srv.shotPNG) > 0 {
 		srv.undoStack = append(srv.undoStack, srv.shotPNG)
 		if len(srv.undoStack) > 8 {
@@ -869,9 +892,128 @@ func handlePushShot(w http.ResponseWriter, r *http.Request) {
 	srv.shotImg = nil
 	srv.shotW, srv.shotH = ww, hh
 	srv.shotRev++
-	srv.mu.Unlock()
-	addLog(fmt.Sprintf("收到截图 %dx%d %s %dKB", ww, hh, mime, len(data)/1024))
-	writeJSON(w, map[string]any{"ok": true})
+}
+
+const tsb1Magic = "TSB1"
+
+func decodeIncomingShot(data []byte, hdrW, hdrH int, hdrMime string) (payload []byte, w, h int, mime, via string, err error) {
+	w, h, mime = hdrW, hdrH, hdrMime
+	if mime == "" {
+		mime = "rawz"
+	}
+	via = "raw"
+	if p, fw, fh, fm, ok := parseTSB1(data); ok {
+		via = "tsb1"
+		payload = p
+		if fw > 0 {
+			w = fw
+		}
+		if fh > 0 {
+			h = fh
+		}
+		if fm != "" {
+			mime = fm
+		}
+		return payload, w, h, mime, via, nil
+	}
+	if p, jw, jh, jm, ok := maybeUnwrapJSONShot(data); ok {
+		via = "json-b64"
+		payload = p
+		if jw > 0 {
+			w = jw
+		}
+		if jh > 0 {
+			h = jh
+		}
+		if jm != "" {
+			mime = jm
+		}
+		return payload, w, h, mime, via, nil
+	}
+	decoded := maybeDecodeBase64(data)
+	if len(decoded) != len(data) || (len(decoded) > 0 && len(data) > 0 && decoded[0] != data[0]) {
+		via = "b64"
+		data = decoded
+	}
+	return data, w, h, mime, via, nil
+}
+
+func parseTSB1(data []byte) (payload []byte, w, h int, mime string, ok bool) {
+	if len(data) < 16 || string(data[:4]) != tsb1Magic {
+		return nil, 0, 0, "", false
+	}
+	w = int(binary.BigEndian.Uint32(data[4:8]))
+	h = int(binary.BigEndian.Uint32(data[8:12]))
+	mime = strings.TrimRight(string(data[12:16]), "\x00")
+	return data[16:], w, h, mime, true
+}
+
+func maybeUnwrapJSONShot(data []byte) (payload []byte, w, h int, mime string, ok bool) {
+	trim := bytes.TrimSpace(data)
+	if len(trim) == 0 || trim[0] != '{' {
+		return nil, 0, 0, "", false
+	}
+	var obj struct {
+		W    int    `json:"w"`
+		H    int    `json:"h"`
+		Mime string `json:"mime"`
+		B64  string `json:"b64"`
+		Data string `json:"data"`
+	}
+	if json.Unmarshal(trim, &obj) != nil {
+		return nil, 0, 0, "", false
+	}
+	raw := obj.B64
+	if raw == "" {
+		raw = obj.Data
+	}
+	if raw == "" {
+		return nil, 0, 0, "", false
+	}
+	decoded, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		decoded, err = base64.RawStdEncoding.DecodeString(raw)
+	}
+	if err != nil {
+		return nil, 0, 0, "", false
+	}
+	mime = obj.Mime
+	if mime == "" {
+		mime = "rawz"
+	}
+	return decoded, obj.W, obj.H, mime, true
+}
+
+func maybeDecodeBase64(data []byte) []byte {
+	if len(data) == 0 {
+		return data
+	}
+	if data[0] == 0x78 || isPNGMagic(data) || (len(data) >= 4 && string(data[:4]) == tsb1Magic) {
+		return data
+	}
+	s := strings.TrimSpace(string(data))
+	if len(s) < 32 {
+		return data
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '/' || c == '=' || c == '\n' || c == '\r' {
+			continue
+		}
+		return data
+	}
+	decoded, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		decoded, err = base64.RawStdEncoding.DecodeString(strings.TrimRight(s, "="))
+	}
+	if err != nil || len(decoded) < 16 {
+		return data
+	}
+	return decoded
+}
+
+func isPNGMagic(data []byte) bool {
+	return len(data) > 8 && bytes.Equal(data[:8], []byte{137, 80, 78, 71, 13, 10, 26, 10})
 }
 
 func rawzToPNG(data []byte, w, h int) ([]byte, error) {

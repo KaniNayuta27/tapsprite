@@ -6,7 +6,6 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.util.Base64;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -1006,8 +1005,6 @@ public final class LanLink {
         new Thread(new Runnable() { // from class: com.tapsprite.agent.LanLink.8
             @Override // java.lang.Runnable
             public void run() {
-                int i;
-                byte[] bArr;
                 if (!CaptureService.ready) {
                     AppState.log("截屏权限未开，弹出系统授权");
                     LanLink.notifyPc("未开截屏权限");
@@ -1016,30 +1013,14 @@ public final class LanLink {
                 }
                 AppState.log("开始截图…");
                 long uptimeMillis = SystemClock.uptimeMillis();
-                String[] pngBase64 = CaptureService.pngBase64();
-                if (pngBase64 == null) {
-                    AppState.log("截不到图。先开截屏权限");
+                CaptureService.PackedShot packedShot = CaptureService.packShot();
+                if (packedShot == null || packedShot.data == null || packedShot.data.length == 0) {
+                    AppState.log("截不到图。投影无帧，未回退 screencap");
                     LanLink.notifyPc("截不到图。请在 App 里打开截屏权限后重试。");
                     return;
                 }
-                String str = pngBase64.length > 3 ? pngBase64[3] : "png";
-                int i2 = 0;
-                try {
-                    i = Integer.parseInt(pngBase64[0]);
-                    try {
-                        i2 = Integer.parseInt(pngBase64[1]);
-                    } catch (Exception e) {
-                    }
-                } catch (Exception e2) {
-                    i = 0;
-                }
-                try {
-                    bArr = Base64.decode(pngBase64[2], 2);
-                } catch (Exception e3) {
-                    bArr = null;
-                }
-                if (bArr != null && LanPush.push(bArr, i, i2, str)) {
-                    AppState.log("截图走局域网 " + (SystemClock.uptimeMillis() - uptimeMillis) + "ms");
+                if (LanPush.push(packedShot.data, packedShot.width, packedShot.height, packedShot.mime)) {
+                    AppState.log("截图走局域网二进制 " + packedShot.mime + " " + (SystemClock.uptimeMillis() - uptimeMillis) + "ms");
                 } else {
                     AppState.log("局域网截图失败，确认电脑 exe 已打开");
                 }
