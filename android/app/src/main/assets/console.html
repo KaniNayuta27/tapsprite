@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>触控精灵 · 电脑控制台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0d0c;
+      --elevated: #141816;
+      --fg: #eef2ef;
+      --muted: #8b948e;
+      --accent: #c5d4cc;
+      --border: color-mix(in srgb, #eef2ef 14%, transparent);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 20px;
+      --radius-xl: 28px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--fg);
+      font-family: "Noto Sans SC", system-ui, sans-serif; }
+    body { min-height: 100vh; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 20px 64px; }
+    .kicker { font-size: 11px; letter-spacing: 0.16em; color: var(--muted); font-weight: 500; }
+    h1 { font-size: clamp(28px, 4vw, 40px); font-weight: 600; letter-spacing: -0.03em; margin: 8px 0 6px; }
+    .lede { color: var(--muted); line-height: 1.55; max-width: 42em; margin: 0 0 28px; }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 900px) { .grid { grid-template-columns: 1.05fr 0.95fr; } }
+    .card { background: var(--elevated); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 18px; }
+    .card h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+    .pill { font-size: 12px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+    .pill.on { color: var(--bg); background: var(--accent); border-color: transparent; }
+    textarea {
+      width: 100%; min-height: 220px; resize: vertical; border-radius: var(--radius-md);
+      background: var(--bg); color: var(--accent); border: 1px solid var(--border);
+      font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; line-height: 1.55;
+      padding: 12px 14px; outline: none;
+    }
+    textarea:focus { border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    button {
+      font-family: inherit; font-weight: 600; font-size: 14px; border: 0; cursor: pointer;
+      border-radius: var(--radius-md); padding: 12px 16px; min-height: 44px;
+    }
+    button.primary { background: var(--fg); color: var(--bg); }
+    button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--border); }
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+    .log {
+      height: 340px; overflow: auto; background: var(--bg); border-radius: var(--radius-md);
+      border: 1px solid var(--border); padding: 12px 14px;
+      font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; line-height: 1.6;
+    }
+    .log .t { color: var(--muted); margin-right: 8px; }
+    .err { color: #c45c4a; font-size: 13px; min-height: 1.2em; margin-top: 8px; }
+    .ok { color: var(--accent); }
+    .snips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .snips button { font-size: 12px; font-weight: 500; padding: 8px 10px; min-height: 36px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="kicker">TAPSPRITE CONSOLE</div>
+    <h1>触控精灵</h1>
+    <p class="lede">手机已在同一网络打开控制台。在这里下发脚本、看实时步骤，或远程点开始 / 停止。悬浮窗仍然可以在手机上直接操作。</p>
+    <div class="grid">
+      <section class="card">
+        <h2>脚本</h2>
+        <div class="meta" id="meta"></div>
+        <textarea id="script" spellcheck="false"></textarea>
+        <div class="snips" id="snips"></div>
+        <div class="row">
+          <button class="primary" id="send">发送到手机</button>
+          <button class="ghost" id="sendRun">发送并运行</button>
+          <button class="ghost" id="start">开始</button>
+          <button class="ghost" id="stop">停止</button>
+        </div>
+        <div class="err" id="err"></div>
+      </section>
+      <section class="card">
+        <h2>实时日志</h2>
+        <div class="log" id="log"></div>
+      </section>
+    </div>
+  </div>
+  <script>
+    const SNIPS = [
+      { n: "8步测试", s: "KeyPress(\"Home\")\nDelay(1000)\nTap(167, 775)\nDelay(2000)\nKeyPress(\"Back\")\nDelay(2000)\nToast(\"脚本结束\")\nDelay(1000)\n" },
+      { n: "自检", s: "SelfTest\n" },
+      { n: "取色器", s: "PickColor\n" },
+      { n: "屏幕", s: "GetScreen\n" },
+      { n: "取色", s: "GetPixelColor 100,200\n" },
+      { n: "找色", s: "FindColor 0,0,1080,2400,\"FFFFFF\",0,0\n" },
+      { n: "滑动", s: "Swipe 800,1200,200,1200,250\n" },
+      { n: "提示", s: "Tip 电脑下发的提示\n" }
+    ];
+    const scriptEl = document.getElementById("script");
+    const logEl = document.getElementById("log");
+    const errEl = document.getElementById("err");
+    const metaEl = document.getElementById("meta");
+    let after = 0;
+    const seen = new Set();
+
+    function pill(text, on) {
+      const s = document.createElement("span");
+      s.className = "pill" + (on ? " on" : "");
+      s.textContent = text;
+      return s;
+    }
+    function pad(n) { return String(n).padStart(2, "0"); }
+    function fmt(t) {
+      const d = new Date(t);
+      return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+    }
+    async function getJSON(url, opt) {
+      const r = await fetch(url, opt);
+      const t = await r.text();
+      try { return { ok: r.ok, data: JSON.parse(t) }; }
+      catch { return { ok: r.ok, data: { error: t } }; }
+    }
+    async function refreshStatus() {
+      const { data } = await getJSON("/api/status");
+      metaEl.innerHTML = "";
+      metaEl.appendChild(pill(data.running ? "运行中" : "待命", data.running));
+      metaEl.appendChild(pill(data.a11y ? "无障碍已开" : "无障碍未开", data.a11y));
+      metaEl.appendChild(pill(data.step || "—", false));
+    }
+    async function refreshLogs() {
+      const { data } = await getJSON("/api/logs?after=" + after);
+      const lines = (data && data.lines) || [];
+      for (const line of lines) {
+        if (seen.has(line.seq)) continue;
+        seen.add(line.seq);
+        after = Math.max(after, line.seq);
+        const row = document.createElement("div");
+        row.innerHTML = '<span class="t">' + fmt(line.t) + "</span>" + escapeHtml(line.msg);
+        logEl.appendChild(row);
+      }
+      if (lines.length) logEl.scrollTop = logEl.scrollHeight;
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&": "&", "<": "<", ">": ">", '"': """, "'": "&#39;"
+      }[c]));
+    }
+    async function loadScript() {
+      const { data } = await getJSON("/api/script");
+      if (data && data.script) scriptEl.value = data.script;
+    }
+    async function send(run) {
+      errEl.textContent = "";
+      const body = JSON.stringify({ script: scriptEl.value, run: !!run });
+      const { ok, data } = await getJSON("/api/script", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body
+      });
+      if (!ok) {
+        errEl.textContent = (data && data.error) || "发送失败";
+        return;
+      }
+      errEl.className = "err ok";
+      errEl.textContent = run ? "已发送并开始运行" : "已发送到手机";
+      setTimeout(() => { errEl.textContent = ""; errEl.className = "err"; }, 1800);
+    }
+    async function control(action) {
+      await getJSON("/api/control", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action })
+      });
+    }
+    const snips = document.getElementById("snips");
+    if (snips) {
+      SNIPS.forEach((item) => {
+        const b = document.createElement("button");
+        b.className = "ghost";
+        b.textContent = item.n;
+        b.onclick = () => { scriptEl.value = item.s; };
+        snips.appendChild(b);
+      });
+    }
+    document.getElementById("send").onclick = () => send(false);
+    document.getElementById("sendRun").onclick = () => send(true);
+    document.getElementById("start").onclick = () => control("start");
+    document.getElementById("stop").onclick = () => control("stop");
+    loadScript();
+    refreshStatus();
+    refreshLogs();
+    setInterval(() => { refreshStatus(); refreshLogs(); }, 500);
+  </script>
+</body>
+</html>

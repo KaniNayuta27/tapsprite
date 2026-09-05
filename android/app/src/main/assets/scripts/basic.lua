@@ -1,0 +1,10 @@
+-- 基础测试  坐标按当前屏幕，不要求 1080x2400
+TracePrint("屏幕 " .. GetScreenX() .. "x" .. GetScreenY())
+KeyPress("Home")
+Delay(1000)
+Tap(167, 775)
+Delay(2000)
+KeyPress("Back")
+Delay(2000)
+Tip("基础测试结束")
+Delay(1000)

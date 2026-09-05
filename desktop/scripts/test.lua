@@ -1,0 +1,6 @@
+KeyPress("Home")
+Delay(1000)
+Tap(167, 775)
+Delay(2000)
+KeyPress("Back")
+Delay(2000)

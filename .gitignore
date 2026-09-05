@@ -1,0 +1,20 @@
+# Android (machine-local SDK path — never commit)
+android/local.properties
+android/.gradle/
+android/**/build/
+android/captures/
+*.iml
+.idea/
+
+# Toolchain helper output (absolute JAVA_HOME / ANDROID_HOME for this host)
+.env.toolchain
+
+# Go
+desktop/tapsprite
+desktop/tapsprite.exe
+desktop/tapsprite-linux
+
+# OS / editor
+.DS_Store
+*.swp
+*~
