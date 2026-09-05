@@ -2,8 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.86</title>
-<link rel="stylesheet" href="https://unpkg.com/monaco-editor@0.45.0/min/vs/editor/editor.main.css" crossorigin="anonymous"/>
+<title>触控精灵 v1.1.87</title>
+<link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
   --bg: #f3f0fa;
@@ -180,6 +180,11 @@ textarea {
 .monaco-editor, .monaco-editor textarea {
   user-select: text !important; -webkit-user-select: text !important;
 }
+@font-face {
+  font-family: codicon;
+  font-display: block;
+  src: url("/vs/base/browser/ui/codicons/codicon/codicon.ttf") format("truetype");
+}
 .monaco-editor .codicon { font-family: codicon !important; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 .btn {
@@ -344,8 +349,9 @@ textarea {
 @media (hover: hover) and (pointer: fine) {
   .lib-file:hover { background: #f6f3ff; color: var(--fg); }
 }
-#page-lib .lib-edcard { flex: 1; min-height: 0; padding: var(--space-4); }
+#page-lib .lib-edcard { flex: 1; min-height: 0; padding: var(--space-4); display: flex; flex-direction: column; }
 #page-lib .script-wrap { flex: 1; height: auto; min-height: 0; }
+#page-lib .lib-edcard .row { flex: none; }
 #libMonaco { position: absolute; inset: 0; }
 #toast {
   position: fixed; left: 50%; bottom: 28px; z-index: 50;
@@ -390,7 +396,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.86</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.87</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -405,7 +411,7 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.86</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.87</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -549,15 +555,21 @@ textarea {
   <section id="page-lib">
     <div class="lib-head">
       <h1>脚本库</h1>
-      <button class="btn primary" id="libStart">开始</button>
     </div>
     <div class="lib-split">
       <div class="lib-list" id="libList">
         <button type="button" class="lib-file on" data-name="test.lua">test.lua</button>
+        <button type="button" class="lib-file" data-name="test2.lua">test2.lua</button>
       </div>
       <div class="card lib-edcard">
         <div class="script-wrap" id="libWrap">
           <div class="edcode"><div id="libMonaco"></div></div>
+        </div>
+        <div class="row">
+          <button class="btn primary" id="libSend">发送到手机</button>
+          <button class="btn ghost" id="libSendRun">发送并运行</button>
+          <button class="btn ghost" id="libRun">开始</button>
+          <button class="btn ghost" id="libStop">停止</button>
         </div>
       </div>
     </div>
@@ -568,8 +580,8 @@ textarea {
 <div id="updateBar" aria-live="polite"><span id="updateBarMsg"></span><div class="track"><div class="fill" id="updateBarFill"></div></div></div>
 <div id="toast" role="status"></div>
 <script src="/luaparse.js"></script>
-<script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
-<script>require.config({ paths: { vs: "https://unpkg.com/monaco-editor@0.45.0/min/vs" } });</script>
+<script src="/vs/loader.js"></script>
+<script>require.config({ paths: { vs: "/vs" } });</script>
 <script>
 const logEl = document.getElementById("log");
 logEl.addEventListener("keydown", (e) => {
@@ -709,7 +721,7 @@ document.getElementById("navLib").onclick = () => show("lib");
     }
     loaded = true;
     api("/api/library").then((r) => {
-      const files = (r && r.files && r.files.length) ? r.files : [{ name: "test.lua" }];
+      const files = (r && r.files && r.files.length) ? r.files : [{ name: "test.lua" }, { name: "test2.lua" }];
       if (!files.some((f) => (f.name || f) === current)) current = files[0].name || files[0];
       renderList(files);
       return api("/api/library?name=" + encodeURIComponent(current));
@@ -718,18 +730,26 @@ document.getElementById("navLib").onclick = () => show("lib");
       else setLibText(DEFAULT);
       if (window.libEd) window.libEd.layout();
     }).catch(() => {
-      renderList([{ name: "test.lua" }]);
+      renderList([{ name: "test.lua" }, { name: "test2.lua" }]);
       setLibText(DEFAULT);
     });
   };
-  const startBtn = document.getElementById("libStart");
-  if (startBtn) {
-    startBtn.onclick = () => {
-      const script = libText();
-      api("/api/library", { name: current, script }).catch(() => {});
-      api("/api/script", { script, run: true, persist: false, library: true });
-    };
-  }
+  const bindLib = (id, fn) => {
+    const el = document.getElementById(id);
+    if (el) el.onclick = fn;
+  };
+  bindLib("libSend", () => {
+    const script = libText();
+    api("/api/library", { name: current, script }).catch(() => {});
+    api("/api/script", { script, run: false });
+  });
+  bindLib("libSendRun", () => {
+    const script = libText();
+    api("/api/library", { name: current, script }).catch(() => {});
+    api("/api/script", { script, run: true });
+  });
+  bindLib("libRun", () => api("/api/control", { action: "start" }));
+  bindLib("libStop", () => api("/api/control", { action: "stop" }));
 })();
 (function setupCaption() {
   const el = document.getElementById("caption");
@@ -1619,14 +1639,14 @@ document.getElementById("devRef").onclick = () => {
 
   window.MonacoEnvironment = {
     getWorkerUrl: function () {
-      const vs = "https://unpkg.com/monaco-editor@0.45.0/min/vs";
+      const vs = (location.origin || "") + "/vs";
       return URL.createObjectURL(new Blob([
         "self.MonacoEnvironment={baseUrl:'" + vs + "/'};",
         "importScripts('" + vs + "/base/worker/workerMain.js');"
       ], { type: "text/javascript" }));
     }
   };
-  require.config({ paths: { vs: "https://unpkg.com/monaco-editor@0.45.0/min/vs" } });
+  require.config({ paths: { vs: "/vs" } });
   require(["vs/editor/editor.main"], function () {
     monaco.editor.defineTheme("tap", {
       base: "vs-dark",

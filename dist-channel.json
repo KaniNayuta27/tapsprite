@@ -1,9 +1,9 @@
 {
-  "versionCode": 100,
-  "versionName": "0.9.75",
-  "apk_ver": "0.9.75",
-  "exe_ver": "1.1.86",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-75.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-86.exe",
-  "notes": "更新条/toast 2–3 秒后消失（同文案不再重置计时）；发送并运行会先停旧脚本再跑新脚本。PC 1.1.86 / App 0.9.75（versionCode 100）"
+  "versionCode": 101,
+  "versionName": "0.9.76",
+  "apk_ver": "0.9.76",
+  "exe_ver": "1.1.87",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-76.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-87.exe",
+  "notes": "本地 Monaco /vs 折叠图标；脚本库四键发送到电脑下发；内置 test2.lua。PC 1.1.87 / App 0.9.76（versionCode 101）"
 }

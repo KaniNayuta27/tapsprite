@@ -22,14 +22,14 @@ import (
 	"time"
 )
 
-//go:embed web/ui.html web/luaparse.js web/doc0.html web/doc1.html web/doc2.html
+//go:embed all:web
 var webFS embed.FS
 
 const (
 	httpPort = 18766
 	udpPort  = 18766
 	phoneUDP = 18765
-	version  = "1.1.86"
+	version  = "1.1.87"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 )
@@ -222,6 +222,14 @@ func handleStatic(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	case strings.HasSuffix(path, ".css"):
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	case strings.HasSuffix(path, ".ttf"):
+		w.Header().Set("Content-Type", "font/ttf")
+	case strings.HasSuffix(path, ".woff"):
+		w.Header().Set("Content-Type", "font/woff")
+	case strings.HasSuffix(path, ".woff2"):
+		w.Header().Set("Content-Type", "font/woff2")
+	case strings.HasSuffix(path, ".json"):
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	}
 	_, _ = w.Write(b)
 }
