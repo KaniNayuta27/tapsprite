@@ -23,9 +23,8 @@ import org.luaj.vm2.Varargs;
  */
 final class LuaThreadHost {
     private static final int MAX_WORKERS = 32;
-    private static final ConcurrentHashMap<String, Object> SHARE = new ConcurrentHashMap<>();
     private static final ThreadLocal<Worker> CURRENT = new ThreadLocal<>();
-    private static volatile Session session;
+    private static final InheritableThreadLocal<Session> CURRENT_SESSION = new InheritableThreadLocal<>();
 
     private LuaThreadHost() {
     }
@@ -43,6 +42,7 @@ final class LuaThreadHost {
     static final class Session {
         final AtomicInteger nextId = new AtomicInteger(1);
         final ConcurrentHashMap<Integer, Worker> workers = new ConcurrentHashMap<>();
+        final ConcurrentHashMap<String, Object> share = new ConcurrentHashMap<>();
     }
 
     /** Snapshot of a Lua closure so a child Globals can rebind it without sharing state. */
@@ -62,19 +62,14 @@ final class LuaThreadHost {
         if (globals == null) {
             throw new LuaError("Thread: 无运行环境");
         }
-        Session prev = session;
-        if (prev != null) {
-            stopSession(prev);
-        }
-        SHARE.clear();
         Session s = new Session();
-        session = s;
+        CURRENT_SESSION.set(s);
         CURRENT.remove();
         return s;
     }
 
     static void end() {
-        end(session);
+        end(CURRENT_SESSION.get());
     }
 
     static void end(Session mine) {
@@ -83,21 +78,17 @@ final class LuaThreadHost {
         }
         stopSession(mine);
         joinWorkers(mine, 2500L);
-        if (session == mine) {
-            session = null;
+        if (CURRENT_SESSION.get() == mine) {
+            CURRENT_SESSION.remove();
         }
         CURRENT.remove();
     }
 
     static void requestStopAll() {
-        Session s = session;
-        if (s == null) {
-            return;
-        }
-        stopSession(s);
+        stopSession(CURRENT_SESSION.get());
     }
 
-    private static void stopSession(Session s) {
+    static void stopSession(Session s) {
         if (s == null) {
             return;
         }
@@ -116,7 +107,7 @@ final class LuaThreadHost {
     }
 
     static int start(Globals caller, Varargs varargs) {
-        Session s = session;
+        final Session s = CURRENT_SESSION.get();
         if (s == null) {
             throw new LuaError("Thread.Start: 脚本未在运行");
         }
@@ -150,6 +141,7 @@ final class LuaThreadHost {
             @Override
             public void run() {
                 CURRENT.set(w);
+                CURRENT_SESSION.set(s);
                 try {
                     if (w.stop.get() || ScriptEngine.isStopRequested()) {
                         return;
@@ -172,10 +164,8 @@ final class LuaThreadHost {
                     }
                 } finally {
                     CURRENT.remove();
-                    Session cur = session;
-                    if (cur != null) {
-                        cur.workers.remove(Integer.valueOf(w.id));
-                    }
+                    CURRENT_SESSION.remove();
+                    s.workers.remove(Integer.valueOf(w.id));
                 }
             }
         }, "tapsprite-lua-" + w.id);
@@ -185,7 +175,7 @@ final class LuaThreadHost {
     }
 
     static boolean stop(int id) {
-        Session s = session;
+        Session s = CURRENT_SESSION.get();
         if (s == null) {
             return false;
         }
@@ -202,26 +192,31 @@ final class LuaThreadHost {
     }
 
     static void setShareVar(LuaValue nameVal, LuaValue value) {
+        Session s = CURRENT_SESSION.get();
+        if (s == null) {
+            throw new LuaError("Thread.SetShareVar: 脚本未在运行");
+        }
         String name = shareName(nameVal);
+        ConcurrentHashMap<String, Object> share = s.share;
         if (value == null || value.isnil()) {
-            SHARE.remove(name);
+            share.remove(name);
             return;
         }
         int t = value.type();
         if (t == LuaValue.TBOOLEAN) {
-            SHARE.put(name, Boolean.valueOf(value.toboolean()));
+            share.put(name, Boolean.valueOf(value.toboolean()));
             return;
         }
         if (t == LuaValue.TNUMBER) {
             if (value.isinttype()) {
-                SHARE.put(name, Long.valueOf(value.tolong()));
+                share.put(name, Long.valueOf(value.tolong()));
             } else {
-                SHARE.put(name, Double.valueOf(value.todouble()));
+                share.put(name, Double.valueOf(value.todouble()));
             }
             return;
         }
         if (t == LuaValue.TSTRING) {
-            SHARE.put(name, value.tojstring());
+            share.put(name, value.tojstring());
             return;
         }
         throw new LuaError("Thread.SetShareVar: 仅支持 number/string/bool/nil");
@@ -235,7 +230,11 @@ final class LuaThreadHost {
         if (name == null || name.length() == 0) {
             return LuaValue.NIL;
         }
-        Object o = SHARE.get(name);
+        Session s = CURRENT_SESSION.get();
+        if (s == null) {
+            return LuaValue.NIL;
+        }
+        Object o = s.share.get(name);
         if (o == null) {
             return LuaValue.NIL;
         }

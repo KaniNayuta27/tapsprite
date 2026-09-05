@@ -13,3 +13,5 @@ func winMinimize() {}
 func winToggleMax() {}
 
 func winDrag() {}
+
+func winPostClose(hwnd uintptr) {}

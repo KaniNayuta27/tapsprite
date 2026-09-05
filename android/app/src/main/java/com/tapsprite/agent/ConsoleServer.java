@@ -235,9 +235,12 @@ public class ConsoleServer {
                     ScriptEngine.start();
                 }
             } else {
-                AppState.log("脚本库运行 " + extractScript.length() + " 字");
+                String libName = LanLink.extractString(str4, "libName");
+                if (libName == null) {
+                    libName = LanLink.extractString(str4, "name");
+                }
                 if (run) {
-                    ScriptEngine.start(extractScript);
+                    ScriptEngine.startLibrary(libName, extractScript);
                 }
             }
             write(outputStream, 200, "application/json; charset=utf-8", "{\"ok\":true}");
@@ -247,6 +250,15 @@ public class ConsoleServer {
             String extractAction = extractAction(str4);
             if ("start".equals(extractAction)) {
                 write(outputStream, 200, "application/json; charset=utf-8", "{\"ok\":" + ScriptEngine.start() + "}");
+                return;
+            }
+            if ("libstop".equals(extractAction) || ("stop".equals(extractAction) && LanLink.jsonFlag(str4, "library", false))) {
+                String libName = LanLink.extractString(str4, "libName");
+                if (libName == null) {
+                    libName = LanLink.extractString(str4, "name");
+                }
+                ScriptEngine.stopLibrary(libName);
+                write(outputStream, 200, "application/json; charset=utf-8", "{\"ok\":true}");
                 return;
             }
             if ("stop".equals(extractAction)) {

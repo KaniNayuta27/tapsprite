@@ -2,17 +2,40 @@ package com.tapsprite.agent;
 
 import android.os.Looper;
 import android.os.PowerManager;
-import com.tapsprite.agent.ScriptParser;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.luaj.vm2.LuaError;
 
-/* loaded from: classes.dex */
+/**
+ * Two lanes:
+ * <ul>
+ *   <li>ConsoleSession — single slot, replace-on-start, overlay bubble, AppState.script.</li>
+ *   <li>LibrarySessions — map by id, concurrent, isolated Globals; never touch console slot or bubble.</li>
+ * </ul>
+ */
 public final class ScriptEngine {
-    private static final AtomicBoolean stop = new AtomicBoolean(false);
-    private static final ThreadLocal<Integer> CURRENT_GEN = new ThreadLocal<>();
-    private static volatile Thread worker;
-    private static volatile int runGen;
+    static final class Session {
+        final String id;
+        final boolean library;
+        final AtomicBoolean stop = new AtomicBoolean(false);
+        volatile Thread worker;
+        volatile int runGen;
+        volatile LuaThreadHost.Session threadHost;
+        volatile boolean running;
+
+        Session(String id, boolean library) {
+            this.id = id;
+            this.library = library;
+        }
+    }
+
+    private static final Session console = new Session("console", false);
+    private static final ConcurrentHashMap<String, Session> library = new ConcurrentHashMap<>();
+    private static final InheritableThreadLocal<Session> CURRENT = new InheritableThreadLocal<>();
+    private static final InheritableThreadLocal<Integer> CURRENT_GEN = new InheritableThreadLocal<>();
 
     private ScriptEngine() {
     }
@@ -21,57 +44,161 @@ public final class ScriptEngine {
         return start(AppState.script);
     }
 
+    /** Console lane: stop-old-then-start. Does not touch library sessions. */
     public static synchronized boolean start(final String src) {
         synchronized (ScriptEngine.class) {
-            final String str = src == null ? "" : src;
-            Thread prev = worker;
-            if (AppState.running || (prev != null && prev.isAlive())) {
-                stopRunningLocked("停止旧脚本，运行新脚本 " + str.length() + " 字");
-                if (AppState.running) {
-                    AppState.log("无法运行：脚本仍在运行");
-                    return false;
-                }
+            return launch(console, src == null ? "" : src, true);
+        }
+    }
+
+    /**
+     * Library lane: start this id if not already running. Never writes AppState.script
+     * and never refreshes the overlay bubble.
+     */
+    public static synchronized boolean startLibrary(String id, String src) {
+        synchronized (ScriptEngine.class) {
+            final String name = normalizeLibId(id);
+            Session existing = library.get(name);
+            if (existing != null && existing.running && !existing.stop.get()
+                    && existing.worker != null && existing.worker.isAlive()) {
+                AppState.log("脚本库已在运行 " + name);
+                return true;
             }
-            if (AppState.auto == null) {
-                AppState.log("无障碍未连接，本次用 input。点「需重开」只尝试打开，不会再关掉服务。");
-            } else {
-                AppState.log("无障碍已连接");
+            Session s = new Session(name, true);
+            library.put(name, s);
+            return launch(s, src == null ? "" : src, false);
+        }
+    }
+
+    public static synchronized void stopLibrary(String id) {
+        synchronized (ScriptEngine.class) {
+            if (id == null || id.trim().length() == 0) {
+                return;
             }
-            AppState.log("准备运行 " + str.length() + " 字  开头：" + str.replace("\n", " ").trim().substring(0, Math.min(40, str.trim().length())));
-            stop.set(false);
-            AppState.running = true;
-            final int gen = ++runGen;
-            worker = new Thread(new Runnable() { // from class: com.tapsprite.agent.ScriptEngine.1
-                @Override // java.lang.Runnable
-                public void run() {
-                    CURRENT_GEN.set(Integer.valueOf(gen));
-                    try {
-                        ScriptEngine.runLua(LuaPrep.toLua(str), gen);
-                    } finally {
-                        CURRENT_GEN.remove();
-                    }
-                }
-            }, "tapsprite-script");
-            worker.start();
-            OverlayService overlayService = AppState.overlay;
-            if (overlayService != null) {
-                overlayService.refreshBubble();
+            Session s = library.get(normalizeLibId(id));
+            if (s == null) {
+                return;
             }
-            return true;
+            requestStopSession(s);
+        }
+    }
+
+    static List<String> libraryRunningIds() {
+        ArrayList<String> out = new ArrayList<>();
+        for (Session s : library.values()) {
+            if (s != null && s.running && s.worker != null && s.worker.isAlive()) {
+                out.add(s.id);
+            }
+        }
+        Collections.sort(out);
+        return out;
+    }
+
+    static String libraryJsonArray() {
+        List<String> ids = libraryRunningIds();
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < ids.size(); i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append(ConsoleServer.jsonStr(ids.get(i)));
+        }
+        sb.append(']');
+        return sb.toString();
+    }
+
+    static String normalizeLibId(String id) {
+        if (id == null) {
+            return "library.lua";
+        }
+        String name = id.trim();
+        if (name.length() == 0) {
+            return "library.lua";
+        }
+        int slash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+        if (slash >= 0) {
+            name = name.substring(slash + 1);
+        }
+        if (name.length() == 0 || ".".equals(name) || "..".equals(name)) {
+            return "library.lua";
+        }
+        return name;
+    }
+
+    static void attachThreadHost(LuaThreadHost.Session host) {
+        Session s = CURRENT.get();
+        if (s != null) {
+            s.threadHost = host;
         }
     }
 
     /** Caller must hold ScriptEngine.class. */
-    private static void stopRunningLocked(String why) {
+    private static boolean launch(final Session s, final String str, boolean consoleLane) {
+        Thread prev = s.worker;
+        if (consoleLane) {
+            if (s.running || (prev != null && prev.isAlive())) {
+                stopRunningLocked(s, "停止旧脚本，运行新脚本 " + str.length() + " 字");
+                if (s.running) {
+                    AppState.log("无法运行：脚本仍在运行");
+                    return false;
+                }
+            }
+        } else if (s.running && prev != null && prev.isAlive()) {
+            AppState.log("脚本库已在运行 " + s.id);
+            return true;
+        } else if (prev != null && prev.isAlive()) {
+            stopRunningLocked(s, "停止旧脚本库 " + s.id);
+        }
+        if (AppState.auto == null) {
+            AppState.log("无障碍未连接，本次用 input。点「需重开」只尝试打开，不会再关掉服务。");
+        } else {
+            AppState.log("无障碍已连接");
+        }
+        if (consoleLane) {
+            AppState.log("准备运行 " + str.length() + " 字  开头：" + str.replace("\n", " ").trim().substring(0, Math.min(40, str.trim().length())));
+        } else {
+            AppState.log("脚本库运行 " + s.id + " " + str.length() + " 字");
+        }
+        s.stop.set(false);
+        s.running = true;
+        if (consoleLane) {
+            AppState.running = true;
+        }
+        final int gen = ++s.runGen;
+        final Session session = s;
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                CURRENT.set(session);
+                CURRENT_GEN.set(Integer.valueOf(gen));
+                try {
+                    ScriptEngine.runLua(session, LuaPrep.toLua(str), gen);
+                } finally {
+                    CURRENT.remove();
+                    CURRENT_GEN.remove();
+                }
+            }
+        }, consoleLane ? "tapsprite-script" : ("tapsprite-lib-" + s.id));
+        s.worker = t;
+        t.start();
+        if (consoleLane) {
+            OverlayService overlayService = AppState.overlay;
+            if (overlayService != null) {
+                overlayService.refreshBubble();
+            }
+        } else {
+            LanLink.pushHello();
+        }
+        return true;
+    }
+
+    /** Caller must hold ScriptEngine.class. */
+    private static void stopRunningLocked(Session s, String why) {
         if (why != null && why.length() > 0) {
             AppState.log(why);
         }
-        stop.set(true);
-        Thread thread = worker;
-        if (thread != null) {
-            thread.interrupt();
-        }
-        LuaThreadHost.requestStopAll();
+        requestStopSession(s);
+        Thread thread = s.worker;
         if (thread != null && thread != Thread.currentThread() && thread.isAlive()) {
             long waitMs = 800L;
             try {
@@ -88,31 +215,58 @@ public final class ScriptEngine {
             }
         }
         if (thread != null && thread.isAlive()) {
-            AppState.log("旧脚本线程未结束，仍启动新脚本");
+            AppState.log(s.library ? ("旧脚本库线程未结束 " + s.id) : "旧脚本线程未结束，仍启动新脚本");
         }
-        runGen++;
-        AppState.running = false;
-        worker = null;
-        AppState.currentStep = "已停止";
+        s.runGen++;
+        s.running = false;
+        s.worker = null;
+        if (!s.library) {
+            AppState.running = false;
+            AppState.currentStep = "已停止";
+        }
     }
 
+    private static void requestStopSession(Session s) {
+        if (s == null) {
+            return;
+        }
+        s.stop.set(true);
+        Thread thread = s.worker;
+        if (thread != null) {
+            thread.interrupt();
+        }
+        LuaThreadHost.stopSession(s.threadHost);
+    }
+
+    /** Console lane only. Overlay bubble / App stop / sendRun replace use this. */
     public static synchronized void requestStop() {
         synchronized (ScriptEngine.class) {
-            stop.set(true);
-            Thread thread = worker;
-            if (thread != null) {
-                thread.interrupt();
-            }
-            LuaThreadHost.requestStopAll();
+            requestStopSession(console);
         }
+    }
+
+    /** Stop the session that owns the calling Lua thread (ExitScript). */
+    public static void requestStopCurrent() {
+        Session s = CURRENT.get();
+        if (s == null || !s.library) {
+            requestStop();
+            return;
+        }
+        stopLibrary(s.id);
     }
 
     public static boolean isStopRequested() {
-        Integer g = CURRENT_GEN.get();
-        if (g != null && g.intValue() != runGen) {
-            return true;
+        Session s = CURRENT.get();
+        if (s != null) {
+            Integer g = CURRENT_GEN.get();
+            if (g != null && g.intValue() != s.runGen) {
+                return true;
+            }
+            if (s.stop.get()) {
+                return true;
+            }
         }
-        return stop.get() || LuaThreadHost.isCurrentStopped();
+        return LuaThreadHost.isCurrentStopped();
     }
 
     private static void runSteps(List<ScriptParser.Step> list) {
@@ -131,7 +285,7 @@ public final class ScriptEngine {
                 AutoService autoService = AppState.auto;
                 int i = 0;
                 while (i < list.size()) {
-                    if (stop.get()) {
+                    if (console.stop.get()) {
                         AppState.currentStep = "已停止";
                         AppState.log("脚本被停止");
                         AppState.running = false;
@@ -205,7 +359,7 @@ public final class ScriptEngine {
                             }
                     }
                 }
-                if (!stop.get()) {
+                if (!console.stop.get()) {
                     AppState.currentStep = "已完成";
                     AppState.log("脚本结束");
                 }
@@ -267,34 +421,40 @@ public final class ScriptEngine {
             } catch (NoSuchFieldError e) {
             }
             try {
-                $SwitchMap$com$tapsprite$agent$ScriptParser$Kind[ScriptParser.Kind.DELAY.ordinal()] = 2;
+                iArr[ScriptParser.Kind.DELAY.ordinal()] = 2;
             } catch (NoSuchFieldError e2) {
             }
             try {
-                $SwitchMap$com$tapsprite$agent$ScriptParser$Kind[ScriptParser.Kind.TAP.ordinal()] = 3;
+                iArr[ScriptParser.Kind.TAP.ordinal()] = 3;
             } catch (NoSuchFieldError e3) {
             }
             try {
-                $SwitchMap$com$tapsprite$agent$ScriptParser$Kind[ScriptParser.Kind.TOAST.ordinal()] = 4;
+                iArr[ScriptParser.Kind.TOAST.ordinal()] = 4;
             } catch (NoSuchFieldError e4) {
             }
             try {
-                $SwitchMap$com$tapsprite$agent$ScriptParser$Kind[ScriptParser.Kind.PRINT.ordinal()] = 5;
+                iArr[ScriptParser.Kind.PRINT.ordinal()] = 5;
             } catch (NoSuchFieldError e5) {
             }
             try {
-                $SwitchMap$com$tapsprite$agent$ScriptParser$Kind[ScriptParser.Kind.CALL.ordinal()] = 6;
+                iArr[ScriptParser.Kind.CALL.ordinal()] = 6;
             } catch (NoSuchFieldError e6) {
             }
         }
     }
 
-    private static boolean isCurrent(int gen) {
-        return runGen == gen;
+    private static boolean isCurrent(Session s, int gen) {
+        return s != null && s.runGen == gen;
     }
 
-    private static void finishRun(int gen) {
-        if (!isCurrent(gen)) {
+    private static void finishRun(Session s, int gen) {
+        if (!isCurrent(s, gen)) {
+            return;
+        }
+        s.running = false;
+        if (s.library) {
+            library.remove(s.id, s);
+            LanLink.pushHello();
             return;
         }
         AppState.running = false;
@@ -305,38 +465,56 @@ public final class ScriptEngine {
     }
 
     /* JADX INFO: Access modifiers changed from: private */
-    public static void runLua(String str, int gen) {
+    public static void runLua(Session s, String str, int gen) {
         PowerManager.WakeLock wakeLock = null;
         try {
             PowerManager powerManager = (PowerManager) App.ctx.getSystemService("power");
             if (powerManager != null) {
-                wakeLock = powerManager.newWakeLock(1, "tapsprite:lua");
+                wakeLock = powerManager.newWakeLock(1, s.library ? "tapsprite:lib" : "tapsprite:lua");
                 wakeLock.setReferenceCounted(false);
                 wakeLock.acquire(600000L);
             }
-            if (isCurrent(gen)) {
-                AppState.currentStep = "Lua 运行中";
-                AppState.log("Lua 脚本开始");
+            if (isCurrent(s, gen)) {
+                if (s.library) {
+                    AppState.log("脚本库 " + s.id + " 开始");
+                } else {
+                    AppState.currentStep = "Lua 运行中";
+                    AppState.log("Lua 脚本开始");
+                }
             }
             LuaEngine.run(str);
-            if (isCurrent(gen) && !stop.get()) {
-                AppState.currentStep = "已完成";
-                AppState.log("脚本结束");
+            if (isCurrent(s, gen) && !s.stop.get()) {
+                if (s.library) {
+                    AppState.log("脚本库 " + s.id + " 结束");
+                } else {
+                    AppState.currentStep = "已完成";
+                    AppState.log("脚本结束");
+                }
             }
         } catch (LuaError e2) {
-            if (isCurrent(gen)) {
-                if (stop.get()) {
-                    AppState.currentStep = "已停止";
-                    AppState.log("脚本被停止");
+            if (isCurrent(s, gen)) {
+                if (s.stop.get()) {
+                    if (s.library) {
+                        AppState.log("脚本库 " + s.id + " 已停止");
+                    } else {
+                        AppState.currentStep = "已停止";
+                        AppState.log("脚本被停止");
+                    }
+                } else if (s.library) {
+                    AppState.log("脚本库 " + s.id + " Lua 错误：" + e2.getMessage());
                 } else {
                     AppState.currentStep = "出错";
                     AppState.log("Lua 错误：" + e2.getMessage());
                 }
             }
         } catch (Exception e4) {
-            if (isCurrent(gen)) {
-                AppState.currentStep = "出错";
-                AppState.log("运行出错：" + e4.getMessage());
+            if (isCurrent(s, gen)) {
+                if (s.library) {
+                    AppState.log("脚本库 " + s.id + " 运行出错：" + e4.getMessage());
+                } else {
+                    AppState.currentStep = "出错";
+                    AppState.log("运行出错：" + e4.getMessage());
+                }
             }
         } finally {
             if (wakeLock != null && wakeLock.isHeld()) {
@@ -345,7 +523,7 @@ public final class ScriptEngine {
                 } catch (Exception e) {
                 }
             }
-            finishRun(gen);
+            finishRun(s, gen);
         }
     }
 

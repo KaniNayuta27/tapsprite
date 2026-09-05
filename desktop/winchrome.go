@@ -14,13 +14,20 @@ func handleWin(w http.ResponseWriter, r *http.Request) {
 		Action string `json:"action"`
 	}
 	_ = readJSON(r, &body)
-	switch strings.ToLower(strings.TrimSpace(body.Action)) {
+	action := strings.ToLower(strings.TrimSpace(body.Action))
+	if action == "close" {
+		writeJSON(w, map[string]any{"ok": true, "maximized": winIsMaximized()})
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		quitWebView()
+		return
+	}
+	switch action {
 	case "min":
 		winMinimize()
 	case "max":
 		winToggleMax()
-	case "close":
-		quitWebView()
 	case "drag":
 		winDrag()
 	}

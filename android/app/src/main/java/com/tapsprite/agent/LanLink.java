@@ -613,10 +613,12 @@ public final class LanLink {
                     }
                     boolean z = str.contains("\"run\":true") || str.contains("\"run\": true");
                     if (!persist) {
-                        AppState.log("脚本库运行 " + extractString2.length() + " 字");
-                        LanLink.startOverlay();
+                        String libName = LanLink.extractString(str, "libName");
+                        if (libName == null) {
+                            libName = LanLink.extractString(str, "name");
+                        }
                         if (z) {
-                            ScriptEngine.start(extractString2);
+                            ScriptEngine.startLibrary(libName, extractString2);
                         }
                         return;
                     }
@@ -637,6 +639,13 @@ public final class LanLink {
                     if ("start".equals(extractString3)) {
                         LanLink.startOverlay();
                         ScriptEngine.start();
+                        return;
+                    } else if ("libstop".equals(extractString3) || ("stop".equals(extractString3) && jsonFlag(str, "library", false))) {
+                        String libName = LanLink.extractString(str, "libName");
+                        if (libName == null) {
+                            libName = LanLink.extractString(str, "name");
+                        }
+                        ScriptEngine.stopLibrary(libName);
                         return;
                     } else if ("stop".equals(extractString3)) {
                         ScriptEngine.requestStop();
@@ -842,7 +851,7 @@ public final class LanLink {
     }
 
     private static byte[] payload(boolean z, long j) {
-        return ("{\"id\":" + ConsoleServer.jsonStr(AppState.deviceId) + ",\"name\":" + ConsoleServer.jsonStr(AppState.deviceName) + ",\"a11y\":" + (AppState.auto != null) + ",\"cap\":" + CaptureService.ready + ",\"emu\":" + AppState.isEmulator() + ",\"ips\":" + ConsoleServer.jsonStr(join(ConsoleServer.ipv4())) + ",\"online\":" + z + ",\"gen\":" + j + ",\"versionCode\":" + Updater.currentCode() + ",\"versionName\":" + ConsoleServer.jsonStr(Updater.currentName()) + "}").getBytes(UTF8);
+        return ("{\"id\":" + ConsoleServer.jsonStr(AppState.deviceId) + ",\"name\":" + ConsoleServer.jsonStr(AppState.deviceName) + ",\"a11y\":" + (AppState.auto != null) + ",\"cap\":" + CaptureService.ready + ",\"emu\":" + AppState.isEmulator() + ",\"ips\":" + ConsoleServer.jsonStr(join(ConsoleServer.ipv4())) + ",\"online\":" + z + ",\"gen\":" + j + ",\"versionCode\":" + Updater.currentCode() + ",\"versionName\":" + ConsoleServer.jsonStr(Updater.currentName()) + ",\"lib\":" + ScriptEngine.libraryJsonArray() + "}").getBytes(UTF8);
     }
 
     /* JADX INFO: Access modifiers changed from: private */

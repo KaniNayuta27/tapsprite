@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.88</title>
+<title>触控精灵 v1.1.89</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -332,22 +332,35 @@ textarea {
 #page-lib { display: none; flex-direction: column; flex: 1; min-height: 0; height: 100%; overflow: hidden; }
 .lib-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex: none; }
 .lib-head h1 { margin: 0; }
-.lib-split { display: grid; grid-template-columns: 200px 1fr; gap: 14px; flex: 1; min-height: 0; }
+.lib-split { display: grid; grid-template-columns: 248px 1fr; gap: 14px; flex: 1; min-height: 0; }
 .lib-list {
   background: var(--bg-elev); border-radius: var(--radius-xl); padding: 10px;
   box-shadow: var(--shadow); overflow: auto; min-height: 0;
-  display: flex; flex-direction: column; gap: 4px;
+  display: flex; flex-direction: column; gap: 6px;
 }
+.lib-item {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+}
+.lib-item.on { background: var(--accent-soft); }
 .lib-file {
   text-align: left; border: 0; background: transparent; color: var(--muted);
-  padding: 10px 12px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600;
+  padding: 4px 6px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600;
   width: 100%;
   transition: transform 160ms var(--ease-out), background-color var(--motion), color var(--motion);
 }
 .lib-file:active { transform: scale(0.97); }
-.lib-file.on { background: var(--accent-soft); color: var(--fg); }
+.lib-item.on .lib-file { color: var(--fg); }
+.lib-run-mark {
+  font-size: 11px; font-weight: 650; color: var(--ok);
+  min-height: 14px; padding: 0 6px;
+}
+.lib-item-acts { display: flex; gap: 6px; padding: 0 4px 2px; }
+.lib-item-acts .btn { flex: 1; padding: 5px 8px; font-size: 12px; }
 @media (hover: hover) and (pointer: fine) {
-  .lib-file:hover { background: #f6f3ff; color: var(--fg); }
+  .lib-item:hover { background: #f6f3ff; }
+  .lib-item.on:hover { background: var(--accent-soft); }
 }
 #page-lib .lib-edcard { flex: 1; min-height: 0; padding: var(--space-4); display: flex; flex-direction: column; }
 #page-lib .script-wrap { flex: 1; height: auto; min-height: 0; }
@@ -396,7 +409,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.88</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.89</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -411,7 +424,7 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.88</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.89</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -558,18 +571,37 @@ textarea {
     </div>
     <div class="lib-split">
       <div class="lib-list" id="libList">
-        <button type="button" class="lib-file on" data-name="test.lua">test.lua</button>
-        <button type="button" class="lib-file" data-name="learn.lua">learn.lua</button>
-        <button type="button" class="lib-file" data-name="test2.lua">test2.lua</button>
+        <div class="lib-item on" data-name="test.lua">
+          <button type="button" class="lib-file" data-name="test.lua">test.lua</button>
+          <div class="lib-run-mark" data-name="test.lua"></div>
+          <div class="lib-item-acts">
+            <button type="button" class="btn ghost" data-lib-start="test.lua">开始</button>
+            <button type="button" class="btn ghost" data-lib-stop="test.lua">停止</button>
+          </div>
+        </div>
+        <div class="lib-item" data-name="learn.lua">
+          <button type="button" class="lib-file" data-name="learn.lua">learn.lua</button>
+          <div class="lib-run-mark" data-name="learn.lua"></div>
+          <div class="lib-item-acts">
+            <button type="button" class="btn ghost" data-lib-start="learn.lua">开始</button>
+            <button type="button" class="btn ghost" data-lib-stop="learn.lua">停止</button>
+          </div>
+        </div>
+        <div class="lib-item" data-name="test2.lua">
+          <button type="button" class="lib-file" data-name="test2.lua">test2.lua</button>
+          <div class="lib-run-mark" data-name="test2.lua"></div>
+          <div class="lib-item-acts">
+            <button type="button" class="btn ghost" data-lib-start="test2.lua">开始</button>
+            <button type="button" class="btn ghost" data-lib-stop="test2.lua">停止</button>
+          </div>
+        </div>
       </div>
       <div class="card lib-edcard">
         <div class="script-wrap" id="libWrap">
           <div class="edcode"><div id="libMonaco"></div></div>
         </div>
         <div class="row">
-          <button class="btn primary" id="libSend">发送到手机</button>
-          <button class="btn ghost" id="libSendRun">发送并运行</button>
-          <button class="btn ghost" id="libRun">开始</button>
+          <button class="btn primary" id="libRun">开始</button>
           <button class="btn ghost" id="libStop">停止</button>
         </div>
       </div>
@@ -673,7 +705,9 @@ document.getElementById("navLib").onclick = () => show("lib");
   const DEFAULT = 'KeyPress("Home")\nDelay(1000)\nTap(167, 775)\nDelay(2000)\nKeyPress("Back")\nDelay(2000)\n';
   let current = "test.lua";
   let loaded = false;
+  let filesCache = [{ name: "test.lua" }, { name: "learn.lua" }, { name: "test2.lua" }];
   window._libPending = DEFAULT;
+  window._libRunning = [];
   function libText() {
     if (window.libEd) return window.libEd.getValue();
     return typeof window._libPending === "string" ? window._libPending : DEFAULT;
@@ -682,26 +716,69 @@ document.getElementById("navLib").onclick = () => show("lib");
     if (window.libEd) window.libEd.setValue(s == null ? "" : s);
     else window._libPending = s;
   }
+  function isLibRunning(name) {
+    return (window._libRunning || []).indexOf(name) >= 0;
+  }
+  function paintLibRunning() {
+    document.querySelectorAll("#libList .lib-item").forEach((row) => {
+      const name = row.getAttribute("data-name");
+      const on = isLibRunning(name);
+      row.classList.toggle("running", on);
+      const mark = row.querySelector(".lib-run-mark");
+      if (mark) mark.textContent = on ? "运行中" : "";
+    });
+  }
+  window.applyLibRunning = function (names) {
+    if (Array.isArray(names)) window._libRunning = names.slice();
+    paintLibRunning();
+  };
   function renderList(files) {
     const box = document.getElementById("libList");
     if (!box) return;
+    filesCache = files || filesCache;
     box.innerHTML = "";
     (files || []).forEach((f) => {
       const name = f.name || f;
+      const row = document.createElement("div");
+      row.className = "lib-item" + (name === current ? " on" : "") + (isLibRunning(name) ? " running" : "");
+      row.setAttribute("data-name", name);
       const b = document.createElement("button");
       b.type = "button";
-      b.className = "lib-file" + (name === current ? " on" : "");
+      b.className = "lib-file";
       b.setAttribute("data-name", name);
       b.textContent = name;
       b.onclick = () => selectFile(name);
-      box.appendChild(b);
+      const mark = document.createElement("div");
+      mark.className = "lib-run-mark";
+      mark.setAttribute("data-name", name);
+      mark.textContent = isLibRunning(name) ? "运行中" : "";
+      const acts = document.createElement("div");
+      acts.className = "lib-item-acts";
+      const start = document.createElement("button");
+      start.type = "button";
+      start.className = "btn ghost";
+      start.setAttribute("data-lib-start", name);
+      start.textContent = "开始";
+      start.onclick = (e) => { e.stopPropagation(); startLib(name); };
+      const stop = document.createElement("button");
+      stop.type = "button";
+      stop.className = "btn ghost";
+      stop.setAttribute("data-lib-stop", name);
+      stop.textContent = "停止";
+      stop.onclick = (e) => { e.stopPropagation(); stopLib(name); };
+      acts.appendChild(start);
+      acts.appendChild(stop);
+      row.appendChild(b);
+      row.appendChild(mark);
+      row.appendChild(acts);
+      box.appendChild(row);
     });
   }
   function selectFile(name) {
     const prev = current;
     const go = () => {
       current = name;
-      document.querySelectorAll("#libList .lib-file").forEach((el) => {
+      document.querySelectorAll("#libList .lib-item").forEach((el) => {
         el.classList.toggle("on", el.getAttribute("data-name") === name);
       });
       api("/api/library?name=" + encodeURIComponent(name)).then((r) => {
@@ -715,9 +792,42 @@ document.getElementById("navLib").onclick = () => show("lib");
       go();
     }
   }
+  function markLocal(name, on) {
+    const cur = window._libRunning || [];
+    if (on) {
+      if (cur.indexOf(name) < 0) cur.push(name);
+    } else {
+      window._libRunning = cur.filter((x) => x !== name);
+      paintLibRunning();
+      return;
+    }
+    window._libRunning = cur;
+    paintLibRunning();
+  }
+  function startLib(name) {
+    const n = name || current;
+    const send = (script) => {
+      api("/api/library", { name: n, script }).catch(() => {});
+      api("/api/script", { script, run: true, library: true, persist: false, name: n });
+      markLocal(n, true);
+    };
+    if (n === current) {
+      send(libText());
+      return;
+    }
+    api("/api/library?name=" + encodeURIComponent(n)).then((r) => {
+      send((r && r.script) || "");
+    });
+  }
+  function stopLib(name) {
+    const n = name || current;
+    api("/api/control", { action: "libstop", name: n, library: true });
+    markLocal(n, false);
+  }
   window.loadLib = function () {
     if (loaded) {
       if (window.libEd) window.libEd.layout();
+      paintLibRunning();
       return;
     }
     loaded = true;
@@ -739,18 +849,8 @@ document.getElementById("navLib").onclick = () => show("lib");
     const el = document.getElementById(id);
     if (el) el.onclick = fn;
   };
-  bindLib("libSend", () => {
-    const script = libText();
-    api("/api/library", { name: current, script }).catch(() => {});
-    api("/api/script", { script, run: false });
-  });
-  bindLib("libSendRun", () => {
-    const script = libText();
-    api("/api/library", { name: current, script }).catch(() => {});
-    api("/api/script", { script, run: true });
-  });
-  bindLib("libRun", () => api("/api/control", { action: "start" }));
-  bindLib("libStop", () => api("/api/control", { action: "stop" }));
+  bindLib("libRun", () => startLib(current));
+  bindLib("libStop", () => stopLib(current));
 })();
 (function setupCaption() {
   const el = document.getElementById("caption");
@@ -1332,6 +1432,9 @@ async function tick() {
     if (s.notice !== toast._last) toast(s.notice);
   }
   if (s.update) showUpdateBar(s.update);
+  if (Array.isArray(s.libRunning) && typeof window.applyLibRunning === "function") {
+    window.applyLibRunning(s.libRunning);
+  }
   } finally { _tickBusy = false; }
 }
 function renderDevs(s) {

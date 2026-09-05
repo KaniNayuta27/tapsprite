@@ -44,10 +44,16 @@ func runWebView(url string) {
 	w.Run()
 }
 
-// quitWebView asks the UI thread to leave Run(); handleQuit also os.Exit as fallback.
+// quitWebView posts WM_CLOSE to the WebView2 HWND (same path as Alt+F4).
+// Terminate()/PostQuitMessage on an HTTP worker thread never reaches the UI
+// message loop, which is why the custom title-bar X previously did nothing.
 func quitWebView() {
+	hwnd := winHWND()
+	if hwnd != 0 {
+		winPostClose(hwnd)
+	}
 	if webviewInst != nil {
-		webviewInst.Terminate()
+		webviewInst.Destroy()
 	}
 }
 

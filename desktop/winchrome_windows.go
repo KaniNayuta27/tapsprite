@@ -18,6 +18,7 @@ var (
 	procIsZoomed                      = user32.NewProc("IsZoomed")
 	procReleaseCapture                = user32.NewProc("ReleaseCapture")
 	procSendMessageW                  = user32.NewProc("SendMessageW")
+	procPostMessageW                  = user32.NewProc("PostMessageW")
 	procSetProcessDpiAwarenessContext = user32.NewProc("SetProcessDpiAwarenessContext")
 	procDwmSetWindowAttribute         = dwmapi.NewProc("DwmSetWindowAttribute")
 )
@@ -34,6 +35,7 @@ const (
 	swMaximize                           = 3
 	swRestore                            = 9
 	wmNCLButtonDown                      = 0x00A1
+	wmClose                              = 0x0010
 	htCaption                            = 2
 	dwmwaWindowCornerPreference          = 33
 	dwmwcpRound                          = 2
@@ -122,4 +124,11 @@ func winDrag() {
 		_, _, _ = procReleaseCapture.Call()
 		_, _, _ = procSendMessageW.Call(hwnd, wmNCLButtonDown, htCaption, 0)
 	})
+}
+
+func winPostClose(hwnd uintptr) {
+	if hwnd == 0 {
+		return
+	}
+	_, _, _ = procPostMessageW.Call(hwnd, wmClose, 0, 0)
 }

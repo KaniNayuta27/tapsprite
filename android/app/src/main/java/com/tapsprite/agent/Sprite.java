@@ -212,7 +212,7 @@ public final class Sprite {
     }
 
     public static void exitScript() {
-        ScriptEngine.requestStop();
+        ScriptEngine.requestStopCurrent();
     }
 
     public static boolean isRoot() {

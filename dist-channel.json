@@ -1,9 +1,9 @@
 {
-  "versionCode": 102,
-  "versionName": "0.9.77",
-  "apk_ver": "0.9.77",
-  "exe_ver": "1.1.88",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-77.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-88.exe",
-  "notes": "Dialog.InputBox 无悬浮窗回退 App 对话框；脚本库内置 learn.lua（学习/打工/冒险）。PC 1.1.88 / App 0.9.77（versionCode 102）"
+  "versionCode": 103,
+  "versionName": "0.9.78",
+  "apk_ver": "0.9.78",
+  "exe_ver": "1.1.89",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-78.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-89.exe",
+  "notes": "脚本库多会话并发（不占电脑下发槽、不停悬浮球）；控制台仍单槽替换。标题栏 X 关闭窗口。PC 1.1.89 / App 0.9.78（versionCode 103）"
 }

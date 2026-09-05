@@ -19,10 +19,14 @@ func TestUIHasScriptLibrary(t *testing.T) {
 	html := string(b)
 	for _, s := range []string{
 		"脚本库", "id=\"navLib\"", "id=\"page-lib\"", "id=\"libMonaco\"",
-		"id=\"libSend\"", "id=\"libSendRun\"", "id=\"libRun\"", "id=\"libStop\"",
+		"id=\"libRun\"", "id=\"libStop\"",
 		"test.lua", "test2.lua", "learn.lua",
-		`api("/api/script", { script, run: false })`,
-		`api("/api/script", { script, run: true })`,
+		`library: true`,
+		`persist: false`,
+		`action: "libstop"`,
+		`data-lib-start`,
+		`data-lib-stop`,
+		`运行中`,
 		`api("/api/control", { action: "start" })`,
 		`api("/api/control", { action: "stop" })`,
 	} {
@@ -30,7 +34,7 @@ func TestUIHasScriptLibrary(t *testing.T) {
 			t.Fatalf("ui.html missing %q", s)
 		}
 	}
-	for _, s := range []string{`id="libStart"`, "persist: false", "library: true"} {
+	for _, s := range []string{`id="libSend"`, `id="libSendRun"`, `id="libStart"`} {
 		if strings.Contains(html, s) {
 			t.Fatalf("ui.html must not contain %q", s)
 		}
@@ -296,28 +300,30 @@ func TestUIHasDialogInputBoxDocs(t *testing.T) {
 	}
 }
 
-func TestScriptLibrarySendPersists(t *testing.T) {
+func TestScriptLibraryStartDoesNotPersist(t *testing.T) {
 	resetSrv()
 	srv.devices["dev1"] = &Device{ID: "dev1", Name: "phone", Online: true, Seen: time.Now()}
 	srv.selected = "dev1"
 	srv.script = "OLD"
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/script", handleScript)
+	mux.HandleFunc("/api/control", handleControl)
 	mux.HandleFunc("/api/pull", handlePull)
+	mux.HandleFunc("/api/status", handleStatus)
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/script", bytes.NewReader([]byte(`{"script":"Tip(\"lib\")","run":true}`)))
+	req := httptest.NewRequest(http.MethodPost, "/api/script", bytes.NewReader([]byte(`{"script":"Tip(\"lib\")","run":true,"library":true,"persist":false,"name":"test.lua"}`)))
 	mux.ServeHTTP(rr, req)
 	var ack map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &ack)
 	if ack["ok"] != true {
 		t.Fatalf("ack %s", rr.Body.Bytes())
 	}
-	if ack["persist"] != true {
-		t.Fatalf("want persist true in ack, got %v", ack["persist"])
+	if ack["persist"] != false {
+		t.Fatalf("want persist false in ack, got %v", ack["persist"])
 	}
-	if srv.script != "Tip(\"lib\")" {
-		t.Fatalf("library send must persist srv.script, got %q", srv.script)
+	if srv.script != "OLD" {
+		t.Fatalf("library start must not write srv.script, got %q", srv.script)
 	}
 
 	rr = httptest.NewRecorder()
@@ -337,11 +343,50 @@ func TestScriptLibrarySendPersists(t *testing.T) {
 	if cmd["run"] != true {
 		t.Fatalf("run %s", raw)
 	}
-	if _, ok := cmd["persist"]; ok {
-		t.Fatalf("persist send must omit persist flag: %s", raw)
+	if cmd["persist"] != false {
+		t.Fatalf("library start must send persist=false: %s", raw)
 	}
-	if cmd["library"] != nil {
-		t.Fatalf("persist send must omit library: %s", raw)
+	if cmd["library"] != true {
+		t.Fatalf("library start must send library=true: %s", raw)
+	}
+	if cmd["libName"] != "test.lua" {
+		t.Fatalf("libName %s", raw)
+	}
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	mux.ServeHTTP(rr, req)
+	var st map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &st)
+	libs, _ := st["libRunning"].([]any)
+	found := false
+	for _, x := range libs {
+		if x == "test.lua" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("status libRunning missing test.lua: %s", rr.Body.Bytes())
+	}
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/control", strings.NewReader(`{"action":"libstop","name":"test.lua","library":true}`))
+	mux.ServeHTTP(rr, req)
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/pull?id=dev1", nil)
+	mux.ServeHTTP(rr, req)
+	raw, _ = io.ReadAll(rr.Body)
+	if err := json.Unmarshal(raw, &cmd); err != nil {
+		t.Fatal(err)
+	}
+	if cmd["type"] != "control" || cmd["action"] != "libstop" {
+		t.Fatalf("libstop cmd %s", raw)
+	}
+	if cmd["libName"] != "test.lua" {
+		t.Fatalf("libstop name %s", raw)
+	}
+	if cmd["library"] != true {
+		t.Fatalf("libstop library %s", raw)
 	}
 }
 

@@ -33,6 +33,7 @@ public final class LuaEngine {
     public static void run(String str) {
         Globals standardGlobals = newGlobals();
         LuaThreadHost.Session host = LuaThreadHost.begin(standardGlobals);
+        ScriptEngine.attachThreadHost(host);
         try {
             standardGlobals.load(str, "script").call();
         } catch (LuaError e) {

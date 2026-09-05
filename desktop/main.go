@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,24 +30,25 @@ const (
 	httpPort = 18766
 	udpPort  = 18766
 	phoneUDP = 18765
-	version  = "1.1.88"
+	version  = "1.1.89"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 )
 
 type Device struct {
-	ID      string    `json:"id"`
-	Name    string    `json:"name"`
-	A11y    bool      `json:"a11y"`
-	Cap     bool      `json:"cap"`
-	Emu     bool      `json:"emu"`
-	IPs     string    `json:"ips"`
-	Online  bool      `json:"online"`
-	Gen     int64     `json:"gen"`
-	VerCode int       `json:"verCode,omitempty"`
-	VerName string    `json:"verName,omitempty"`
-	Host    string    `json:"-"`
-	Seen    time.Time `json:"-"`
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	A11y       bool      `json:"a11y"`
+	Cap        bool      `json:"cap"`
+	Emu        bool      `json:"emu"`
+	IPs        string    `json:"ips"`
+	Online     bool      `json:"online"`
+	Gen        int64     `json:"gen"`
+	VerCode    int       `json:"verCode,omitempty"`
+	VerName    string    `json:"verName,omitempty"`
+	LibRunning []string  `json:"lib,omitempty"`
+	Host       string    `json:"-"`
+	Seen       time.Time `json:"-"`
 }
 
 type Cmd struct {
@@ -82,6 +84,7 @@ type Server struct {
 	lanIP       string // single preferred LAN IPv4 for UI (never a Join of all NICs)
 	undoStack   [][]byte
 	rejoinHosts []string
+	libRunning  map[string]bool
 }
 
 var srv = &Server{
@@ -281,7 +284,17 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	srv.mu.Lock()
 	prev, had := srv.devices[id]
 	fresh := !had || time.Since(prev.Seen) > 60*time.Second || !prev.Online
+	lib, libOK := jsonStringSlice(body["lib"])
 	d := &Device{ID: id, Name: name, A11y: a11y, Cap: capv, Emu: emu, IPs: ips, Online: online, Gen: gen, VerCode: verCode, VerName: verName, Host: host, Seen: time.Now()}
+	if had && prev != nil {
+		d.LibRunning = prev.LibRunning
+	}
+	if libOK {
+		d.LibRunning = lib
+		if srv.selected == id || srv.selected == "" {
+			setLibRunningLocked(lib)
+		}
+	}
 	srv.devices[id] = d
 	if srv.selected == "" {
 		srv.selected = id
@@ -343,23 +356,29 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		a11y = sel.A11y
 	}
 	lanIP := srv.lanIP
+	libRunning := libRunningSliceLocked()
+	if deviceLiveLocked(sel) && sel.LibRunning != nil {
+		libRunning = append([]string{}, sel.LibRunning...)
+		sort.Strings(libRunning)
+	}
 	writeJSON(w, map[string]any{
-		"status":   srv.status,
-		"sub":      srv.sub,
-		"lanIP":    lanIP,
-		"ip":       ip,
-		"a11y":     a11y,
-		"devices":  devs,
-		"selected": srv.selected,
-		"newLogs":  append([]string{}, srv.logs...),
-		"logCount": srv.logCount,
-		"shotRev":  srv.shotRev,
-		"slots":    slots,
-		"notice":   srv.notice,
-		"noticeAt": srv.noticeAt,
-		"version":  version,
-		"update":   getUpdate(),
-		"winMax":   winIsMaximized(),
+		"status":     srv.status,
+		"sub":        srv.sub,
+		"lanIP":      lanIP,
+		"ip":         ip,
+		"a11y":       a11y,
+		"devices":    devs,
+		"selected":   srv.selected,
+		"newLogs":    append([]string{}, srv.logs...),
+		"logCount":   srv.logCount,
+		"shotRev":    srv.shotRev,
+		"slots":      slots,
+		"notice":     srv.notice,
+		"noticeAt":   srv.noticeAt,
+		"version":    version,
+		"update":     getUpdate(),
+		"winMax":     winIsMaximized(),
+		"libRunning": libRunning,
 	})
 }
 
@@ -492,6 +511,7 @@ func handleScript(w http.ResponseWriter, r *http.Request) {
 		Run     bool   `json:"run"`
 		Persist *bool  `json:"persist"`
 		Library bool   `json:"library"`
+		Name    string `json:"name"`
 	}
 	_ = readJSON(r, &body)
 	persist := true
@@ -505,33 +525,111 @@ func handleScript(w http.ResponseWriter, r *http.Request) {
 	if !persist {
 		cmd["persist"] = false
 		cmd["library"] = true
+		if body.Name != "" {
+			cmd["libName"] = body.Name
+		}
 	}
 	srv.mu.Lock()
 	if persist {
 		srv.script = body.Script
 	}
 	id := srv.selected
+	if !persist && body.Run && body.Name != "" {
+		markLibRunningLocked(body.Name, true)
+	}
 	srv.mu.Unlock()
 	enqueue(id, cmd)
 	if persist {
 		addLog(fmt.Sprintf("下发脚本 %d 字 run=%v", len(body.Script), body.Run))
 	} else {
-		addLog(fmt.Sprintf("脚本库运行 %d 字", len(body.Script)))
+		addLog(fmt.Sprintf("脚本库运行 %s %d 字", body.Name, len(body.Script)))
 	}
 	writeJSON(w, map[string]any{"ok": true, "persist": persist})
 }
 
 func handleControl(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Action string `json:"action"`
+		Action  string `json:"action"`
+		Name    string `json:"name"`
+		Library bool   `json:"library"`
 	}
 	_ = readJSON(r, &body)
+	action := strings.ToLower(strings.TrimSpace(body.Action))
+	if action == "stop" && body.Library {
+		action = "libstop"
+	}
+	cmd := map[string]any{"type": "control", "action": action}
+	if body.Name != "" {
+		cmd["libName"] = body.Name
+	}
+	if action == "libstop" || body.Library {
+		cmd["library"] = true
+	}
 	srv.mu.Lock()
 	id := srv.selected
+	if action == "libstop" && body.Name != "" {
+		markLibRunningLocked(body.Name, false)
+	}
 	srv.mu.Unlock()
-	enqueue(id, map[string]any{"type": "control", "action": body.Action})
-	addLog("control " + body.Action)
+	enqueue(id, cmd)
+	addLog("control " + action)
 	writeJSON(w, map[string]any{"ok": true})
+}
+
+func jsonStringSlice(v any) ([]string, bool) {
+	if v == nil {
+		return nil, false
+	}
+	arr, ok := v.([]any)
+	if !ok {
+		return nil, false
+	}
+	out := make([]string, 0, len(arr))
+	for _, x := range arr {
+		s, _ := x.(string)
+		if s != "" {
+			out = append(out, s)
+		}
+	}
+	return out, true
+}
+
+func markLibRunningLocked(name string, on bool) {
+	if name == "" {
+		return
+	}
+	if srv.libRunning == nil {
+		srv.libRunning = map[string]bool{}
+	}
+	if on {
+		srv.libRunning[name] = true
+	} else {
+		delete(srv.libRunning, name)
+	}
+}
+
+func setLibRunningLocked(names []string) {
+	m := map[string]bool{}
+	for _, n := range names {
+		if n != "" {
+			m[n] = true
+		}
+	}
+	srv.libRunning = m
+}
+
+func libRunningSliceLocked() []string {
+	if len(srv.libRunning) == 0 {
+		return []string{}
+	}
+	out := make([]string, 0, len(srv.libRunning))
+	for n, on := range srv.libRunning {
+		if on {
+			out = append(out, n)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 func handleShot(w http.ResponseWriter, r *http.Request) {
