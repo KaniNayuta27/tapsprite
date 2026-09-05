@@ -101,6 +101,9 @@ func listLibraryScripts() []string {
 	if !seen["test2.lua"] {
 		names = append(names, "test2.lua")
 	}
+	if !seen["learn.lua"] {
+		names = append(names, "learn.lua")
+	}
 	sort.Slice(names, func(i, j int) bool {
 		if names[i] == "test.lua" {
 			return true
@@ -129,6 +132,11 @@ func readLibrary(name string) (string, error) {
 	}
 	if name == "test2.lua" {
 		return defaultTest2Lua, nil
+	}
+	if name == "learn.lua" {
+		if b, err := scriptsFS.ReadFile("scripts/learn.lua"); err == nil {
+			return string(b), nil
+		}
 	}
 	return "", os.ErrNotExist
 }

@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.87</title>
+<title>触控精灵 v1.1.88</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -396,7 +396,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.87</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.88</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -411,7 +411,7 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.87</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.88</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -559,6 +559,7 @@ textarea {
     <div class="lib-split">
       <div class="lib-list" id="libList">
         <button type="button" class="lib-file on" data-name="test.lua">test.lua</button>
+        <button type="button" class="lib-file" data-name="learn.lua">learn.lua</button>
         <button type="button" class="lib-file" data-name="test2.lua">test2.lua</button>
       </div>
       <div class="card lib-edcard">
@@ -721,7 +722,7 @@ document.getElementById("navLib").onclick = () => show("lib");
     }
     loaded = true;
     api("/api/library").then((r) => {
-      const files = (r && r.files && r.files.length) ? r.files : [{ name: "test.lua" }, { name: "test2.lua" }];
+      const files = (r && r.files && r.files.length) ? r.files : [{ name: "test.lua" }, { name: "learn.lua" }, { name: "test2.lua" }];
       if (!files.some((f) => (f.name || f) === current)) current = files[0].name || files[0];
       renderList(files);
       return api("/api/library?name=" + encodeURIComponent(current));
@@ -730,7 +731,7 @@ document.getElementById("navLib").onclick = () => show("lib");
       else setLibText(DEFAULT);
       if (window.libEd) window.libEd.layout();
     }).catch(() => {
-      renderList([{ name: "test.lua" }, { name: "test2.lua" }]);
+      renderList([{ name: "test.lua" }, { name: "learn.lua" }, { name: "test2.lua" }]);
       setLibText(DEFAULT);
     });
   };
@@ -1417,7 +1418,8 @@ document.getElementById("devRef").onclick = () => {
     ["Trim","(s)"],["UCase","(s)"],["LCase","(s)"],["CInt","(s)"],["CDbl","(s)"],["Int","(n)"],
     ["Now","()"],["IsNull","(v)"],["UBound","(t)"],["Cos","(n)"],["Sin","(n)"],
     ["GetDeviceID","()"],["GetColorDep","()"],["Play","(name)"],["PutAttachment","(name)"],
-    ["FW","."],["Dialog","."],["Sys","."],["Element","."],["Image","."],["UTF8","."],
+    ["FW","."],["Dialog","."],["Dialog.InputBox","(prompt[, default])"],["InputBox","(prompt[, default])"],
+    ["Sys","."],["Element","."],["Image","."],["UTF8","."],
     ["Thread","."],["Thread.Start","(fn, ...)"],["Thread.Stop","(id)"],
     ["Thread.SetShareVar","(name, v)"],["Thread.GetShareVar","(name)"]
   ];
@@ -1438,6 +1440,9 @@ document.getElementById("devRef").onclick = () => {
     OcrText: ["OcrText(x1, y1, x2, y2)", "识别矩形内文字。", "local s = OcrText(80, 200, 1000, 400)"],
     ExitScript: ["ExitScript()", "结束脚本。", "ExitScript()"],
     TickCount: ["TickCount()", "开机起毫秒。", "local t0 = TickCount()"],
+    Dialog: ["Dialog.InputBox(prompt[, default])", "弹出输入框，阻塞脚本线程直到确定或取消。取消/空返回 \"\"。无悬浮窗时回退到 App 对话框。", "local v = Dialog.InputBox(\"1：鼓励  3：不鼓励\")\nlearning = tonumber(v) or 3"],
+    "Dialog.InputBox": ["Dialog.InputBox(prompt[, default])", "弹出输入框，阻塞脚本线程直到确定或取消。取消/空返回 \"\"。无悬浮窗时回退到 App 对话框。", "local v = Dialog.InputBox(\"1：鼓励  3：不鼓励\")\nlearning = tonumber(v) or 3"],
+    InputBox: ["Dialog.InputBox(prompt[, default])", "弹出输入框，阻塞脚本线程直到确定或取消。取消/空返回 \"\"。无悬浮窗时回退到 App 对话框。", "local v = Dialog.InputBox(\"1：鼓励  3：不鼓励\")\nlearning = tonumber(v) or 3"],
     Thread: ["Thread.Start(fn, ...)", "真并行后台线程，返回 id。子线程独立 Lua 环境，普通全局不共享；用 SetShareVar/GetShareVar 传 number/string/bool/nil。主脚本停止时子线程一并结束。", "Thread.SetShareVar(\"aa\", 0)\nlocal id = Thread.Start(worker, \"你\", \"好\")\nThread.Stop(id)"],
     "Thread.Start": ["Thread.Start(fn|name, ...)", "真并行：独立 LuaJ 环境 + Java 线程。立刻返回 id。函数写在同一脚本，Start 放循环外。子线程 TracePrint 进同一日志。", "local id = Thread.Start(test_thread, \"你\", \"好\")"],
     "Thread.Stop": ["Thread.Stop(id)", "结束 Thread.Start 返回的线程。", "Thread.Stop(id)"],

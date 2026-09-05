@@ -75,8 +75,7 @@ public final class LuaEngine {
         }
     }
 
-    /* JADX INFO: Access modifiers changed from: private */
-    public static void checkStop() {
+    static void checkStop() {
         if (ScriptEngine.isStopRequested()) {
             throw new LuaError("脚本已停止");
         }
@@ -804,9 +803,11 @@ public final class LuaEngine {
         luaTable.set("InputBox", new VarArgFunction() { // from class: com.tapsprite.agent.LuaEngine.81
             @Override // org.luaj.vm2.lib.VarArgFunction, org.luaj.vm2.lib.LibFunction, org.luaj.vm2.LuaValue
             public Varargs invoke(Varargs varargs) {
-                OverlayService overlayService = AppState.overlay;
-                String optjstring = overlayService == null ? varargs.optjstring(2, "") : overlayService.prompt(varargs.optjstring(1, "输入"), varargs.optjstring(2, ""));
-                return valueOf(optjstring != null ? optjstring : "");
+                LuaEngine.checkStop();
+                String title = varargs.optjstring(1, "输入");
+                String def = varargs.optjstring(2, "");
+                String out = DialogApi.inputBox(title, def);
+                return valueOf(out != null ? out : "");
             }
         });
         globals.set("Dialog", luaTable);

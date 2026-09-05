@@ -24,6 +24,7 @@ import android.widget.TextView;
 import java.util.HashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /* loaded from: classes.dex */
@@ -129,8 +130,12 @@ public class OverlayService extends Service {
         });
     }
 
-    private boolean canOverlay() {
+    boolean canOverlay() {
         return Settings.canDrawOverlays(this);
+    }
+
+    boolean canShowPrompt() {
+        return canOverlay() && this.wm != null;
     }
 
     private void startAsForeground() {
@@ -642,28 +647,59 @@ public class OverlayService extends Service {
         }, "tapsprite-pick").start();
     }
 
+    /**
+     * Blocking prompt on the script thread.
+     * @return typed text; "" if cancelled; null if overlay cannot be shown
+     */
     String prompt(final String str, final String str2) {
+        if (!canShowPrompt()) {
+            return null;
+        }
         final CountDownLatch countDownLatch = new CountDownLatch(1);
-        final AtomicReference atomicReference = new AtomicReference(str2);
+        final AtomicReference<String> atomicReference = new AtomicReference<>(null);
+        final AtomicBoolean shown = new AtomicBoolean(false);
         this.main.post(new Runnable() { // from class: com.tapsprite.agent.OverlayService.13
             @Override // java.lang.Runnable
             public void run() {
-                OverlayService.this.showPrompt(str, str2, atomicReference, countDownLatch);
+                OverlayService.this.showPrompt(str, str2, atomicReference, countDownLatch, shown);
             }
         });
         try {
-            countDownLatch.await(60L, TimeUnit.SECONDS);
+            while (!countDownLatch.await(200L, TimeUnit.MILLISECONDS)) {
+                if (ScriptEngine.isStopRequested()) {
+                    this.main.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            OverlayService.this.removeModal();
+                            countDownLatch.countDown();
+                        }
+                    });
+                    return "";
+                }
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            this.main.post(new Runnable() {
+                @Override
+                public void run() {
+                    OverlayService.this.removeModal();
+                    countDownLatch.countDown();
+                }
+            });
+            return "";
         }
-        return (String) atomicReference.get();
+        if (!shown.get()) {
+            return null;
+        }
+        String r = atomicReference.get();
+        return r != null ? r : "";
     }
 
     /* JADX INFO: Access modifiers changed from: private */
-    public void showPrompt(String str, String str2, final AtomicReference<String> atomicReference, final CountDownLatch countDownLatch) {
+    public void showPrompt(String str, String str2, final AtomicReference<String> atomicReference, final CountDownLatch countDownLatch, final AtomicBoolean shown) {
         int i;
         removeModal();
-        if (!canOverlay()) {
+        if (!canShowPrompt()) {
             countDownLatch.countDown();
             return;
         }
@@ -673,6 +709,7 @@ public class OverlayService extends Service {
         LinearLayout linearLayout = new LinearLayout(this);
         linearLayout.setOrientation(1);
         linearLayout.setPadding(dp(22), dp(20), dp(22), dp(18));
+        linearLayout.setClickable(true);
         GradientDrawable gradientDrawable = new GradientDrawable();
         gradientDrawable.setColor(-15460330);
         gradientDrawable.setCornerRadius(dp(22));
@@ -720,7 +757,32 @@ public class OverlayService extends Service {
             }
         });
         linearLayout.addView(textView2);
+        TextView cancel = new TextView(this);
+        cancel.setText("取消");
+        cancel.setGravity(17);
+        cancel.setTextColor(-3812148);
+        cancel.setPadding(0, dp(10), 0, dp(4));
+        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(-1, -2);
+        cancelLp.topMargin = dp(4);
+        cancel.setLayoutParams(cancelLp);
+        cancel.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                atomicReference.set("");
+                OverlayService.this.removeModal();
+                countDownLatch.countDown();
+            }
+        });
+        linearLayout.addView(cancel);
         this.modal.addView(linearLayout, new FrameLayout.LayoutParams(dp(280), -2, 17));
+        this.modal.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                atomicReference.set("");
+                OverlayService.this.removeModal();
+                countDownLatch.countDown();
+            }
+        });
         if (Build.VERSION.SDK_INT >= 26) {
             i = 2038;
         } else {
@@ -730,7 +792,11 @@ public class OverlayService extends Service {
         this.modalParams = layoutParams2;
         try {
             this.wm.addView(this.modal, layoutParams2);
+            shown.set(true);
+            editText.requestFocus();
         } catch (Exception e) {
+            AppState.log("InputBox 悬浮窗失败：" + (e.getMessage() == null ? e.toString() : e.getMessage()));
+            this.modal = null;
             countDownLatch.countDown();
         }
     }

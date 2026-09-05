@@ -20,7 +20,7 @@ func TestUIHasScriptLibrary(t *testing.T) {
 	for _, s := range []string{
 		"脚本库", "id=\"navLib\"", "id=\"page-lib\"", "id=\"libMonaco\"",
 		"id=\"libSend\"", "id=\"libSendRun\"", "id=\"libRun\"", "id=\"libStop\"",
-		"test.lua", "test2.lua",
+		"test.lua", "test2.lua", "learn.lua",
 		`api("/api/script", { script, run: false })`,
 		`api("/api/script", { script, run: true })`,
 		`api("/api/control", { action: "start" })`,
@@ -135,7 +135,7 @@ func TestLibraryListsTestLua(t *testing.T) {
 	if !out.OK {
 		t.Fatalf("want ok, got %s", rr.Body.Bytes())
 	}
-	found, found2 := false, false
+	found, found2, foundLearn := false, false, false
 	for _, f := range out.Files {
 		if f.Name == "test.lua" {
 			found = true
@@ -143,12 +143,18 @@ func TestLibraryListsTestLua(t *testing.T) {
 		if f.Name == "test2.lua" {
 			found2 = true
 		}
+		if f.Name == "learn.lua" {
+			foundLearn = true
+		}
 	}
 	if !found {
 		t.Fatalf("test.lua missing: %s", rr.Body.Bytes())
 	}
 	if !found2 {
 		t.Fatalf("test2.lua missing: %s", rr.Body.Bytes())
+	}
+	if !foundLearn {
+		t.Fatalf("learn.lua missing: %s", rr.Body.Bytes())
 	}
 }
 
@@ -214,6 +220,79 @@ func TestLibraryTest2LuaNoTickCount(t *testing.T) {
 	}
 	if !strings.Contains(out.Script, "FindMultiColor") || !strings.Contains(out.Script, "点开始") {
 		t.Fatalf("unexpected test2.lua body")
+	}
+}
+
+func TestLibraryLearnLua(t *testing.T) {
+	b, err := scriptsFS.ReadFile("scripts/learn.lua")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(b)
+	for _, s := range []string{
+		"Dialog.InputBox",
+		"function getNumber",
+		"function addTime",
+		"function 恢复",
+		"function 简略恢复",
+		"function BackHome",
+		"function bath",
+		"function eat",
+		"function lagCheck",
+		"function isQQUI",
+		"math.randomseed(TickCount())",
+		"Tap2",
+		"DrawCircle",
+		"Image.OcrText",
+		"Element.GetAll",
+		"UTF8.InStr",
+		"tonumber(v) or 3",
+	} {
+		if !strings.Contains(body, s) {
+			t.Fatalf("learn.lua missing %q", s)
+		}
+	}
+	if strings.Contains(body, "function tip") || strings.Contains(body, "FW.") || strings.Contains(body, "tipcancel") {
+		t.Fatal("learn.lua must not use tip/FW")
+	}
+	if strings.Contains(body, ".. TickCount()") || strings.Contains(body, "& TickCount()") {
+		t.Fatal("learn.lua must not concatenate TickCount in TracePrint")
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/library", handleLibrary)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/library?name=learn.lua", nil)
+	mux.ServeHTTP(rr, req)
+	var out struct {
+		OK     bool   `json:"ok"`
+		Name   string `json:"name"`
+		Script string `json:"script"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if !out.OK || out.Name != "learn.lua" {
+		t.Fatalf("bad body %s", rr.Body.Bytes())
+	}
+	if out.Script != body {
+		t.Fatalf("learn.lua API body mismatch")
+	}
+}
+
+func TestUIHasDialogInputBoxDocs(t *testing.T) {
+	b, err := readWeb("ui.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+	for _, s := range []string{
+		`["Dialog.InputBox","(prompt[, default])"]`,
+		`Dialog.InputBox(prompt[, default])`,
+		`tonumber(v) or 3`,
+	} {
+		if !strings.Contains(html, s) {
+			t.Fatalf("ui.html missing %q", s)
+		}
 	}
 }
 

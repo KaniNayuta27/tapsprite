@@ -444,10 +444,8 @@ public final class Sprite {
             return "ok";
         }
         if (lowerCase.equals("dialog.inputbox") || lowerCase.equals("inputbox")) {
-            OverlayService overlayService4 = AppState.overlay;
-            String s2 = overlayService4 == null ? s(strArr, 1, "") : overlayService4.prompt(s(strArr, 0, "输入"), s(strArr, 1, ""));
-            AppState.log("InputBox = " + s2);
-            return s2;
+            String s2 = DialogApi.inputBox(s(strArr, 0, "输入"), s(strArr, 1, ""));
+            return s2 != null ? s2 : "";
         }
         if (lowerCase.equals("findcolorex")) {
             return String.valueOf(ScreenApi.findColorEx(i(strArr, 0, 0), i(strArr, 1, 0), i(strArr, 2, 0), i(strArr, 3, 0), s(strArr, 4, "FFFFFF"), f(strArr, 5), i(strArr, 6, 0), i(strArr, 7, 20)));

@@ -84,6 +84,25 @@ public class MainActivity extends Activity {
         }
     };
 
+    static MainActivity live() {
+        return live;
+    }
+
+    /** Bring the App to front so an InputBox AlertDialog can show without overlay. */
+    static void bringToFront() {
+        android.content.Context ctx = App.ctx;
+        if (ctx == null) {
+            return;
+        }
+        Intent i = new Intent(ctx, MainActivity.class);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        try {
+            ctx.startActivity(i);
+        } catch (Exception e) {
+            AppState.log("无法打开主界面：" + (e.getMessage() == null ? e.toString() : e.getMessage()));
+        }
+    }
+
     static void ping() {
         final MainActivity mainActivity = live;
         if (mainActivity != null) {
