@@ -1,9 +1,9 @@
 {
-  "versionCode": 93,
-  "versionName": "0.9.68",
-  "apk_ver": "0.9.68",
+  "versionCode": 94,
+  "versionName": "0.9.69",
+  "apk_ver": "0.9.69",
   "exe_ver": "1.1.80",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-68.apk",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-69.apk",
   "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-80.exe",
-  "notes": "版本 bump：PC 1.1.80 / App 0.9.68（versionCode 93）"
+  "notes": "版本 bump：PC 1.1.80 / App 0.9.69（versionCode 94）"
 }
