@@ -252,6 +252,11 @@ public class ConsoleServer {
                 write(outputStream, 200, "application/json; charset=utf-8", "{\"ok\":" + ScriptEngine.start() + "}");
                 return;
             }
+            if ("libstopall".equals(extractAction)) {
+                ScriptEngine.stopAllLibrary();
+                write(outputStream, 200, "application/json; charset=utf-8", "{\"ok\":true}");
+                return;
+            }
             if ("libstop".equals(extractAction) || ("stop".equals(extractAction) && LanLink.jsonFlag(str4, "library", false))) {
                 String libName = LanLink.extractString(str4, "libName");
                 if (libName == null) {

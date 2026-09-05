@@ -81,6 +81,18 @@ public final class ScriptEngine {
             }
             requestStopSession(s);
         }
+        LanLink.pushHello();
+    }
+
+    /** Stop every library session. Does not touch the console lane. */
+    public static synchronized void stopAllLibrary() {
+        synchronized (ScriptEngine.class) {
+            for (Session s : library.values()) {
+                requestStopSession(s);
+            }
+            AppState.log("脚本库全部停止");
+        }
+        LanLink.pushHello();
     }
 
     static List<String> libraryRunningIds() {

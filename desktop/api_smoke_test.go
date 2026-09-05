@@ -158,6 +158,91 @@ func TestStatusA11yEmptyWhenDisconnected(t *testing.T) {
 	if len(devs) != 0 {
 		t.Fatalf("stale device should not appear, got %v", st["devices"])
 	}
+	status, _ := st["status"].(string)
+	if strings.HasPrefix(status, "已连接") {
+		t.Fatalf("stale device must not keep 已连接 status, got %q", status)
+	}
+}
+
+func TestStatusClearsConnectedAfterTimeout(t *testing.T) {
+	resetSrv()
+	srv.devices["dev1"] = &Device{
+		ID: "dev1", Name: "V2121A", A11y: true, Cap: true, Online: true, Host: "192.168.1.8",
+		Seen: time.Now(),
+	}
+	srv.selected = "dev1"
+	srv.status = "已连接 V2121A"
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/status", handleStatus)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	mux.ServeHTTP(rr, req)
+	var st map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st["status"] != "已连接 V2121A" {
+		t.Fatalf("live want 已连接 V2121A, got %v", st["status"])
+	}
+	devs, _ := st["devices"].([]any)
+	if len(devs) != 1 {
+		t.Fatalf("live device missing, got %v", st["devices"])
+	}
+
+	srv.mu.Lock()
+	srv.devices["dev1"].Seen = time.Now().Add(-30 * time.Second)
+	srv.mu.Unlock()
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	mux.ServeHTTP(rr, req)
+	st = map[string]any{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st["status"] != waitingStatus {
+		t.Fatalf("after timeout want %q, got %v", waitingStatus, st["status"])
+	}
+	devs, _ = st["devices"].([]any)
+	if len(devs) != 0 {
+		t.Fatalf("timed-out device still listed: %v", st["devices"])
+	}
+	if st["a11y"] != nil {
+		t.Fatalf("timed-out a11y must be empty, got %v", st["a11y"])
+	}
+	if ip, _ := st["ip"].(string); ip != "" {
+		t.Fatalf("timed-out ip must be empty, got %q", ip)
+	}
+}
+
+func TestByeClearsConnectedStatus(t *testing.T) {
+	resetSrv()
+	srv.devices["dev1"] = &Device{ID: "dev1", Name: "V2121A", Online: true, Seen: time.Now()}
+	srv.selected = "dev1"
+	srv.status = "已连接 V2121A"
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/bye", handleBye)
+	mux.HandleFunc("/api/status", handleStatus)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/bye", strings.NewReader(`{"id":"dev1"}`))
+	mux.ServeHTTP(rr, req)
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	mux.ServeHTTP(rr, req)
+	var st map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st["status"] != waitingStatus {
+		t.Fatalf("bye must clear 已连接, got %v", st["status"])
+	}
+	devs, _ := st["devices"].([]any)
+	if len(devs) != 0 {
+		t.Fatalf("bye device still listed: %v", st["devices"])
+	}
 }
 
 func TestHelloStoresAppVersion(t *testing.T) {
@@ -208,4 +293,3 @@ func TestShotNoPermWhenCapOff(t *testing.T) {
 		t.Fatalf("shot must still be enqueued so phone can pop permission UI, got %d", len(q))
 	}
 }
-

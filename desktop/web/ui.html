@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.89</title>
+<title>触控精灵 v1.1.90</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -339,25 +339,28 @@ textarea {
   display: flex; flex-direction: column; gap: 6px;
 }
 .lib-item {
-  display: flex; flex-direction: column; gap: 6px;
-  padding: 8px;
+  display: flex; flex-direction: row; align-items: center; gap: 8px;
+  padding: 10px 8px;
   border-radius: var(--radius-md);
+  cursor: pointer;
 }
 .lib-item.on { background: var(--accent-soft); }
 .lib-file {
   text-align: left; border: 0; background: transparent; color: var(--muted);
-  padding: 4px 6px; border-radius: var(--radius-md); font-size: 13px; font-weight: 600;
-  width: 100%;
+  padding: 2px 4px; border-radius: var(--radius-md); font-size: 16px; font-weight: 650;
+  width: auto; flex: 0 1 auto; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   transition: transform 160ms var(--ease-out), background-color var(--motion), color var(--motion);
 }
 .lib-file:active { transform: scale(0.97); }
 .lib-item.on .lib-file { color: var(--fg); }
 .lib-run-mark {
-  font-size: 11px; font-weight: 650; color: var(--ok);
-  min-height: 14px; padding: 0 6px;
+  font-size: 12px; font-weight: 700; color: var(--ok);
+  flex: none; padding: 0; white-space: nowrap; letter-spacing: .02em;
 }
-.lib-item-acts { display: flex; gap: 6px; padding: 0 4px 2px; }
-.lib-item-acts .btn { flex: 1; padding: 5px 8px; font-size: 12px; }
+.lib-run-mark:empty { display: none; }
+.btn.danger { background: #e44545; color: #fff; }
+.btn.danger:hover { background: #cc3a3a; }
 @media (hover: hover) and (pointer: fine) {
   .lib-item:hover { background: #f6f3ff; }
   .lib-item.on:hover { background: var(--accent-soft); }
@@ -409,7 +412,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.89</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.90</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -424,7 +427,7 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.89</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.90</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -573,27 +576,15 @@ textarea {
       <div class="lib-list" id="libList">
         <div class="lib-item on" data-name="test.lua">
           <button type="button" class="lib-file" data-name="test.lua">test.lua</button>
-          <div class="lib-run-mark" data-name="test.lua"></div>
-          <div class="lib-item-acts">
-            <button type="button" class="btn ghost" data-lib-start="test.lua">开始</button>
-            <button type="button" class="btn ghost" data-lib-stop="test.lua">停止</button>
-          </div>
+          <span class="lib-run-mark" data-name="test.lua"></span>
         </div>
         <div class="lib-item" data-name="learn.lua">
           <button type="button" class="lib-file" data-name="learn.lua">learn.lua</button>
-          <div class="lib-run-mark" data-name="learn.lua"></div>
-          <div class="lib-item-acts">
-            <button type="button" class="btn ghost" data-lib-start="learn.lua">开始</button>
-            <button type="button" class="btn ghost" data-lib-stop="learn.lua">停止</button>
-          </div>
+          <span class="lib-run-mark" data-name="learn.lua"></span>
         </div>
         <div class="lib-item" data-name="test2.lua">
           <button type="button" class="lib-file" data-name="test2.lua">test2.lua</button>
-          <div class="lib-run-mark" data-name="test2.lua"></div>
-          <div class="lib-item-acts">
-            <button type="button" class="btn ghost" data-lib-start="test2.lua">开始</button>
-            <button type="button" class="btn ghost" data-lib-stop="test2.lua">停止</button>
-          </div>
+          <span class="lib-run-mark" data-name="test2.lua"></span>
         </div>
       </div>
       <div class="card lib-edcard">
@@ -603,6 +594,7 @@ textarea {
         <div class="row">
           <button class="btn primary" id="libRun">开始</button>
           <button class="btn ghost" id="libStop">停止</button>
+          <button class="btn danger" id="libStopAll">全部停止</button>
         </div>
       </div>
     </div>
@@ -742,35 +734,19 @@ document.getElementById("navLib").onclick = () => show("lib");
       const row = document.createElement("div");
       row.className = "lib-item" + (name === current ? " on" : "") + (isLibRunning(name) ? " running" : "");
       row.setAttribute("data-name", name);
+      row.onclick = () => selectFile(name);
       const b = document.createElement("button");
       b.type = "button";
       b.className = "lib-file";
       b.setAttribute("data-name", name);
       b.textContent = name;
-      b.onclick = () => selectFile(name);
-      const mark = document.createElement("div");
+      b.onclick = (e) => { e.stopPropagation(); selectFile(name); };
+      const mark = document.createElement("span");
       mark.className = "lib-run-mark";
       mark.setAttribute("data-name", name);
       mark.textContent = isLibRunning(name) ? "运行中" : "";
-      const acts = document.createElement("div");
-      acts.className = "lib-item-acts";
-      const start = document.createElement("button");
-      start.type = "button";
-      start.className = "btn ghost";
-      start.setAttribute("data-lib-start", name);
-      start.textContent = "开始";
-      start.onclick = (e) => { e.stopPropagation(); startLib(name); };
-      const stop = document.createElement("button");
-      stop.type = "button";
-      stop.className = "btn ghost";
-      stop.setAttribute("data-lib-stop", name);
-      stop.textContent = "停止";
-      stop.onclick = (e) => { e.stopPropagation(); stopLib(name); };
-      acts.appendChild(start);
-      acts.appendChild(stop);
       row.appendChild(b);
       row.appendChild(mark);
-      row.appendChild(acts);
       box.appendChild(row);
     });
   }
@@ -824,6 +800,11 @@ document.getElementById("navLib").onclick = () => show("lib");
     api("/api/control", { action: "libstop", name: n, library: true });
     markLocal(n, false);
   }
+  function stopAllLib() {
+    api("/api/control", { action: "libstopall", library: true });
+    window._libRunning = [];
+    paintLibRunning();
+  }
   window.loadLib = function () {
     if (loaded) {
       if (window.libEd) window.libEd.layout();
@@ -851,6 +832,7 @@ document.getElementById("navLib").onclick = () => show("lib");
   };
   bindLib("libRun", () => startLib(current));
   bindLib("libStop", () => stopLib(current));
+  bindLib("libStopAll", () => stopAllLib());
 })();
 (function setupCaption() {
   const el = document.getElementById("caption");
@@ -1373,7 +1355,12 @@ async function tick() {
   _tickBusy = true;
   try {
   const s = await fetch("/api/status").then(r => r.json()).catch(() => ({}));
-  document.getElementById("stTitle").textContent = s.status || document.getElementById("stTitle").textContent;
+  const list = Array.isArray(s.devices) ? s.devices : [];
+  let title = s.status || "";
+  if (!list.length && /^已连接/.test(title)) {
+    title = "等待手机联机…";
+  }
+  if (title) document.getElementById("stTitle").textContent = title;
   if (s.version) {
     const sm = document.querySelector(".brand small");
     if (sm) sm.textContent = "TAPSPRITE PC · v" + s.version;
@@ -1442,6 +1429,8 @@ function renderDevs(s) {
   const list = Array.isArray(s.devices) ? s.devices : [];
   const cur = s.selected || "";
   if (!list.length) {
+    const t = document.getElementById("stTitle");
+    if (t && /^已连接/.test(t.textContent || "")) t.textContent = "等待手机联机…";
     if (sel._sig !== "empty") {
       sel._sig = "empty";
       sel.innerHTML = "";

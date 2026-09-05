@@ -19,14 +19,14 @@ func TestUIHasScriptLibrary(t *testing.T) {
 	html := string(b)
 	for _, s := range []string{
 		"脚本库", "id=\"navLib\"", "id=\"page-lib\"", "id=\"libMonaco\"",
-		"id=\"libRun\"", "id=\"libStop\"",
+		"id=\"libRun\"", "id=\"libStop\"", "id=\"libStopAll\"",
 		"test.lua", "test2.lua", "learn.lua",
 		`library: true`,
 		`persist: false`,
 		`action: "libstop"`,
-		`data-lib-start`,
-		`data-lib-stop`,
+		`action: "libstopall"`,
 		`运行中`,
+		`全部停止`,
 		`api("/api/control", { action: "start" })`,
 		`api("/api/control", { action: "stop" })`,
 	} {
@@ -34,7 +34,7 @@ func TestUIHasScriptLibrary(t *testing.T) {
 			t.Fatalf("ui.html missing %q", s)
 		}
 	}
-	for _, s := range []string{`id="libSend"`, `id="libSendRun"`, `id="libStart"`} {
+	for _, s := range []string{`id="libSend"`, `id="libSendRun"`, `id="libStart"`, `data-lib-start`, `data-lib-stop`, `lib-item-acts`} {
 		if strings.Contains(html, s) {
 			t.Fatalf("ui.html must not contain %q", s)
 		}
@@ -387,6 +387,57 @@ func TestScriptLibraryStartDoesNotPersist(t *testing.T) {
 	}
 	if cmd["library"] != true {
 		t.Fatalf("libstop library %s", raw)
+	}
+}
+
+func TestLibStopAllClearsRunningAndQueues(t *testing.T) {
+	resetSrv()
+	srv.devices["dev1"] = &Device{ID: "dev1", Name: "phone", Online: true, Seen: time.Now()}
+	srv.selected = "dev1"
+	srv.libRunning = map[string]bool{"test.lua": true, "learn.lua": true}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/control", handleControl)
+	mux.HandleFunc("/api/pull", handlePull)
+	mux.HandleFunc("/api/status", handleStatus)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/control", strings.NewReader(`{"action":"libstopall","library":true}`))
+	mux.ServeHTTP(rr, req)
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	mux.ServeHTTP(rr, req)
+	var st map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &st)
+	libs, _ := st["libRunning"].([]any)
+	if len(libs) != 0 {
+		t.Fatalf("libstopall must clear libRunning, got %v", libs)
+	}
+
+	got := map[string]bool{}
+	for i := 0; i < 3; i++ {
+		rr = httptest.NewRecorder()
+		req = httptest.NewRequest(http.MethodGet, "/api/pull?id=dev1", nil)
+		mux.ServeHTTP(rr, req)
+		raw, _ := io.ReadAll(rr.Body)
+		var cmd map[string]any
+		if err := json.Unmarshal(raw, &cmd); err != nil {
+			t.Fatal(err)
+		}
+		if cmd["type"] != "control" {
+			t.Fatalf("pull %d want control, got %s", i, raw)
+		}
+		action, _ := cmd["action"].(string)
+		got[action] = true
+		if action == "libstop" {
+			name, _ := cmd["libName"].(string)
+			if name != "test.lua" && name != "learn.lua" {
+				t.Fatalf("libstop name %s", raw)
+			}
+		}
+	}
+	if !got["libstopall"] || !got["libstop"] {
+		t.Fatalf("want libstopall + per-name libstop, got %v", got)
 	}
 }
 

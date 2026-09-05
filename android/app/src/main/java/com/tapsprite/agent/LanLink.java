@@ -37,6 +37,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class LanLink {
     private static volatile boolean genLoaded;
     private static volatile boolean ok;
+    private static volatile long lastHelloPushMs;
     private static Thread puller;
     private static Thread udp;
     private static volatile DatagramSocket udpSock;
@@ -574,6 +575,8 @@ public final class LanLink {
                                 String str2 = LanLink.get(str, LanLink.pullPath());
                                 if (str2 == null) {
                                     AppState.log("电脑暂时连不上，重新握手");
+                                    LanLink.ok = false;
+                                    LanLink.lastStatus = "未联机";
                                     LanLink.reannounce();
                                     LanLink.sleepQuiet(500);
                                 } else if (str2.indexOf("\"hello\":true") >= 0 || str2.indexOf("\"hello\": true") >= 0) {
@@ -583,6 +586,9 @@ public final class LanLink {
                                 } else if (str2.indexOf("\"cmd\":null") < 0 && str2.indexOf("\"cmd\": null") < 0 && str2.indexOf("\"type\"") >= 0) {
                                     AppState.log("收到电脑指令");
                                     LanLink.applyCmd(str2);
+                                    LanLink.heartbeatHello();
+                                } else {
+                                    LanLink.heartbeatHello();
                                 }
                             }
                         }
@@ -640,6 +646,9 @@ public final class LanLink {
                         LanLink.startOverlay();
                         ScriptEngine.start();
                         return;
+                    } else if ("libstopall".equals(extractString3)) {
+                        ScriptEngine.stopAllLibrary();
+                        return;
                     } else if ("libstop".equals(extractString3) || ("stop".equals(extractString3) && jsonFlag(str, "library", false))) {
                         String libName = LanLink.extractString(str, "libName");
                         if (libName == null) {
@@ -674,7 +683,7 @@ public final class LanLink {
         try {
             httpURLConnection = (HttpURLConnection) new URL("http://" + str + ":18766" + str2).openConnection();
             httpURLConnection.setConnectTimeout(800);
-            httpURLConnection.setReadTimeout(18000);
+            httpURLConnection.setReadTimeout(4000);
             httpURLConnection.setRequestMethod("GET");
             InputStream errorStream = httpURLConnection.getResponseCode() >= 400 ? httpURLConnection.getErrorStream() : httpURLConnection.getInputStream();
             if (errorStream == null) {
@@ -970,6 +979,16 @@ public final class LanLink {
             thread.setDaemon(true);
             thread.start();
         }
+    }
+
+    /** Periodic /api/hello so PC Seen stays fresh and lib-running list syncs. */
+    static void heartbeatHello() {
+        long now = SystemClock.uptimeMillis();
+        if (now - lastHelloPushMs < 2000) {
+            return;
+        }
+        lastHelloPushMs = now;
+        pushHello();
     }
 
     static String pullPath() {

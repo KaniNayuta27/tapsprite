@@ -30,9 +30,12 @@ const (
 	httpPort = 18766
 	udpPort  = 18766
 	phoneUDP = 18765
-	version  = "1.1.89"
+	version  = "1.1.90"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
+	// After this silence, TCP-probe phone:18765; failure drops connected UI immediately.
+	deviceSuspectAfter = 2500 * time.Millisecond
+	waitingStatus      = "等待手机联机…"
 )
 
 type Device struct {
@@ -97,6 +100,7 @@ var srv = &Server{
 func main() {
 	rejoin := parseRejoinHosts(os.Args[1:])
 	go listenUDP()
+	go startDeviceWatch()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", handleStatic)
 	mux.HandleFunc("/api/hello", handleHello)
@@ -140,7 +144,12 @@ func main() {
 	scheduleStartupCleanup()
 
 	uiURL := fmt.Sprintf("http://127.0.0.1%s/", addr)
-	server := &http.Server{Addr: addr, Handler: withCORS(mux)}
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           withCORS(mux),
+		ReadHeaderTimeout: 8 * time.Second,
+		IdleTimeout:       30 * time.Second,
+	}
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
@@ -264,7 +273,10 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	capv, _ := body["cap"].(bool)
 	emu, _ := body["emu"].(bool)
 	ips, _ := body["ips"].(string)
-	online, _ := body["online"].(bool)
+	online := true
+	if v, ok := body["online"].(bool); ok {
+		online = v
+	}
 	verName, _ := body["versionName"].(string)
 	if verName == "" {
 		verName, _ = body["ver"].(string)
@@ -299,7 +311,7 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	if srv.selected == "" {
 		srv.selected = id
 	}
-	srv.status = "已连接 " + name
+	syncLiveDevicesLocked(time.Now())
 	srv.mu.Unlock()
 	// Re-pick display LAN IP now that a phone Host is known (same-/24 preference).
 	refreshLANSub(preferredLocalIPv4())
@@ -316,30 +328,113 @@ func handleBye(w http.ResponseWriter, r *http.Request) {
 	srv.mu.Lock()
 	if id != "" {
 		delete(srv.devices, id)
-		if srv.selected == id {
-			srv.selected = ""
-			for k := range srv.devices {
-				srv.selected = k
-				break
-			}
-		}
 	}
+	syncLiveDevicesLocked(time.Now())
 	srv.mu.Unlock()
 	addLog("bye " + id)
 	writeJSON(w, map[string]any{"ok": true})
 }
 
 func deviceLiveLocked(d *Device) bool {
-	return d != nil && time.Since(d.Seen) < deviceLiveFor
+	return d != nil && d.Online && time.Since(d.Seen) < deviceLiveFor
+}
+
+// syncLiveDevicesLocked drops stale Online flags, keeps selected on a live phone,
+// and never leaves srv.status stuck on 「已连接」 after the last hello/pull.
+func syncLiveDevicesLocked(now time.Time) {
+	if now.IsZero() {
+		now = time.Now()
+	}
+	for _, d := range srv.devices {
+		if d == nil {
+			continue
+		}
+		if now.Sub(d.Seen) >= deviceLiveFor {
+			d.Online = false
+		}
+	}
+	sel := srv.devices[srv.selected]
+	if !deviceLiveLocked(sel) {
+		srv.selected = ""
+		sel = nil
+		for _, d := range srv.devices {
+			if deviceLiveLocked(d) {
+				srv.selected = d.ID
+				sel = d
+				break
+			}
+		}
+	}
+	if deviceLiveLocked(sel) {
+		srv.status = "已连接 " + sel.Name
+		return
+	}
+	srv.status = waitingStatus
+	srv.libRunning = map[string]bool{}
+}
+
+func phoneTCPAlive(host string) bool {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return false
+	}
+	if i := strings.IndexByte(host, '%'); i >= 0 {
+		host = host[:i]
+	}
+	d := net.Dialer{Timeout: 500 * time.Millisecond}
+	c, err := d.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(phoneUDP)))
+	if err != nil {
+		return false
+	}
+	_ = c.Close()
+	return true
+}
+
+func startDeviceWatch() {
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	for range t.C {
+		now := time.Now()
+		type suspect struct{ id, host, name string }
+		var probes []suspect
+		srv.mu.Lock()
+		for _, d := range srv.devices {
+			if d == nil || !d.Online || d.Host == "" {
+				continue
+			}
+			age := now.Sub(d.Seen)
+			if age >= deviceSuspectAfter && age < deviceLiveFor {
+				probes = append(probes, suspect{d.ID, d.Host, d.Name})
+			}
+		}
+		syncLiveDevicesLocked(now)
+		srv.mu.Unlock()
+		for _, p := range probes {
+			if phoneTCPAlive(p.host) {
+				continue
+			}
+			dropped := false
+			srv.mu.Lock()
+			if d := srv.devices[p.id]; d != nil && d.Online && time.Since(d.Seen) >= deviceSuspectAfter {
+				d.Online = false
+				dropped = true
+				syncLiveDevicesLocked(time.Now())
+			}
+			srv.mu.Unlock()
+			if dropped {
+				addLogDedup("drop:"+p.id, "设备无应答 "+p.name, 20*time.Second)
+			}
+		}
+	}
 }
 
 func handleStatus(w http.ResponseWriter, r *http.Request) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
+	syncLiveDevicesLocked(time.Now())
 	devs := []map[string]any{}
-	now := time.Now()
 	for _, d := range srv.devices {
-		if now.Sub(d.Seen) >= deviceLiveFor {
+		if !deviceLiveLocked(d) {
 			continue
 		}
 		devs = append(devs, map[string]any{
@@ -558,6 +653,23 @@ func handleControl(w http.ResponseWriter, r *http.Request) {
 	if action == "stop" && body.Library {
 		action = "libstop"
 	}
+	srv.mu.Lock()
+	id := srv.selected
+	if action == "libstopall" {
+		names := libRunningSliceLocked()
+		srv.libRunning = map[string]bool{}
+		if sel := srv.devices[id]; sel != nil {
+			sel.LibRunning = nil
+		}
+		srv.mu.Unlock()
+		enqueue(id, map[string]any{"type": "control", "action": "libstopall", "library": true})
+		for _, n := range names {
+			enqueue(id, map[string]any{"type": "control", "action": "libstop", "libName": n, "library": true})
+		}
+		addLog("control libstopall")
+		writeJSON(w, map[string]any{"ok": true})
+		return
+	}
 	cmd := map[string]any{"type": "control", "action": action}
 	if body.Name != "" {
 		cmd["libName"] = body.Name
@@ -565,8 +677,6 @@ func handleControl(w http.ResponseWriter, r *http.Request) {
 	if action == "libstop" || body.Library {
 		cmd["library"] = true
 	}
-	srv.mu.Lock()
-	id := srv.selected
 	if action == "libstop" && body.Name != "" {
 		markLibRunningLocked(body.Name, false)
 	}
@@ -1410,6 +1520,9 @@ func onlinePhoneHosts() []string {
 	defer srv.mu.Unlock()
 	out := []string{}
 	for _, d := range srv.devices {
+		if !deviceLiveLocked(d) {
+			continue
+		}
 		if d != nil && d.Host != "" {
 			h := d.Host
 			// strip zone / unexpected
