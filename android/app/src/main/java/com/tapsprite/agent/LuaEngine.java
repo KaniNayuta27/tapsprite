@@ -34,11 +34,19 @@ public final class LuaEngine {
         Globals standardGlobals = JsePlatform.standardGlobals();
         bind(standardGlobals);
         standardGlobals.set("print", standardGlobals.get("TracePrint"));
+        LuaThreadHost.begin(standardGlobals);
         try {
-            standardGlobals.load(str, "script").call();
+            LuaThreadHost.enterVm();
+            try {
+                standardGlobals.load(str, "script").call();
+            } finally {
+                LuaThreadHost.leaveVm();
+            }
         } catch (LuaError e) {
             AppState.log("Lua 错误：" + e.getMessage());
             throw e;
+        } finally {
+            LuaThreadHost.end();
         }
     }
 
@@ -97,8 +105,10 @@ public final class LuaEngine {
                 LuaEngine.checkStop();
                 try {
                     Sprite.delay(luaValue.tolong());
+                    LuaEngine.checkStop();
                     return TRUE;
                 } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                     throw new LuaError("脚本已停止");
                 }
             }
@@ -306,21 +316,39 @@ public final class LuaEngine {
         globals.set("TracePrint", new OneArgFunction() { // from class: com.tapsprite.agent.LuaEngine.22
             @Override // org.luaj.vm2.lib.OneArgFunction, org.luaj.vm2.lib.LibFunction, org.luaj.vm2.LuaValue
             public LuaValue call(LuaValue luaValue) {
-                Sprite.tracePrint(luaValue.isnil() ? "" : luaValue.tojstring());
+                final String msg = luaValue.isnil() ? "" : luaValue.tojstring();
+                LuaThreadHost.unlocked(new Runnable() {
+                    @Override
+                    public void run() {
+                        Sprite.tracePrint(msg);
+                    }
+                });
                 return NIL;
             }
         });
         globals.set("Tip", new OneArgFunction() { // from class: com.tapsprite.agent.LuaEngine.23
             @Override // org.luaj.vm2.lib.OneArgFunction, org.luaj.vm2.lib.LibFunction, org.luaj.vm2.LuaValue
             public LuaValue call(LuaValue luaValue) {
-                Sprite.tip(luaValue.isnil() ? "" : luaValue.tojstring());
+                final String msg = luaValue.isnil() ? "" : luaValue.tojstring();
+                LuaThreadHost.unlocked(new Runnable() {
+                    @Override
+                    public void run() {
+                        Sprite.tip(msg);
+                    }
+                });
                 return TRUE;
             }
         });
         globals.set("Toast", new OneArgFunction() { // from class: com.tapsprite.agent.LuaEngine.24
             @Override // org.luaj.vm2.lib.OneArgFunction, org.luaj.vm2.lib.LibFunction, org.luaj.vm2.LuaValue
             public LuaValue call(LuaValue luaValue) {
-                Sprite.tip(luaValue.isnil() ? "" : luaValue.tojstring());
+                final String msg = luaValue.isnil() ? "" : luaValue.tojstring();
+                LuaThreadHost.unlocked(new Runnable() {
+                    @Override
+                    public void run() {
+                        Sprite.tip(msg);
+                    }
+                });
                 return TRUE;
             }
         });
@@ -343,8 +371,10 @@ public final class LuaEngine {
                 LuaEngine.checkStop();
                 try {
                     Sprite.delay((long) (luaValue.todouble() * 1000.0d));
+                    LuaEngine.checkStop();
                     return TRUE;
                 } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                     throw new LuaError("脚本已停止");
                 }
             }
@@ -661,6 +691,7 @@ public final class LuaEngine {
         bindUtf8(globals);
         bindUrl(globals);
         bindDir(globals);
+        bindThread(globals);
     }
 
     /* JADX INFO: Access modifiers changed from: private */
@@ -885,5 +916,27 @@ public final class LuaEngine {
         });
         globals.set("dir", t);
         globals.set("Dir", t);
+    }
+
+    private static void bindThread(final Globals globals) {
+        LuaTable t = new LuaTable();
+        t.set("Start", new VarArgFunction() {
+            @Override
+            public Varargs invoke(Varargs varargs) {
+                LuaEngine.checkStop();
+                return valueOf(LuaThreadHost.start(globals, varargs));
+            }
+        });
+        t.set("Stop", new OneArgFunction() {
+            @Override
+            public LuaValue call(LuaValue luaValue) {
+                if (luaValue.isnil()) {
+                    return FALSE;
+                }
+                return LuaThreadHost.stop(luaValue.toint()) ? TRUE : FALSE;
+            }
+        });
+        globals.set("Thread", t);
+        globals.set("thread", t);
     }
 }

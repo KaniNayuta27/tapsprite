@@ -54,11 +54,12 @@ public final class ScriptEngine {
             if (thread != null) {
                 thread.interrupt();
             }
+            LuaThreadHost.requestStopAll();
         }
     }
 
     public static boolean isStopRequested() {
-        return stop.get();
+        return stop.get() || LuaThreadHost.isCurrentStopped();
     }
 
     private static void runSteps(List<ScriptParser.Step> list) {
@@ -309,13 +310,23 @@ public final class ScriptEngine {
     }
 
     private static void sleep(long j) throws InterruptedException {
-        while (j > 0) {
-            if (stop.get()) {
-                throw new InterruptedException();
+        boolean held = LuaThreadHost.isHeldByCurrentThread();
+        if (held) {
+            LuaThreadHost.leaveVm();
+        }
+        try {
+            while (j > 0) {
+                if (isStopRequested()) {
+                    throw new InterruptedException();
+                }
+                long min = Math.min(j, 120L);
+                Thread.sleep(min);
+                j -= min;
             }
-            long min = Math.min(j, 120L);
-            Thread.sleep(min);
-            j -= min;
+        } finally {
+            if (held) {
+                LuaThreadHost.enterVm();
+            }
         }
     }
 

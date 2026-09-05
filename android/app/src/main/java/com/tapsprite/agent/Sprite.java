@@ -519,16 +519,19 @@ public final class Sprite {
             return;
         }
         String str2 = DateFormat.format("HH:mm:ss", System.currentTimeMillis()).toString() + "   " + (str == null ? "" : str);
-        int i = 0;
-        while (i < 4) {
-            String[] strArr = TIP_LINES;
-            int i2 = i + 1;
-            strArr[i] = strArr[i2];
-            i = i2;
+        String str3;
+        synchronized (TIP_LINES) {
+            int i = 0;
+            while (i < 4) {
+                String[] strArr = TIP_LINES;
+                int i2 = i + 1;
+                strArr[i] = strArr[i2];
+                i = i2;
+            }
+            String[] strArr2 = TIP_LINES;
+            strArr2[4] = str2;
+            str3 = strArr2[0] + "\n" + strArr2[1] + "\n" + strArr2[2] + "\n" + strArr2[3] + "\n" + strArr2[4];
         }
-        String[] strArr2 = TIP_LINES;
-        strArr2[4] = str2;
-        String str3 = strArr2[0] + "\n" + strArr2[1] + "\n" + strArr2[2] + "\n" + strArr2[3] + "\n" + strArr2[4];
         if (!overlayService.hasFw("提示窗")) {
             FwApi.newFWindow("提示窗", 24, Math.max(80, DeviceApi.getScreenY() - 280), Math.min(700, DeviceApi.getScreenX() - 48), 220);
             FwApi.setBackColor("提示窗", "000000");

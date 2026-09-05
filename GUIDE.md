@@ -106,6 +106,8 @@ sim：`0`/`1` = 精确；`0.9` = 允许约 10%；`3`/`4` = 允许 3、4 级通�
 | `TracePrint("msg")` / `print("msg")` | 打到电脑日志 |
 | `Tip("msg")` | 屏幕底部 5 行滚动，同时打日志。**不再弹窗** |
 | `Delay(ms)` / `Sleep(ms)` | 等待，可被停止打断 |
+| `Thread.Start(fn|name, ...)` | 后台跑函数，立刻返回线程 id。子线程 TracePrint 进同一日志 |
+| `Thread.Stop(id)` | 结束该线程；主脚本停止时子线程一并结束 |
 | `ExitScript()` | 结束脚本 |
 | `IsRoot()` | 这里表示是否模拟器 |
 | `GetScreenX()` `GetScreenY()` | 宽高 |
