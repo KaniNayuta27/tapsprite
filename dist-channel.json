@@ -1,9 +1,9 @@
 {
-  "versionCode": 92,
-  "versionName": "0.9.67",
-  "apk_ver": "0.9.67",
-  "exe_ver": "1.1.78",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-67.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-78.exe",
-  "notes": "PC 标题栏加高贴近 Win11 标准窗；APK 下载完成条 10 秒后消失并写入桌面日志；1.1.78 / 0.9.67"
+  "versionCode": 93,
+  "versionName": "0.9.68",
+  "apk_ver": "0.9.68",
+  "exe_ver": "1.1.79",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-68.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-79.exe",
+  "notes": "版本 bump：PC 1.1.79 / App 0.9.68（versionCode 93）"
 }
