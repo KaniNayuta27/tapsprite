@@ -82,6 +82,110 @@ func TestCropAndRotate(t *testing.T) {
 	}
 }
 
+func pngWH(t *testing.T, w, h int) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestNewShotClearsCropUndo(t *testing.T) {
+	setTestShot(t, 20, 10)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/crop", strings.NewReader(`{"x1":2,"y1":1,"x2":8,"y2":5}`))
+	handleCrop(rr, req)
+	srv.mu.Lock()
+	if len(srv.undoStack) != 1 {
+		n := len(srv.undoStack)
+		srv.mu.Unlock()
+		t.Fatalf("after crop undo=%d", n)
+	}
+	srv.mu.Unlock()
+
+	applyShotPNG(pngWH(t, 12, 8), 12, 8)
+	srv.mu.Lock()
+	n, w, h := len(srv.undoStack), srv.shotW, srv.shotH
+	srv.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("new shot must clear crop undo, got %d", n)
+	}
+	if w != 12 || h != 8 {
+		t.Fatalf("new shot size %d/%d", w, h)
+	}
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/crop", strings.NewReader(`{"x1":1,"y1":1,"x2":5,"y2":4}`))
+	handleCrop(rr, req)
+	srv.mu.Lock()
+	if len(srv.undoStack) != 1 {
+		n = len(srv.undoStack)
+		srv.mu.Unlock()
+		t.Fatalf("crop after new shot undo=%d", n)
+	}
+	srv.mu.Unlock()
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/undo", nil)
+	handleUndo(rr, req)
+	var out map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out["more"] != false {
+		t.Fatalf("undo last crop more=%v", out["more"])
+	}
+	srv.mu.Lock()
+	n, w, h = len(srv.undoStack), srv.shotW, srv.shotH
+	srv.mu.Unlock()
+	if n != 0 || w != 12 || h != 8 {
+		t.Fatalf("after undo w/h/undo=%d/%d/%d", w, h, n)
+	}
+}
+
+func TestRotateDoesNotPushCropUndo(t *testing.T) {
+	setTestShot(t, 20, 10)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/rotate", strings.NewReader(`{"dir":"cw"}`))
+	handleRotate(rr, req)
+	srv.mu.Lock()
+	n := len(srv.undoStack)
+	srv.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("rotate must not push crop undo, got %d", n)
+	}
+}
+
+func TestStatusCropUndoCount(t *testing.T) {
+	setTestShot(t, 20, 10)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	handleStatus(rr, req)
+	var st map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st["cropUndo"] != float64(0) {
+		t.Fatalf("fresh cropUndo=%v", st["cropUndo"])
+	}
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/crop", strings.NewReader(`{"x1":2,"y1":1,"x2":8,"y2":5}`))
+	handleCrop(rr, req)
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodGet, "/api/status", nil)
+	handleStatus(rr, req)
+	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st["cropUndo"] != float64(1) {
+		t.Fatalf("after crop cropUndo=%v", st["cropUndo"])
+	}
+}
+
 func TestSlotExportTen(t *testing.T) {
 	srv.mu.Lock()
 	srv.slots = [10]Slot{}

@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.94</title>
+<title>触控精灵 v1.1.95</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -247,15 +247,35 @@ textarea {
   position: relative; cursor: crosshair; border-radius: 0; user-select: none;
 }
 #shot { image-rendering: pixelated; transform-origin: 0 0; display: block; -webkit-user-drag: none; user-select: none; pointer-events: none; }
-.slots { display: flex; flex-direction: column; gap: 8px; }
+.slots { display: flex; flex-direction: column; gap: 4px; }
 .slot {
-  display: grid; grid-template-columns: 22px auto auto; gap: 8px; align-items: center;
-  background: #f7f5ff; border-radius: var(--radius-md); padding: 10px 12px; font: 12px var(--mono);
-  font-variant-numeric: tabular-nums;
+  display: flex; align-items: center; gap: 5px; flex-wrap: nowrap;
+  background: #f7f5ff; border-radius: var(--radius-md); padding: 5px 8px; font: 12px var(--mono);
+  font-variant-numeric: tabular-nums; min-width: 0;
 }
+.slot .slot-key { flex: none; color: var(--muted); font-weight: 650; min-width: 0.9em; }
+.slot .slot-empty { flex: none; min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slot .coord, .slot .hexc { flex: none; }
 .coord, .hexc { cursor: inherit; }
 .hexc { min-width: 4.2em; }
-.sw { width: 40px; height: 24px; border-radius: 6px; background: repeating-conic-gradient(#ddd 0 25%, #f4f4f4 0 50%) 0 0 / 8px 8px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+.sw {
+  flex: none; width: 18px; height: 14px; border-radius: 3px;
+  background: repeating-conic-gradient(#ddd 0 25%, #f4f4f4 0 50%) 0 0 / 8px 8px;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+}
+.slot .slot-delta-lab {
+  flex: none; color: var(--muted); font-weight: 650; font-size: 11px;
+  font-family: var(--font); margin-left: 2px;
+}
+.slot input.slot-delta {
+  flex: none; width: 52px; margin: 0; border: 1px solid #e4dff2; border-radius: 6px;
+  padding: 3px 5px; font: 11px var(--mono); background: #fff; color: var(--fg);
+  user-select: text; -webkit-user-select: text;
+}
+.slot input.slot-pick {
+  flex: none; width: 14px; height: 14px; margin: 0;
+  accent-color: var(--accent);
+}
 .ctx {
   position: fixed; z-index: 40; min-width: 220px; padding: 6px 0;
   background: #fff; color: #222; border-radius: 8px;
@@ -320,13 +340,6 @@ textarea {
 }
 .hud canvas { display: block; width: 120px; height: 120px; image-rendering: pixelated; background: #222; }
 .hud .t { margin-top: 6px; white-space: pre; font-variant-numeric: tabular-nums; }
-.slots { display: flex; flex-direction: column; gap: 6px; }
-.slot {
-  display: grid; grid-template-columns: 22px auto auto; gap: 8px; align-items: center;
-  background: #f7f5ff; border-radius: var(--radius-md); padding: 8px 10px; font: 12px var(--mono);
-  font-variant-numeric: tabular-nums;
-}
-.sw { width: 28px; height: 18px; border-radius: 6px; background: #ddd; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
 #page-home { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; overflow: hidden; }
 #page-grab { display: none; flex: 1; min-height: 0; height: 100%; }
 #page-lib { display: none; flex-direction: column; flex: 1; min-height: 0; height: 100%; overflow: hidden; }
@@ -414,7 +427,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.94</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.95</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -429,7 +442,7 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.94</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.95</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -1177,12 +1190,9 @@ document.getElementById("oxReset").onclick = () => {
   if (window._slots) renderSlots(window._slots);
 };
 document.getElementById("showRange").onclick = () => {
-  const x1 = parseInt(document.getElementById("mx1").value, 10) || 0;
-  const y1 = parseInt(document.getElementById("my1").value, 10) || 0;
-  const x2 = parseInt(document.getElementById("mx2").value, 10) || 0;
-  const y2 = parseInt(document.getElementById("my2").value, 10) || 0;
-  selRect = { x1, y1, x2, y2 };
-  fillMeas();
+  const n = measNums();
+  if (n.some((x) => x === null)) return;
+  selRect = { x1: n[0], y1: n[1], x2: n[2], y2: n[3] };
   layoutSel();
 };
 function layoutCrop() {
@@ -1253,9 +1263,13 @@ function paintHud() {
   z.fillStyle = "#222";
   z.fillRect(0, 0, 120, 120);
   const src = (shotPix && shotPix.canvas) ? shotPix.canvas : shot;
-  z.drawImage(src, pt.x - 6, pt.y - 6, 13, 13, 0, 0, 120, 120);
-  z.fillStyle = "#f33";
-  z.fillRect(58, 58, 4, 4);
+  const magN = 13, magS = 120;
+  z.drawImage(src, pt.x - 6, pt.y - 6, magN, magN, 0, 0, magS, magS);
+  const cell = magS / magN;
+  const mid = Math.floor(magN / 2) * cell;
+  z.strokeStyle = "#ff0000";
+  z.lineWidth = 1;
+  z.strokeRect(mid + 0.5, mid + 0.5, cell - 1, cell - 1);
   const p = sampleShot(pt.x, pt.y);
   if (!p) { hud.style.display = "none"; return; }
   window._px = p;
@@ -1296,13 +1310,14 @@ stage.addEventListener("mousedown", (e) => {
 window.addEventListener("mouseup", () => {
   hideHud();
   if (dragMode === "seldraw") {
-    if (!selMoved) {
-      if (selRect) {
-        const x1 = Math.min(selRect.x1, selRect.x2), x2 = Math.max(selRect.x1, selRect.x2);
-        const y1 = Math.min(selRect.y1, selRect.y2), y2 = Math.max(selRect.y1, selRect.y2);
-        if (!(selStart && selStart.x >= x1 && selStart.x <= x2 && selStart.y >= y1 && selStart.y <= y2)) {
-          clearSel();
-        }
+    if (selMoved) {
+      fillMeas();
+      clearSel();
+    } else if (selRect) {
+      const x1 = Math.min(selRect.x1, selRect.x2), x2 = Math.max(selRect.x1, selRect.x2);
+      const y1 = Math.min(selRect.y1, selRect.y2), y2 = Math.max(selRect.y1, selRect.y2);
+      if (!(selStart && selStart.x >= x1 && selStart.x <= x2 && selStart.y >= y1 && selStart.y <= y2)) {
+        clearSel();
       }
     }
     dragMode = null;
@@ -1381,14 +1396,60 @@ function copyText(t) {
     navigator.clipboard.writeText(t);
   }
 }
+function harvestSlotExtras() {
+  if (!window._slotExtras) {
+    window._slotExtras = Array.from({ length: 10 }, () => ({ delta: "000000", pick: false }));
+  }
+  const box = document.getElementById("slots");
+  if (!box) return;
+  box.querySelectorAll(".slot").forEach((el, i) => {
+    if (!window._slotExtras[i]) window._slotExtras[i] = { delta: "000000", pick: false };
+    const d = el.querySelector("input.slot-delta");
+    const c = el.querySelector("input.slot-pick");
+    if (d) window._slotExtras[i].delta = d.value;
+    if (c) window._slotExtras[i].pick = !!c.checked;
+  });
+}
+function slotDeltaHtml(i) {
+  const extra = (window._slotExtras && window._slotExtras[i]) || { delta: "000000", pick: false };
+  let delta = String(extra.delta || "000000").replace(/[^0-9a-fA-F]/g, "").slice(0, 6);
+  if (!delta) delta = "000000";
+  return '<span class="slot-delta-lab">偏色</span><input class="slot-delta" type="text" maxlength="6" value="' +
+    delta + '" spellcheck="false" title="偏色"><input class="slot-pick" type="checkbox"' +
+    (extra.pick ? " checked" : "") + " title=\"\">";
+}
+function bindSlotExtras(el, i) {
+  const d = el.querySelector("input.slot-delta");
+  const c = el.querySelector("input.slot-pick");
+  if (d) {
+    d.addEventListener("click", (ev) => ev.stopPropagation());
+    d.addEventListener("mousedown", (ev) => ev.stopPropagation());
+    d.addEventListener("input", () => {
+      if (!window._slotExtras[i]) window._slotExtras[i] = { delta: "000000", pick: false };
+      window._slotExtras[i].delta = d.value;
+    });
+  }
+  if (c) {
+    c.addEventListener("click", (ev) => ev.stopPropagation());
+    c.addEventListener("mousedown", (ev) => ev.stopPropagation());
+    c.addEventListener("change", () => {
+      if (!window._slotExtras[i]) window._slotExtras[i] = { delta: "000000", pick: false };
+      window._slotExtras[i].pick = !!c.checked;
+    });
+  }
+}
 function renderSlots(data) {
   if (!data || !data.slots) return;
   window._slots = data;
   const box = document.getElementById("slots");
-  box.innerHTML = "";
   const slots = data.slots || [];
   const oxoy = originXY();
   const ox = oxoy[0], oy = oxoy[1];
+  const sig = ox + "," + oy + "|" + slots.map((s) => (s && s.on ? (s.x + "," + s.y + "," + s.hex) : "")).join(";");
+  if (box._sig === sig && box.childElementCount === 10) return;
+  harvestSlotExtras();
+  box._sig = sig;
+  box.innerHTML = "";
   for (let i = 0; i < 10; i++) {
     const s = slots[i] || {};
     const el = document.createElement("div");
@@ -1397,15 +1458,20 @@ function renderSlots(data) {
     const sw = s.on ? ("rgb("+s.r+","+s.g+","+s.b+")") : "";
     if (s.on) {
       const dx = s.x - ox, dy = s.y - oy;
-      el.innerHTML = '<div class="sw"' + (sw ? ' style="background:' + sw + '"' : "") + '></div><div>' +
-        key + '  <span class="coord">' + dx + ", " + dy + "</span></div>" +
-        '<span class="hexc">' + s.hex + "</span>";
+      el.innerHTML = '<div class="sw"' + (sw ? ' style="background:' + sw + '"' : "") + '></div>' +
+        '<span class="slot-key">' + key + "</span>" +
+        '<span class="coord">' + dx + ", " + dy + "</span>" +
+        '<span class="hexc">' + s.hex + "</span>" +
+        slotDeltaHtml(i);
       el.querySelector(".coord").onclick = (ev) => { ev.stopPropagation(); copyText(dx + ", " + dy); };
       el.querySelector(".hexc").onclick = (ev) => { ev.stopPropagation(); copyText(s.hex); };
       el.querySelector(".sw").onclick = (ev) => { ev.stopPropagation(); copyText(s.hex); };
     } else {
-      el.innerHTML = '<div class="sw"></div><div>' + key + "  空  Ctrl+Alt+" + key + "</div>";
+      el.innerHTML = '<div class="sw"></div><span class="slot-key">' + key + "</span>" +
+        '<span class="slot-empty">空  Ctrl+Alt+' + key + "</span>" +
+        slotDeltaHtml(i);
     }
+    bindSlotExtras(el, i);
     box.appendChild(el);
   }
 }
@@ -1470,7 +1536,13 @@ async function tick() {
   if (rev && rev !== lastRev) {
     lastRev = rev;
     await refreshShot();
-    if (expectingShot) { expectingShot = false; show("grab"); showSaveUndo(false); }
+    if (expectingShot) { expectingShot = false; show("grab"); }
+  }
+  if (typeof s.cropUndo === "number") {
+    if (s.cropUndo <= 0) showSaveUndo(false);
+    else if (!window._cropUndo) showSaveUndo(true);
+    else undoBtn.style.display = "inline-flex";
+    window._cropUndo = s.cropUndo;
   }
   renderSlots(s);
   renderDevs(s);

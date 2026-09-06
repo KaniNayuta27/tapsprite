@@ -1,9 +1,9 @@
 {
-  "versionCode": 108,
-  "versionName": "0.9.83",
-  "apk_ver": "0.9.83",
-  "exe_ver": "1.1.94",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-83.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-94.exe",
-  "notes": "全部 toast 类通知统一 2 秒自动隐藏。PC 1.1.94 / App 0.9.83（versionCode 108）"
+  "versionCode": 109,
+  "versionName": "0.9.84",
+  "apk_ver": "0.9.84",
+  "exe_ver": "1.1.95",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-84.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-95.exe",
+  "notes": "抓抓放大镜中心红框；框选松开后隐藏选区；裁剪 Undo/Save 不跨截图；取色行偏色+复选。PC 1.1.95 / App 0.9.84（versionCode 109）"
 }

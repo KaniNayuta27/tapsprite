@@ -31,7 +31,7 @@ const (
 	httpPort = 18766
 	udpPort  = 18766
 	phoneUDP = 18765
-	version  = "1.1.94"
+	version  = "1.1.95"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 	// After this silence, TCP-probe phone:18765; failure drops connected UI immediately.
@@ -469,6 +469,7 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		"newLogs":    append([]string{}, srv.logs...),
 		"logCount":   srv.logCount,
 		"shotRev":    srv.shotRev,
+		"cropUndo":   len(srv.undoStack),
 		"slots":      slots,
 		"notice":     srv.notice,
 		"noticeAt":   srv.noticeAt,
@@ -882,15 +883,15 @@ func handlePushShot(w http.ResponseWriter, r *http.Request) {
 func applyShotPNG(pngBytes []byte, ww, hh int) {
 	srv.mu.Lock()
 	defer srv.mu.Unlock()
-	if len(srv.shotPNG) > 0 {
-		srv.undoStack = append(srv.undoStack, srv.shotPNG)
-		if len(srv.undoStack) > 8 {
-			srv.undoStack = srv.undoStack[len(srv.undoStack)-8:]
-		}
-	}
+	// A new screenshot is a new base image. Crop undo must not span previous shots.
+	srv.undoStack = nil
+	setShotLocked(pngBytes, ww, hh)
+}
+
+func setShotLocked(pngBytes []byte, w, h int) {
 	srv.shotPNG = pngBytes
 	srv.shotImg = nil
-	srv.shotW, srv.shotH = ww, hh
+	srv.shotW, srv.shotH = w, h
 	srv.shotRev++
 }
 
@@ -1483,8 +1484,14 @@ func handleRotate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nw, nh := dst.Bounds().Dx(), dst.Bounds().Dy()
-	commitShot(buf.Bytes(), nw, nh)
+	replaceShot(buf.Bytes(), nw, nh)
 	writeJSON(w, map[string]any{"ok": true, "w": nw, "h": nh, "dir": dir})
+}
+
+func replaceShot(pngBytes []byte, w, h int) {
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	setShotLocked(pngBytes, w, h)
 }
 
 func commitShot(pngBytes []byte, w, h int) {
@@ -1496,10 +1503,7 @@ func commitShot(pngBytes []byte, w, h int) {
 			srv.undoStack = srv.undoStack[len(srv.undoStack)-8:]
 		}
 	}
-	srv.shotPNG = pngBytes
-	srv.shotImg = nil
-	srv.shotW, srv.shotH = w, h
-	srv.shotRev++
+	setShotLocked(pngBytes, w, h)
 }
 
 func exportSlotsLocked() []map[string]any {

@@ -76,6 +76,39 @@ func TestUILibraryToolbarToastsAndGrab(t *testing.T) {
 	}
 }
 
+func TestUIGrabColorSelUndo(t *testing.T) {
+	b, err := readWeb("ui.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+	for _, s := range []string{
+		`z.strokeRect(mid + 0.5, mid + 0.5, cell - 1, cell - 1)`,
+		`z.strokeStyle = "#ff0000"`,
+		`if (selMoved) {`,
+		`fillMeas();`,
+		`clearSel();`,
+		`slot-delta-lab`,
+		`偏色`,
+		`input.slot-delta`,
+		`input.slot-pick`,
+		`s.cropUndo`,
+		`harvestSlotExtras`,
+	} {
+		if !strings.Contains(html, s) {
+			t.Fatalf("ui.html missing %q", s)
+		}
+	}
+	for _, s := range []string{
+		`z.fillRect(58, 58, 4, 4)`,
+		`z.fillStyle = "#f33"`,
+	} {
+		if strings.Contains(html, s) {
+			t.Fatalf("ui.html must not contain %q", s)
+		}
+	}
+}
+
 func TestUIMonacoIndentAndFoldAssets(t *testing.T) {
 	b, err := readWeb("ui.html")
 	if err != nil {
