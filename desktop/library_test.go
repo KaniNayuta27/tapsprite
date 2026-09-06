@@ -53,6 +53,8 @@ func TestUILibraryToolbarToastsAndGrab(t *testing.T) {
 		`toast(n + " 已开始", "ok")`,
 		`toast(n + " 已停止", "warn")`,
 		`toast("全部脚本已停止", "danger")`,
+		`ms == null ? 2000 : ms`,
+		`bar.className = ""; }, 2000);`,
 		`cacheShotPixels`,
 		`sampleShot`,
 		`bindEdTools(window.libEd`,
@@ -64,6 +66,9 @@ func TestUILibraryToolbarToastsAndGrab(t *testing.T) {
 	for _, s := range []string{
 		`拖出选区后`,
 		`{ showSaveUndo(true); refreshShot(); }`,
+		`dur = 2500`,
+		`dur = 12000`,
+		`}, 2500);`,
 	} {
 		if strings.Contains(html, s) {
 			t.Fatalf("ui.html must not contain %q", s)

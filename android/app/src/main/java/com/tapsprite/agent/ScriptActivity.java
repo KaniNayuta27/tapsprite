@@ -206,11 +206,11 @@ public class ScriptActivity extends Activity {
     /* JADX INFO: Access modifiers changed from: private */
     public void onLoad() {
         if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, "请先允许悬浮窗", 1).show();
+            Toast.makeText(this, "请先允许悬浮窗", 0).show();
             return;
         }
         if (AppState.auto == null) {
-            Toast.makeText(this, "请先打开无障碍「触控精灵」", 1).show();
+            Toast.makeText(this, "请先打开无障碍「触控精灵」", 0).show();
             startActivity(new Intent("android.settings.ACCESSIBILITY_SETTINGS"));
             return;
         }

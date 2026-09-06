@@ -166,7 +166,7 @@
       }
       errEl.className = "err ok";
       errEl.textContent = run ? "已发送并开始运行" : "已发送到手机";
-      setTimeout(() => { errEl.textContent = ""; errEl.className = "err"; }, 1800);
+      setTimeout(() => { errEl.textContent = ""; errEl.className = "err"; }, 2000);
     }
     async function control(action) {
       await getJSON("/api/control", {

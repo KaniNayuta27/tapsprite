@@ -392,7 +392,7 @@ function toast(msg, kind) {
   el.className = kind || "warn";
   el.classList.add("on");
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => el.classList.remove("on"), 12000);
+  toast._t = setTimeout(() => el.classList.remove("on"), 2000);
 }
 function imgXY(e) {
   const r = shot.getBoundingClientRect();

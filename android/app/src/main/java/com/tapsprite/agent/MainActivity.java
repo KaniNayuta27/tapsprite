@@ -616,7 +616,7 @@ public class MainActivity extends Activity {
                                 MainActivity.this.refresh();
                             } else {
                                 MainActivity.this.startActivity(new Intent("android.settings.ACCESSIBILITY_SETTINGS"));
-                                Toast.makeText(MainActivity.this, "自动重连失败，请关掉再打开「触控精灵」", 1).show();
+                                Toast.makeText(MainActivity.this, "自动重连失败，请关掉再打开「触控精灵」", 0).show();
                             }
                         }
                     });
@@ -729,9 +729,9 @@ public class MainActivity extends Activity {
                             @Override
                             public void run() {
                                 if (ok) {
-                                    Toast.makeText(MainActivity.this, "已连上电脑 " + host, 1).show();
+                                    Toast.makeText(MainActivity.this, "已连上电脑 " + host, 0).show();
                                 } else {
-                                    Toast.makeText(MainActivity.this, "连不上 " + host + "。检查 exe/同 WiFi/防火墙", 1).show();
+                                    Toast.makeText(MainActivity.this, "连不上 " + host + "。检查 exe/同 WiFi/防火墙", 0).show();
                                 }
                                 MainActivity.this.refresh();
                             }
@@ -928,7 +928,7 @@ public class MainActivity extends Activity {
                 int readInt = ConfigApi.readInt("下拉框3", 7) + 1;
                 int i2 = readInt <= 10 ? readInt : 0;
                 ConfigApi.writeInt("下拉框3", i2);
-                Toast.makeText(MainActivity.this, "洗澡8=" + z + " 洗澡9=" + z2 + " 小号数量下拉=" + i2, 1).show();
+                Toast.makeText(MainActivity.this, "洗澡8=" + z + " 洗澡9=" + z2 + " 小号数量下拉=" + i2, 0).show();
             }
         });
         card.addView(ghostButton2);
@@ -1083,14 +1083,14 @@ public class MainActivity extends Activity {
         try {
             MediaProjectionManager mediaProjectionManager = (MediaProjectionManager) getSystemService("media_projection");
             if (mediaProjectionManager == null) {
-                Toast.makeText(this, "这台设备没有截屏接口", 1).show();
+                Toast.makeText(this, "这台设备没有截屏接口", 0).show();
             } else {
                 this.captureAsking = true;
                 startActivityForResult(mediaProjectionManager.createScreenCaptureIntent(), REQ_CAPTURE);
             }
         } catch (Exception e) {
             this.captureAsking = false;
-            Toast.makeText(this, "无法申请截屏：" + e.getMessage(), 1).show();
+            Toast.makeText(this, "无法申请截屏：" + e.getMessage(), 0).show();
         }
     }
 
@@ -1133,7 +1133,7 @@ public class MainActivity extends Activity {
         } else {
             pendingShotAfterCapture = false;
             AppState.log("未授权截屏，找色会失败");
-            Toast.makeText(this, "没有截屏权限，FindColor 会失败", 1).show();
+            Toast.makeText(this, "没有截屏权限，FindColor 会失败", 0).show();
         }
         refresh();
     }
@@ -1145,12 +1145,12 @@ public class MainActivity extends Activity {
 
     private void onLoad() {
         if (!hasOverlay()) {
-            Toast.makeText(this, "请先允许悬浮窗", 1).show();
+            Toast.makeText(this, "请先允许悬浮窗", 0).show();
             requestOverlay();
             return;
         }
         if (!isA11yEnabled() && AppState.auto == null) {
-            Toast.makeText(this, "请先打开无障碍「触控精灵」", 1).show();
+            Toast.makeText(this, "请先打开无障碍「触控精灵」", 0).show();
             startActivity(new Intent("android.settings.ACCESSIBILITY_SETTINGS"));
             return;
         }
