@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.91</title>
+<title>触控精灵 v1.1.93</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -429,7 +429,7 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.91</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.93</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -1556,55 +1556,198 @@ document.getElementById("devRef").onclick = () => {
   const DEFAULT = 'KeyPress("Home")\nDelay(1000)\nTap(167, 775)\nDelay(2000)\nKeyPress("Back")\nDelay(2000)\n';
   const cmds = [
     ["Tap","(x, y)"],["Click","(x, y)"],["Tap2","(x, y)"],["RandomTap","(x, y, r)"],
-    ["LongClick","(x, y)"],["Touch","(x, y)"],["Swipe","(x1,y1,x2,y2,ms)"],
+    ["RandomsTap","(x, y, r, n)"],["LongClick","(x, y)"],["Touch","(x, y)"],["Swipe","(x1,y1,x2,y2,ms)"],
     ["TouchDown","(x, y)"],["TouchMove","(x, y, ms)"],["TouchUp","()"],
-    ["DrawCircle","(sx,sy,cx,cy,ms)"],["KeyPress","(\"Back\")"],["InputText","(\"字\")"],
-    ["ClickText","(\"确定\")"],["GetPixelColor","(x, y)"],["FindColor","(x1,y1,x2,y2,color,sim)"],
+    ["DrawCircle","(sx,sy,cx,cy,ms)"],["MoveZoomOut","(x1,y1,x2,y2,ms)"],["MoveZoomIn","(x1,y1,x2,y2,ms)"],
+    ["KeyPress","(\"Back\")"],["InputText","(\"字\")"],
+    ["ClickText","(\"确定\")"],["GetPixelColor","(x, y)"],["GetPixelColorA11y","(x, y)"],["GetColorA11y","(x, y)"],
+    ["FindColor","(x1,y1,x2,y2,color,sim)"],
     ["FindMultiColor","(...)"],["CmpColor","(x, y, color, sim)"],["CmpColorEx","(\"x|y|c\", sim)"],
-    ["WaitColor","(x1,y1,x2,y2,color,ms)"],["KeepScreen","(true)"],["KeepCapture","(true)"],
+    ["WaitColor","(x1,y1,x2,y2,color,ms)"],["GetColorNum","(x1,y1,x2,y2,color,sim)"],
+    ["KeepScreen","(true)"],["KeepCapture","(true)"],
     ["SnapShot","()"],["FindPic","(...)"],["OcrText","(x1,y1,x2,y2)"],["ColorDiff","(a, b)"],
     ["RGB","(r, g, b)"],["TracePrint","(\"msg\")"],["print","(\"msg\")"],["Tip","(\"msg\")"],
     ["Toast","(\"msg\")"],["Delay","(ms)"],["Sleep","(ms)"],["DelayS","(sec)"],
     ["ExitScript","()"],["GetScreenX","()"],["GetScreenY","()"],["TickCount","()"],
     ["KeepAwake","(true)"],["SetScreenAlwaysOn","(true)"],["IsRoot","()"],["Vibrate","(ms)"],
     ["Rnd","()"],["Randomize","()"],["GetBattery","()"],["GetClip","()"],["SetClip","(\"字\")"],
-    ["RunApp","(\"pkg\")"],["KillApp","(\"pkg\")"],["ReadUIConfig","(key)"],["WriteUIConfig","(key,v)"],
+    ["RunApp","(\"pkg\")"],["KillApp","(\"pkg\")"],["OpenUrl","(url)"],["ReadUIConfig","(key)"],["WriteUIConfig","(key,v)"],
     ["FileRead","(\"a.txt\")"],["FileWrite","(\"a.txt\", s)"],["Left","(s, n)"],["Right","(s, n)"],
     ["Mid","(s, i, n)"],["Len","(s)"],["InStr","(s, find)"],["Replace","(s, a, b)"],
     ["Trim","(s)"],["UCase","(s)"],["LCase","(s)"],["CInt","(s)"],["CDbl","(s)"],["Int","(n)"],
     ["Now","()"],["IsNull","(v)"],["UBound","(t)"],["Cos","(n)"],["Sin","(n)"],
     ["GetDeviceID","()"],["GetColorDep","()"],["Play","(name)"],["PutAttachment","(name)"],
-    ["FW","."],["Dialog","."],["Dialog.InputBox","(prompt[, default])"],["InputBox","(prompt[, default])"],
-    ["Sys","."],["Element","."],["Image","."],["UTF8","."],
+    ["FW","."],["FW.NewFWindow","(id,x,y,w,h)"],["FW.AddTextView","(win,id,text,x,y,w,h)"],
+    ["FW.SetText","(id, text)"],["FW.SetTextColor","(id, color)"],["FW.SetTextSize","(id, size)"],
+    ["FW.SetBackColor","(id, color)"],["FW.Opacity","(id, n)"],["FW.Show","(id)"],["FW.Hide","(id)"],["FW.Close","(id)"],
+    ["Dialog","."],["Dialog.InputBox","(prompt[, default])"],["InputBox","(prompt[, default])"],
+    ["Sys","."],["Sys.AppIsFront","(pkg)"],["Element","."],["Element.GetAll","()"],["Element.Click","(text)"],
+    ["Image","."],["Image.OcrText","(x1,y1,x2,y2)"],["UTF8","."],["UTF8.InStr","(start, s, find)"],
+    ["Url","."],["Url.HttpGet","(url)"],["Url.HttpPost","(url, body)"],["Url.Download","(url, path)"],
+    ["Dir","."],["dir","."],["dir.Exist","(path)"],["dir.Create","(path)"],["dir.Delete","(path)"],
     ["Thread","."],["Thread.Start","(fn, ...)"],["Thread.Stop","(id)"],
-    ["Thread.SetShareVar","(name, v)"],["Thread.GetShareVar","(name)"]
+    ["Thread.SetShareVar","(name, v)"],["Thread.GetShareVar","(name)"],
+    ["SetShareVar","(name, v)"],["GetShareVar","(name)"]
   ];
   const CMD = {};
   cmds.forEach((c) => { CMD[c[0]] = c[1]; });
   const DOCS = {
+    if: ["if 条件 then ... elseif 条件 then ... else ... end", "条件分支。条件为真执行 then 块；否则依次尝试 elseif；都假则走 else。else / elseif 可省略。", "if x > 0 then\n    Tap(x, y)\nelseif x == 0 then\n    Delay(100)\nelse\n    ExitScript()\nend"],
+    then: ["if 条件 then ... end", "条件成立后执行的语句块起点，必须与 if / elseif 搭配，块以 end 结束。", "if CmpColor(100, 200, \"CC7B00\", 0) then Tip(\"对\") end"],
+    elseif: ["elseif 条件 then ...", "前一个 if / elseif 不成立时再判断。写在 if 与 end 之间。", "if n == 1 then\n    Tip(\"一\")\nelseif n == 2 then\n    Tip(\"二\")\nend"],
+    else: ["else ... end", "前面条件都不成立时执行。写在 if 块内、end 之前。", "if ok then\n    Tap(x, y)\nelse\n    TracePrint(\"miss\")\nend"],
+    end: ["end", "结束 if / for / while / function / do 语句块。必须与开头配对。", "if x > 0 then\n    Tap(x, y)\nend"],
+    for: ["for i = 初值, 终值 [, 步长] do ... end\nfor k, v in pairs(t) do ... end", "数值 for 按步长循环（步长可省略，默认 1，可为负）。泛型 for 用 pairs / ipairs 遍历表。", "for i = 1, 3 do\n    Tap(540, 1600)\n    Delay(200)\nend\nfor k, v in pairs(t) do TracePrint(k) end"],
+    in: ["for k, v in 迭代器 do ... end", "泛型 for 的迭代器位置，常用 pairs(t) 或 ipairs(t)。", "for i, e in ipairs(Element.GetAll()) do\n    TracePrint(e.text)\nend"],
+    while: ["while 条件 do ... end", "条件为真时重复执行。一开始为假则一次也不跑。", "while not CmpColor(10, 10, \"FFFFFF\", 0) do\n    Delay(200)\nend"],
+    repeat: ["repeat ... until 条件", "至少执行一次，直到条件为真才结束。", "repeat\n    Delay(100)\nuntil TickCount() - t0 > 3000"],
+    until: ["until 条件", "结束 repeat 循环。条件为真时跳出。", "repeat\n    Delay(50)\nuntil WaitColor(0, 0, 100, 100, \"FF0000\", 0)"],
+    do: ["do ... end", "独立语句块，可限制 local 变量作用域。for / while 的 do 则开启循环体。", "do\n    local t = TickCount()\n    Delay(100)\n    TracePrint(TickCount() - t)\nend"],
+    function: ["function 名(参数) ... end", "定义函数。也可用 名 = function(...) ... end。local function 名() 定义局部函数。", "function tapMid()\n    Tap(GetScreenX() / 2, GetScreenY() / 2)\nend"],
+    local: ["local 名 [= 值]", "声明局部变量，只在当前块内可见。local function 名() 定义局部函数。", "local x, y = FindColor(0, 0, 1080, 2400, \"CC7B00\", 0, 0)"],
+    return: ["return [值, ...]", "从函数返回。可返回多个值；无值则返回 nil。", "function add(a, b)\n    return a + b\nend"],
+    break: ["break", "跳出最内层循环（for / while / repeat）。不能用来跳出 if。", "for i = 1, 10 do\n    if i > 3 then break end\n    TracePrint(i)\nend"],
+    and: ["a and b", "a 为假（nil / false）则结果是 a，否则是 b。可短路。", "if x and x > 0 then Tap(x, y) end"],
+    or: ["a or b", "a 为真则结果是 a，否则是 b。常用来写默认值。", "local n = tonumber(v) or 0"],
+    not: ["not a", "a 为 nil / false 时为 true，否则为 false。", "if not ok then ExitScript() end"],
+    pairs: ["for k, v in pairs(t) do ... end", "遍历表的所有键值（含字符串键）。顺序不保证。", "for k, v in pairs(t) do TracePrint(k .. \"=\" .. tostring(v)) end"],
+    ipairs: ["for i, v in ipairs(t) do ... end", "按 1,2,3… 遍历数组部分，遇到第一个空洞停止。", "for i, e in ipairs(all) do TracePrint(e.text) end"],
+    table: ["table.insert / table.remove / table.concat / table.sort", "Lua 表工具。#t 取数组长度。用 {} 创建表。", "local t = {}\ntable.insert(t, \"a\")\nTracePrint(table.concat(t, \",\"))"],
+    "table.insert": ["table.insert(t, [pos,] value)", "向数组插入元素。省略 pos 则追加到末尾。", "table.insert(t, x)"],
+    "table.remove": ["table.remove(t [, pos])", "删除数组元素并返回它。省略 pos 则删最后一个。", "table.remove(t)"],
+    "table.concat": ["table.concat(t [, sep])", "把数组元素拼成字符串，sep 默认空。", "table.concat(t, \",\")"],
+    string: ["string.sub / string.find / string.format / string.gsub", "字符串函数。连接用 .. 。下标从 1 计。", "local s = string.sub(name, 1, 3)\nTracePrint(\"x=\" .. x)"],
+    "string.sub": ["string.sub(s, i [, j])", "截取从 i 到 j 的子串，下标从 1 计。负下标从末尾算。", "string.sub(\"abcdef\", 2, 4)"],
+    "string.find": ["string.find(s, pattern [, init])", "查找 pattern，返回起止下标；找不到返回 nil。", "if string.find(s, \"确定\") then ClickText(\"确定\") end"],
+    "string.format": ["string.format(fmt, ...)", "按格式拼字符串，类似 C printf。", "string.format(\"%d, %d\", x, y)"],
+    tonumber: ["tonumber(s [, base])", "把字符串转成数字，失败返回 nil。常与 or 写默认值。", "local n = tonumber(v) or 0"],
+    tostring: ["tostring(v)", "转成字符串。数字、布尔、nil 都能转。", "TracePrint(\"x=\" .. tostring(x))"],
+    type: ["type(v)", "返回类型名：\"nil\" \"number\" \"string\" \"boolean\" \"table\" \"function\"。", "if type(v) == \"string\" then Tip(v) end"],
+    math: ["math.floor / math.random / math.abs / math.max", "数学库。整除用 math.floor(n / 2)，不要写 //。", "local n = math.floor(Rnd() * 10)"],
+    "math.floor": ["math.floor(n)", "向下取整。", "math.floor(3.9)"],
+    "math.random": ["math.random([m [, n]])", "随机数。无参 0~1；math.random(n) 为 1~n。", "math.random(1, 100)"],
     Tap: ["Tap(x, y)", "在屏幕坐标点一下。", "Tap(167, 775)"],
+    Click: ["Click(x, y)", "同 Tap，在屏幕坐标点一下。", "Click(167, 775)"],
     Tap2: ["Tap2(x, y)", "同一点连点两次。", "Tap2(540, 1600)"],
-    Delay: ["Delay(ms)", "等待毫秒。", "Delay(1000)"],
-    KeyPress: ["KeyPress(\"Back\")", "系统键：Home / Back / Recents / Power 等。", "KeyPress(\"Home\")"],
-    FindColor: ["FindColor(x1, y1, x2, y2, color, sim, dir)", "矩形内找色，返回 x, y；失败 -1, -1。", "local x, y = FindColor(0, 0, 1080, 2400, \"CC7B00\", 0, 0)"],
-    FindMultiColor: ["FindMultiColor(...)", "多点找色。", "local x, y = FindMultiColor(0,0,1080,2400,\"CC7B00\",\"10|0|FFFFFF\",0,0)"],
+    RandomTap: ["RandomTap(x, y, r)", "在 (x,y) 为圆心、r 为半径的圆内随机点一下。r 默认 12。", "RandomTap(540, 1600, 30)"],
+    RandomsTap: ["RandomsTap(x, y, r, n)", "带抖动的随机点击：半径 r 内取点。n 为次数，默认 1。", "RandomsTap(540, 1600, 20, 3)"],
+    LongClick: ["LongClick(x, y)", "长按该坐标。", "LongClick(540, 1200)"],
+    Touch: ["Touch(x, y)", "同 LongClick，长按该坐标。", "Touch(540, 1200)"],
+    Swipe: ["Swipe(x1, y1, x2, y2, ms)", "从起点滑到终点。ms 是时长，默认 300。", "Swipe(800, 1200, 200, 1200, 250)"],
+    TouchDown: ["TouchDown(x, y)", "按下，不抬起。可与 TouchMove / TouchUp 拼路径。", "TouchDown(200, 800)"],
+    TouchMove: ["TouchMove(x, y, ms)", "按住移动到该点。ms 为移动时长。", "TouchMove(600, 800, 200)"],
+    TouchUp: ["TouchUp()", "抬起手指。", "TouchUp()"],
+    DrawCircle: ["DrawCircle(sx, sy, cx, cy, ms, loops)", "从起点绕圆心滑动，适合转圈。loops 为圈数。", "DrawCircle(400, 1200, 540, 1200, 800, 1)"],
+    MoveZoomOut: ["MoveZoomOut(x1, y1, x2, y2, ms)", "双指捏合缩小：两指从两点滑向中点。需无障碍。", "MoveZoomOut(200, 800, 880, 1600, 400)"],
+    MoveZoomIn: ["MoveZoomIn(x1, y1, x2, y2, ms)", "双指放大：两指从中点滑向两点。需无障碍。", "MoveZoomIn(200, 800, 880, 1600, 400)"],
+    KeyPress: ["KeyPress(\"Back\")", "系统键：Home / Back / Recents / Notifications / Power / VolumeUp / VolumeDown / Screenshot。", "KeyPress(\"Home\")"],
+    InputText: ["InputText(\"字\")", "往当前焦点输入框填字，依赖无障碍。", "InputText(\"hello\")"],
+    ClickText: ["ClickText(\"确定\")", "按无障碍节点上的文字点击。", "ClickText(\"确定\")"],
+    GetPixelColor: ["GetPixelColor(x, y)", "取该点 6 位十六进制颜色。需要截屏权限。", "local c = GetPixelColor(100, 200)"],
+    GetPixelColorA11y: ["GetPixelColorA11y(x, y)", "经无障碍截屏取色，返回 6 位十六进制。需安卓 11+ 无障碍。失败返回 \"\"。", "local c = GetPixelColorA11y(100, 200)"],
+    GetColorA11y: ["GetColorA11y(x, y)", "同 GetPixelColorA11y。", "local c = GetColorA11y(100, 200)"],
+    FindColor: ["FindColor(x1, y1, x2, y2, color, sim, dir)", "矩形内找色，返回 x, y；失败 -1, -1。sim：0 或 1 精确；0.9 约 10%。dir：0 左上→右下。", "local x, y = FindColor(0, 0, 1080, 2400, \"CC7B00\", 0, 0)"],
+    FindMultiColor: ["FindMultiColor(x1,y1,x2,y2,first,offset,sim,dir)", "先找第一色，再按偏移核对其他颜色。offset：dx|dy|color,dx|dy|color。", "local x, y = FindMultiColor(0,0,1080,2400,\"CC7B00\",\"10|0|FFFFFF\",0,0)"],
     CmpColor: ["CmpColor(x, y, color, sim)", "判断该点颜色是否匹配。", "if CmpColor(100, 200, \"CC7B00\", 0) then Tip(\"对\") end"],
-    GetPixelColor: ["GetPixelColor(x, y)", "取该点 6 位十六进制颜色。", "local c = GetPixelColor(100, 200)"],
-    Swipe: ["Swipe(x1, y1, x2, y2, ms)", "从起点滑到终点。", "Swipe(800, 1200, 200, 1200, 250)"],
-    TracePrint: ["TracePrint(\"msg\")", "打到电脑日志。", "TracePrint(\"x=\" .. x)"],
-    KeepScreen: ["KeepScreen(true/false)", "冻结画面再连续找色。", "KeepScreen(true)"],
-    OcrText: ["OcrText(x1, y1, x2, y2)", "识别矩形内文字。", "local s = OcrText(80, 200, 1000, 400)"],
-    ExitScript: ["ExitScript()", "结束脚本。", "ExitScript()"],
-    TickCount: ["TickCount()", "开机起毫秒。", "local t0 = TickCount()"],
+    CmpColorEx: ["CmpColorEx(\"x|y|color,...\", sim)", "多点同时比色，全部满足才为真。", "CmpColorEx(\"100|200|CC7B00,120|200|FFFFFF\", 0)"],
+    WaitColor: ["WaitColor(x1,y1,x2,y2,color,timeoutMs,sim)", "等到区域内出现该色，或超时返回 false。", "if WaitColor(0,0,1080,400,\"FF0000\",5000,0) then Tip(\"出现了\") end"],
+    GetColorNum: ["GetColorNum(x1,y1,x2,y2,color,sim)", "统计矩形内匹配颜色的像素个数。区域全 0 表示全屏。", "local n = GetColorNum(0,0,1080,400,\"FFFFFF-101010\", 0.9)"],
+    KeepScreen: ["KeepScreen(true/false)", "冻结画面再连续找色，用完 KeepScreen(false)。", "KeepScreen(true)"],
+    KeepCapture: ["KeepCapture(true/false)", "同 KeepScreen。", "KeepCapture(true)"],
+    SnapShot: ["SnapShot()", "保存当前屏幕 PNG，返回路径。", "local path = SnapShot()"],
+    FindPic: ["FindPic(x1,y1,x2,y2,pic,sim)", "区域模板找图。成功返回 x,y，失败 -1,-1。sim 默认 0.75。多图用 | 分隔。", "local x, y = FindPic(0,0,0,0, \"btn.png\", 0.8)"],
+    OcrText: ["OcrText(x1, y1, x2, y2)", "识别矩形内文字，返回字符串。", "local s = OcrText(80, 200, 1000, 400)"],
+    ColorDiff: ["ColorDiff(a, b)", "两个颜色最大通道差。", "TracePrint(ColorDiff(\"FF0000\", \"FE0101\"))"],
+    RGB: ["RGB(r, g, b)", "0-255 合成十六进制颜色字符串。", "local c = RGB(204, 123, 0)"],
+    TracePrint: ["TracePrint(\"msg\")", "打到电脑客户端日志。", "TracePrint(\"x=\" .. x)"],
+    print: ["print(\"msg\")", "同 TracePrint，打到电脑日志。", "print(\"ok\")"],
+    Tip: ["Tip(\"msg\")", "手机底部最多 5 行滚动提示，同时打日志。不会弹窗。", "Tip(\"脚本结束\")"],
+    Toast: ["Toast(\"msg\")", "系统 Toast 短提示。", "Toast(\"ok\")"],
+    Delay: ["Delay(ms)", "等待毫秒，可被停止打断。", "Delay(1000)"],
+    Sleep: ["Sleep(ms)", "同 Delay，等待毫秒。", "Sleep(1000)"],
+    DelayS: ["DelayS(sec)", "等待秒。", "DelayS(1)"],
+    ExitScript: ["ExitScript()", "立刻结束当前脚本。", "ExitScript()"],
+    GetScreenX: ["GetScreenX()", "屏幕宽度像素。", "local w = GetScreenX()"],
+    GetScreenY: ["GetScreenY()", "屏幕高度像素。", "local h = GetScreenY()"],
+    TickCount: ["TickCount()", "开机以来的毫秒数，用来计时。", "local t0 = TickCount()"],
+    KeepAwake: ["KeepAwake(true/false)", "尽量保持亮屏。不能 100% 防系统锁屏。", "KeepAwake(true)"],
+    SetScreenAlwaysOn: ["SetScreenAlwaysOn(true/false)", "同 KeepAwake。", "SetScreenAlwaysOn(true)"],
+    IsRoot: ["IsRoot()", "这里表示是否模拟器，不是真 root。", "if IsRoot() then TracePrint(\"模拟器\") end"],
+    Vibrate: ["Vibrate(ms)", "震动。", "Vibrate(200)"],
+    Rnd: ["Rnd()", "0~1 随机数。也可用 math.random()。", "Delay(300 + math.floor(Rnd() * 200))"],
+    Randomize: ["Randomize()", "用当前时间给随机数播种。", "Randomize()"],
+    GetBattery: ["GetBattery()", "电量 0-100。", "TracePrint(GetBattery())"],
+    GetClip: ["GetClip()", "读剪贴板。", "TracePrint(GetClip())"],
+    SetClip: ["SetClip(\"字\")", "写剪贴板。", "SetClip(\"copied\")"],
+    RunApp: ["RunApp(\"pkg\")", "按包名启动应用。", "RunApp(\"com.tencent.mobileqq\")"],
+    KillApp: ["KillApp(\"pkg\")", "按包名结束应用。", "KillApp(\"com.tencent.mobileqq\")"],
+    OpenUrl: ["OpenUrl(url)", "用系统浏览器打开链接。无协议时自动加 https://。", "OpenUrl(\"https://example.com\")"],
+    ReadUIConfig: ["ReadUIConfig(key)", "读本地配置。悬浮窗开关也走这里。", "local v = ReadUIConfig(\"多选框1\")"],
+    WriteUIConfig: ["WriteUIConfig(key, value)", "写本地配置。", "WriteUIConfig(\"多选框1\", \"true\")"],
+    FileRead: ["FileRead(\"a.txt\")", "应用私有目录读文本。", "TracePrint(FileRead(\"log.txt\"))"],
+    FileWrite: ["FileWrite(\"a.txt\", s)", "应用私有目录写文本。", "FileWrite(\"log.txt\", \"ok\")"],
+    Left: ["Left(s, n)", "取字符串左边 n 个字符。也可用 string.sub。", "Left(\"abcdef\", 2)"],
+    Right: ["Right(s, n)", "取字符串右边 n 个字符。", "Right(\"abcdef\", 2)"],
+    Mid: ["Mid(s, start, n)", "从 start（从 1 计）截取 n 个字符。", "Mid(\"abcdef\", 2, 3)"],
+    Len: ["Len(s)", "字符串长度。", "Len(\"hello\")"],
+    InStr: ["InStr(s, find)", "查找子串，返回 1 起始下标；找不到 0。", "if InStr(s, \"确定\") > 0 then ClickText(\"确定\") end"],
+    Replace: ["Replace(s, a, b)", "把 s 里的 a 换成 b。", "Replace(raw, \"〔\", \"\")"],
+    Trim: ["Trim(s)", "去掉首尾空白。", "Trim(\"  hi  \")"],
+    UCase: ["UCase(s)", "转大写。", "UCase(\"ab\")"],
+    LCase: ["LCase(s)", "转小写。", "LCase(\"AB\")"],
+    CInt: ["CInt(s)", "转整数。", "local n = CInt(\"12\")"],
+    CDbl: ["CDbl(s)", "转小数。", "local n = CDbl(\"1.5\")"],
+    Int: ["Int(n)", "取整。", "Int(3.9)"],
+    Now: ["Now()", "当前时间字符串。", "local s = Now()"],
+    IsNull: ["IsNull(v)", "是否为 nil / 空。", "if IsNull(v) then return end"],
+    UBound: ["UBound(t)", "表的数组长度（同 #t）。", "for i = 1, UBound(t) do TracePrint(t[i]) end"],
+    Cos: ["Cos(n)", "余弦。", "Cos(0)"],
+    Sin: ["Sin(n)", "正弦。", "Sin(0)"],
+    GetDeviceID: ["GetDeviceID()", "设备标识。", "TracePrint(GetDeviceID())"],
+    GetColorDep: ["GetColorDep()", "色深，兼容旧脚本。", "TracePrint(GetColorDep())"],
+    Play: ["Play(name)", "播放附件 / 脚本资源。", "Play(\"click\")"],
+    PutAttachment: ["PutAttachment(name)", "把附件释放到私有目录，返回路径。", "PutAttachment(\"btn.png\")"],
+    FW: ["FW.NewFWindow / AddTextView / SetText / Show", "自定义浮窗。日常提示直接 Tip(\"...\") 即可。", "FW.NewFWindow(\"提示窗\", 24, 400, 700, 180)\nFW.AddTextView(\"提示窗\", \"提示文字\", \"hello\", 0, 0, 700, 180)\nFW.SetText(\"提示文字\", \"一行\")\nFW.Show(\"提示窗\")"],
+    "FW.NewFWindow": ["FW.NewFWindow(id, x, y, w, h)", "创建浮窗。", "FW.NewFWindow(\"提示窗\", 24, 400, 700, 180)"],
+    "FW.AddTextView": ["FW.AddTextView(win, id, text, x, y, w, h)", "往浮窗加文本控件。", "FW.AddTextView(\"提示窗\", \"提示文字\", \"hello\", 0, 0, 700, 180)"],
+    "FW.SetText": ["FW.SetText(id, text)", "改文本控件内容。", "FW.SetText(\"提示文字\", \"一行\")"],
+    "FW.SetTextColor": ["FW.SetTextColor(id, color)", "改文本颜色。", "FW.SetTextColor(\"提示文字\", \"FFFFFF\")"],
+    "FW.SetTextSize": ["FW.SetTextSize(id, size)", "改字号。", "FW.SetTextSize(\"提示文字\", 16)"],
+    "FW.SetBackColor": ["FW.SetBackColor(id, color)", "改浮窗背景色。", "FW.SetBackColor(\"提示窗\", \"000000\")"],
+    "FW.Opacity": ["FW.Opacity(id, n)", "浮窗不透明度 0-255。", "FW.Opacity(\"提示窗\", 200)"],
+    "FW.Show": ["FW.Show(id)", "显示浮窗。", "FW.Show(\"提示窗\")"],
+    "FW.Hide": ["FW.Hide(id)", "隐藏浮窗。", "FW.Hide(\"提示窗\")"],
+    "FW.Close": ["FW.Close(id)", "关闭并销毁浮窗。", "FW.Close(\"提示窗\")"],
     Dialog: ["Dialog.InputBox(prompt[, default])", "弹出输入框，阻塞脚本线程直到确定或取消。取消/空返回 \"\"。无悬浮窗时回退到 App 对话框。", "local v = Dialog.InputBox(\"1：鼓励  3：不鼓励\")\nlearning = tonumber(v) or 3"],
     "Dialog.InputBox": ["Dialog.InputBox(prompt[, default])", "弹出输入框，阻塞脚本线程直到确定或取消。取消/空返回 \"\"。无悬浮窗时回退到 App 对话框。", "local v = Dialog.InputBox(\"1：鼓励  3：不鼓励\")\nlearning = tonumber(v) or 3"],
     InputBox: ["Dialog.InputBox(prompt[, default])", "弹出输入框，阻塞脚本线程直到确定或取消。取消/空返回 \"\"。无悬浮窗时回退到 App 对话框。", "local v = Dialog.InputBox(\"1：鼓励  3：不鼓励\")\nlearning = tonumber(v) or 3"],
+    Sys: ["Sys.AppIsFront(pkg)", "判断包名是否在前台。", "if Sys.AppIsFront(\"com.tencent.mobileqq\") then Tip(\"在\") end"],
+    "Sys.AppIsFront": ["Sys.AppIsFront(pkg)", "包名是否在前台，返回 true / false。", "Sys.AppIsFront(\"com.tencent.mobileqq\")"],
+    Element: ["Element.Click(text) / Element.GetAll()", "无障碍元素。Click 按文字/描述点击。GetAll 返回表：id/text/desc/cls/clickable/bounds。", "Element.Click(\"确定\")\nlocal all = Element.GetAll()"],
+    "Element.GetAll": ["Element.GetAll()", "返回无障碍节点表。每项含 text/desc/id/cls/clickable/bounds/boundsStr。", "local all = Element.GetAll()\nfor i = 1, UBound(all) do TracePrint(all[i].text) end"],
+    "Element.Click": ["Element.Click(text)", "按文字/描述点击节点，同 ClickText。", "Element.Click(\"确定\")"],
+    Image: ["Image.OcrText(x1, y1, x2, y2)", "识别矩形内文字，同 OcrText。", "local s = Image.OcrText(80, 200, 1000, 400)"],
+    "Image.OcrText": ["Image.OcrText(x1, y1, x2, y2)", "识别矩形内文字，返回字符串。同 OcrText。", "local s = Image.OcrText(80, 200, 1000, 400)"],
+    UTF8: ["UTF8.InStr(start, s, find)", "从 start（从 1 计）查找子串，返回 1 起始下标；找不到 0。", "if UTF8.InStr(1, text, \"败\") > 0 then Tip(\"失败\") end"],
+    "UTF8.InStr": ["UTF8.InStr(start, s, find)", "从 start（从 1 计）查找子串，返回 1 起始下标；找不到 0。", "if UTF8.InStr(1, text, \"败\") > 0 then Tip(\"失败\") end"],
+    Url: ["Url.HttpGet / HttpPost / Download", "同步 HTTP。超时约 15 秒。失败时 Get/Post 返回空串，Download 返回 false。", "local s = Url.HttpGet(\"https://httpbin.org/get\")"],
+    "Url.HttpGet": ["Url.HttpGet(url)", "同步 GET，返回正文；失败空串。", "local s = Url.HttpGet(\"https://example.com\")"],
+    "Url.HttpPost": ["Url.HttpPost(url, body)", "同步 POST，返回正文；失败空串。", "Url.HttpPost(\"https://example.com\", \"a=1\")"],
+    "Url.Download": ["Url.Download(url, path)", "下载到应用私有目录相对路径。成功 true。", "Url.Download(\"https://example.com/a.png\", \"a.png\")"],
+    Dir: ["dir.Exist / Create / Delete", "应用私有目录下的相对路径。Delete 会递归删。禁止 .. 穿越。", "dir.Create(\"shots\")"],
+    dir: ["dir.Exist / Create / Delete", "应用私有目录下的相对路径。Delete 会递归删。禁止 .. 穿越。", "dir.Create(\"shots\")"],
+    "dir.Exist": ["dir.Exist(path)", "相对路径是否存在。", "if dir.Exist(\"shots\") then TracePrint(\"ok\") end"],
+    "dir.Create": ["dir.Create(path)", "创建相对目录。", "dir.Create(\"shots\")"],
+    "dir.Delete": ["dir.Delete(path)", "递归删除相对路径。", "dir.Delete(\"shots\")"],
     Thread: ["Thread.Start(fn, ...)", "真并行后台线程，返回 id。子线程独立 Lua 环境，普通全局不共享；用 SetShareVar/GetShareVar 传 number/string/bool/nil。主脚本停止时子线程一并结束。", "Thread.SetShareVar(\"aa\", 0)\nlocal id = Thread.Start(worker, \"你\", \"好\")\nThread.Stop(id)"],
     "Thread.Start": ["Thread.Start(fn|name, ...)", "真并行：独立 LuaJ 环境 + Java 线程。立刻返回 id。函数写在同一脚本，Start 放循环外。子线程 TracePrint 进同一日志。", "local id = Thread.Start(test_thread, \"你\", \"好\")"],
     "Thread.Stop": ["Thread.Stop(id)", "结束 Thread.Start 返回的线程。", "Thread.Stop(id)"],
     "Thread.SetShareVar": ["Thread.SetShareVar(name, value)", "线程间共享变量。value 仅 number/string/bool/nil；nil 删除。普通 Lua 全局不共享。", "Thread.SetShareVar(\"aa\", 1)"],
-    "Thread.GetShareVar": ["Thread.GetShareVar(name)", "读取 SetShareVar 的值，没有则 nil。", "local aa = Thread.GetShareVar(\"aa\") or 0"]
+    "Thread.GetShareVar": ["Thread.GetShareVar(name)", "读取 SetShareVar 的值，没有则 nil。", "local aa = Thread.GetShareVar(\"aa\") or 0"],
+    SetShareVar: ["Thread.SetShareVar(name, value)", "线程间共享变量。请写 Thread.SetShareVar。value 仅 number/string/bool/nil。", "Thread.SetShareVar(\"aa\", 1)"],
+    GetShareVar: ["Thread.GetShareVar(name)", "读取共享变量。请写 Thread.GetShareVar。没有则 nil。", "local aa = Thread.GetShareVar(\"aa\") or 0"]
   };
+  const LUA_INDENT = "    ";
   function indentLua(src) {
     const lines = src.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
     let d = 0;
@@ -1618,7 +1761,7 @@ document.getElementById("devRef").onclick = () => {
       const code = t.replace(/--.*$/, "").trim();
       let dd = d;
       if (/^(end|until|else|elseif)\b/.test(code)) dd = Math.max(0, d - 1);
-      out.push("  ".repeat(dd) + t);
+      out.push(LUA_INDENT.repeat(dd) + t);
       d = dd;
       if (/^(else|elseif)\b/.test(code)) d++;
       else if (/\bfunction\b/.test(code) && !/\bend\s*$/.test(code)) d++;
@@ -1742,7 +1885,7 @@ document.getElementById("devRef").onclick = () => {
     const spaced = spaceLine(line);
     const t = spaced.trim();
     const kind = blockKind(t);
-    const mid = indent + "  ";
+    const mid = indent + LUA_INDENT;
     let insert = spaced + "\n" + indent;
     let cursorLine = pos.lineNumber + 1;
     let cursorCol = indent.length + 1;
@@ -1876,19 +2019,55 @@ document.getElementById("devRef").onclick = () => {
         return { suggestions };
       }
     });
+    function luaSymbolAt(model, position) {
+      const w = model.getWordAtPosition(position);
+      if (!w) return null;
+      const line = model.getLineContent(position.lineNumber);
+      const before = line.slice(0, w.startColumn - 1);
+      const left = before.match(/([A-Za-z_][A-Za-z0-9_]*)\s*\.\s*$/);
+      if (left) {
+        const dotted = left[1] + "." + w.word;
+        if (hoverDoc(dotted)) {
+          return { word: dotted, startColumn: w.startColumn - left[0].length, endColumn: w.endColumn };
+        }
+      }
+      const after = line.slice(w.endColumn - 1);
+      const right = after.match(/^\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)/);
+      if (right) {
+        const dotted = w.word + "." + right[1];
+        if (hoverDoc(dotted)) {
+          return { word: dotted, startColumn: w.startColumn, endColumn: w.endColumn + right[0].length };
+        }
+      }
+      return { word: w.word, startColumn: w.startColumn, endColumn: w.endColumn };
+    }
+    function hoverDoc(word) {
+      if (!word) return null;
+      if (DOCS[word]) return DOCS[word];
+      if (CMD[word]) return [word + CMD[word], "触控精灵命令。", word + CMD[word]];
+      const low = word.toLowerCase();
+      for (const k in DOCS) {
+        if (k.toLowerCase() === low) return DOCS[k];
+      }
+      for (const k in CMD) {
+        if (k.toLowerCase() === low) return [k + CMD[k], "触控精灵命令。", k + CMD[k]];
+      }
+      return null;
+    }
     monaco.languages.registerHoverProvider("lua", {
       provideHover: function (model, position) {
-        const w = model.getWordAtPosition(position);
+        const w = luaSymbolAt(model, position);
         if (!w) return null;
-        const d = DOCS[w.word] || (CMD[w.word] ? [w.word + CMD[w.word], "触控精灵命令。", w.word + CMD[w.word]] : null);
+        const d = hoverDoc(w.word);
         if (!d) return null;
+        const contents = [
+          { value: "语法: " + d[0] },
+          { value: "解释: " + d[1] }
+        ];
+        if (d[2]) contents.push({ value: "```lua\n" + d[2] + "\n```" });
         return {
           range: new monaco.Range(position.lineNumber, w.startColumn, position.lineNumber, w.endColumn),
-          contents: [
-            { value: "```lua\n" + d[0] + "\n```" },
-            { value: d[1] },
-            { value: "```lua\n" + (d[2] || "") + "\n```" }
-          ]
+          contents
         };
       }
     });
@@ -1908,7 +2087,7 @@ document.getElementById("devRef").onclick = () => {
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       automaticLayout: true,
-      tabSize: 2,
+      tabSize: 4,
       insertSpaces: true,
       detectIndentation: false,
       wordBasedSuggestions: "off",
@@ -1942,7 +2121,7 @@ document.getElementById("devRef").onclick = () => {
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
         automaticLayout: true,
-        tabSize: 2,
+        tabSize: 4,
         insertSpaces: true,
         detectIndentation: false,
         wordBasedSuggestions: "off",
@@ -1973,14 +2152,18 @@ document.getElementById("devRef").onclick = () => {
         if (c) c.acceptSelectedSuggestion(false, false);
       }
     });
+    function bindSmartEnter(target) {
+      target.onKeyDown(function (e) {
+        if (e.keyCode === monaco.KeyCode.Enter && !e.shiftKey && !e.altKey) {
+          const suggest = target.getContribution("editor.contrib.suggestController");
+          if (suggest && suggest.model && suggest.model.state) return;
+          if (smartEnter(target)) e.preventDefault();
+        }
+      });
+    }
     ed.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, function () {});
-    ed.onKeyDown(function (e) {
-      if (e.keyCode === monaco.KeyCode.Enter && !e.shiftKey && !e.altKey) {
-        const suggest = ed.getContribution("editor.contrib.suggestController");
-        if (suggest && suggest.model && suggest.model.state) return;
-        if (smartEnter(ed)) e.preventDefault();
-      }
-    });
+    bindSmartEnter(ed);
+    if (window.libEd) bindSmartEnter(window.libEd);
     function bindEdTools(target, ids) {
       function lineRange() {
         const s = target.getSelection();

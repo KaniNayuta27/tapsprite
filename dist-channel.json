@@ -1,9 +1,9 @@
 {
-  "versionCode": 106,
-  "versionName": "0.9.81",
-  "apk_ver": "0.9.81",
-  "exe_ver": "1.1.92",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-81.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-92.exe",
-  "notes": "抓抓手机→电脑改为 TSB1 二进制帧（rawz 无损，不再 Base64）；投影无帧则失败、不回退 screencap。PC 1.1.92 / App 0.9.81（versionCode 106）"
+  "versionCode": 107,
+  "versionName": "0.9.82",
+  "apk_ver": "0.9.82",
+  "exe_ver": "1.1.93",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-82.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-93.exe",
+  "notes": "控制台/脚本库 Lua 悬停（语法/解释）；缩进 4 空格；刷新按钮写设备数日志。PC 1.1.93 / App 0.9.82（versionCode 107）"
 }

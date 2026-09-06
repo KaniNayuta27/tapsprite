@@ -31,7 +31,7 @@ const (
 	httpPort = 18766
 	udpPort  = 18766
 	phoneUDP = 18765
-	version  = "1.1.92"
+	version  = "1.1.93"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 	// After this silence, TCP-probe phone:18765; failure drops connected UI immediately.
@@ -1049,7 +1049,17 @@ func rawzToPNG(data []byte, w, h int) ([]byte, error) {
 
 func handleRefresh(w http.ResponseWriter, r *http.Request) {
 	probeHostsTS(knownProbeHosts())
-	writeJSON(w, map[string]any{"ok": true})
+	srv.mu.Lock()
+	syncLiveDevicesLocked(time.Now())
+	n := 0
+	for _, d := range srv.devices {
+		if deviceLiveLocked(d) {
+			n++
+		}
+	}
+	srv.mu.Unlock()
+	addLog(fmt.Sprintf("已刷新，当前设备 %d 台", n))
+	writeJSON(w, map[string]any{"ok": true, "count": n})
 }
 
 func parseRejoinHosts(args []string) []string {

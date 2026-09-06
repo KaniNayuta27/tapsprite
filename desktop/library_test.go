@@ -313,6 +313,39 @@ func TestLibraryLearnLua(t *testing.T) {
 	}
 }
 
+func TestUILuaHoverAndFourSpaceIndent(t *testing.T) {
+	b, err := readWeb("ui.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	html := string(b)
+	if strings.Contains(html, "tabSize: 2") {
+		t.Fatal("monaco tabSize must be 4, not 2")
+	}
+	for _, s := range []string{
+		`tabSize: 4`,
+		`insertSpaces: true`,
+		`detectIndentation: false`,
+		`const LUA_INDENT = "    "`,
+		`LUA_INDENT.repeat(dd)`,
+		`indent + LUA_INDENT`,
+		`bindSmartEnter(window.libEd)`,
+		`{ value: "语法: " + d[0] }`,
+		`{ value: "解释: " + d[1] }`,
+		`if: ["if 条件 then ... elseif 条件 then ... else ... end"`,
+		`"Thread.Start": ["Thread.Start(fn|name, ...)`,
+		`"Thread.SetShareVar": ["Thread.SetShareVar(name, value)"`,
+		`"Image.OcrText": ["Image.OcrText(x1, y1, x2, y2)"`,
+		`["DrawCircle","(sx,sy,cx,cy,ms)"]`,
+		`pairs: ["for k, v in pairs(t) do ... end"`,
+		`luaSymbolAt`,
+	} {
+		if !strings.Contains(html, s) {
+			t.Fatalf("ui.html missing %q", s)
+		}
+	}
+}
+
 func TestUIHasDialogInputBoxDocs(t *testing.T) {
 	b, err := readWeb("ui.html")
 	if err != nil {

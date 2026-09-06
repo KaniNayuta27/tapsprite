@@ -245,6 +245,41 @@ func TestByeClearsConnectedStatus(t *testing.T) {
 	}
 }
 
+func TestRefreshLogsDeviceCount(t *testing.T) {
+	resetSrv()
+	srv.devices["dev1"] = &Device{
+		ID: "dev1", Name: "phone", Online: true, Seen: time.Now(),
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/refresh", handleRefresh)
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/refresh", strings.NewReader("{}"))
+	mux.ServeHTTP(rr, req)
+	var out map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if out["ok"] != true {
+		t.Fatalf("want ok true got %v", out)
+	}
+	if jsonInt(out["count"]) != 1 {
+		t.Fatalf("want count 1 got %v", out["count"])
+	}
+	srv.mu.Lock()
+	logs := append([]string{}, srv.logs...)
+	srv.mu.Unlock()
+	found := false
+	for _, line := range logs {
+		if strings.Contains(line, "已刷新，当前设备 1 台") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("missing refresh log, got %v", logs)
+	}
+}
+
 func TestHelloStoresAppVersion(t *testing.T) {
 	resetSrv()
 	mux := http.NewServeMux()
