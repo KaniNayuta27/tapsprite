@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="a11y_desc">触控精灵使用无障碍服务，按你加载或从电脑下发的脚本执行 Home、返回、点击等操作。它不会读取密码或聊天内容，仅在你点悬浮窗开始后运行。</string>
+    <string name="app_name">触控精灵</string>
+    <string name="overlay_channel">脚本控制</string>
+</resources>

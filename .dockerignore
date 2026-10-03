@@ -1,0 +1,10 @@
+.git
+android/.gradle
+android/**/build
+android/dist
+desktop/dist
+public
+**/*.apk
+**/*.exe
+.env.toolchain
+android/local.properties

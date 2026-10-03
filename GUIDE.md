@@ -105,7 +105,12 @@ sim：`0`/`1` = 精确；`0.9` = 允许约 10%；`3`/`4` = 允许 3、4 级通�
 |---|---|
 | `TracePrint("msg")` / `print("msg")` | 打到电脑日志 |
 | `Tip("msg")` | 屏幕底部 5 行滚动，同时打日志。**不再弹窗** |
+| `Dialog.InputBox(prompt[, default])` | 弹出输入框，**阻塞脚本线程**（不堵 UI 线程）。确定返回文本；取消或空返回 `""`。无悬浮窗时回退到 App 对话框。`tonumber(v) or 3` 即可给空值默认 |
 | `Delay(ms)` / `Sleep(ms)` | 等待，可被停止打断 |
+| `Thread.Start(fn|name, ...)` | 真并行后台线程，立刻返回 id。每个子线程独立 Lua 环境；普通全局**不共享**。`Start` 写在循环外，函数定义在同一脚本。子线程 TracePrint 进同一日志 |
+| `Thread.Stop(id)` | 结束该线程；主脚本停止时子线程一并结束 |
+| `Thread.SetShareVar(name, v)` | 进程内共享变量。`v` 仅 number / string / bool / nil（nil 删除）。线程安全 |
+| `Thread.GetShareVar(name)` | 读取共享变量，没有则 nil。典型：主线程 Set，子线程 Get |
 | `ExitScript()` | 结束脚本 |
 | `IsRoot()` | 这里表示是否模拟器 |
 | `GetScreenX()` `GetScreenY()` | 宽高 |
@@ -168,6 +173,13 @@ if x > -1 then
 else
   Tip("没找到")
 end
+```
+
+输入框（阻塞脚本，不堵 UI）：
+
+```lua
+local v = Dialog.InputBox("1：鼓励  3：不鼓励")
+learning = tonumber(v) or 3
 ```
 
 `//` 整除是 Lua 5.3 语法。本引擎是 **Lua 5.2**，请写成 `math.floor(w / 2)`。
