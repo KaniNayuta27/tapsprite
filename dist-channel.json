@@ -1,9 +1,9 @@
 {
-  "versionCode": 111,
-  "versionName": "0.9.86",
-  "apk_ver": "0.9.86",
-  "exe_ver": "1.1.97",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-86.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-97.exe",
-  "notes": "实时操控：系统按键条与边缘手势导航（返回/主页/多任务，无 root）。PC 1.1.97 / App 0.9.86（versionCode 111）"
+  "versionCode": 112,
+  "versionName": "0.9.87",
+  "apk_ver": "0.9.87",
+  "exe_ver": "1.1.98",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-87.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-98.exe",
+  "notes": "实时操控：实时拖动与长按、画面防花屏、锁定30帧、亮屏与解锁。已去掉边缘手势和电源菜单。PC 1.1.98 / App 0.9.87（versionCode 112）"
 }

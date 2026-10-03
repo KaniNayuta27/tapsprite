@@ -39,11 +39,14 @@ import org.json.JSONObject;
  * <pre>
  * 0x01 + utf-8 JSON meta {encW,encH,physW,physH,rot,ts}
  * 0x02 + u8 flags (bit0 = key) + u64be unix ms + Annex-B access unit
- * 0x03 + utf-8 JSON control (tap / swipe / global / sync / stop / mapped)
+ * 0x03 + utf-8 JSON control (down / move / up / tap / swipe / global / sync / stop / fps / wake / unlock / mapped / log)
  * </pre>
  */
 public final class LiveStream {
     static final int MAX_LONG = 1280;
+    private static final int MAX_AU = 1_500_000;
+    private static final AtomicInteger MAX_FPS = new AtomicInteger(30);
+    private static final AtomicInteger FPS_GEN = new AtomicInteger();
     private static final Object LIFE = new Object();
     private static final AtomicInteger SESSION = new AtomicInteger();
     private static final ExecutorService GESTURES = Executors.newSingleThreadExecutor(new java.util.concurrent.ThreadFactory() {
@@ -59,6 +62,9 @@ public final class LiveStream {
     private static volatile Wire wire;
     private static volatile Disp shown;
     private static volatile boolean active;
+    private static volatile Sender activeSender;
+    private static volatile String reopenWhy = "";
+    private static int lastEncLevel = -1;
 
     private LiveStream() {
     }
@@ -70,6 +76,7 @@ public final class LiveStream {
     /** Non-blocking. Safe from the socket read thread. */
     public static void requestStop() {
         SESSION.incrementAndGet();
+        LivePointer.lift();
         Wire w = wire;
         if (w != null) {
             w.close();
@@ -83,6 +90,7 @@ public final class LiveStream {
             prev = loopThread;
             loopThread = null;
         }
+        LivePointer.lift();
         Wire w = wire;
         if (w != null) {
             w.close();
@@ -156,6 +164,7 @@ public final class LiveStream {
             local = Wire.connect(host);
             wire = local;
             sender = new Sender(local);
+            activeSender = sender;
             Thread tx = new Thread(sender, "tapsprite-live-tx");
             tx.setDaemon(true);
             tx.start();
@@ -182,22 +191,32 @@ public final class LiveStream {
                     AppState.log("实时操控无法挂上投影");
                     break;
                 }
-                AppState.log("实时操控开始 " + enc[0] + "x" + enc[1] + " 屏 " + d.w + "x" + d.h + " rot " + d.rotDeg);
+                int fpsNow = MAX_FPS.get() >= 60 ? 60 : 30;
+                AppState.log("实时操控开始 " + enc[0] + "x" + enc[1]
+                        + " 屏 " + d.w + "x" + d.h + " rot " + d.rotDeg
+                        + " L" + lastEncLevel + " " + fpsNow + "fps "
+                        + (fpsNow >= 60 ? 6 : 3) + "Mbps");
                 sender.urgent(metaMessage(d, enc[0], enc[1]));
                 requestSync(codec);
-                boolean rotate = pump(codec, sender, id, d, enc[0], enc[1]);
+                boolean reopen = pump(codec, sender, id, d, enc[0], enc[1]);
                 releaseCodec(codec);
                 codec = null;
                 CaptureService.restoreShotSurface();
-                if (!rotate || SESSION.get() != id) {
+                if (!reopen || SESSION.get() != id) {
                     break;
                 }
-                AppState.log("实时操控旋转，重开编码");
+                String why = reopenWhy;
+                reopenWhy = "";
+                AppState.log("实时操控重开编码 " + why);
             }
         } catch (Throwable t) {
             AppState.log("实时操控中断 " + t.getMessage());
         } finally {
             releaseCodec(codec);
+            LivePointer.lift();
+            if (activeSender == sender) {
+                activeSender = null;
+            }
             if (sender != null) {
                 sender.close();
             }
@@ -219,16 +238,20 @@ public final class LiveStream {
         }
     }
 
-    /** @return true if the caller should reopen the encoder (rotation / size). */
+    /** @return true if the caller should reopen the encoder (rotation, size, or fps). */
     private static boolean pump(MediaCodec codec, Sender sender, int id, Disp d, int encW, int encH) {
         MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
         byte[] csd = null;
-        long lastOffer = 0;
         long nextWatch = SystemClock.elapsedRealtime() + 200;
         int watchRot = d.rotDeg;
         int watchW = d.w;
         int watchH = d.h;
+        int watchGen = FPS_GEN.get();
         while (SESSION.get() == id) {
+            if (FPS_GEN.get() != watchGen) {
+                reopenWhy = "帧率";
+                return true;
+            }
             if (syncWanted) {
                 requestSync(codec);
             }
@@ -236,6 +259,7 @@ public final class LiveStream {
                 Disp n = readDisp();
                 shown = n;
                 if (n.rotDeg != watchRot || n.w != watchW || n.h != watchH) {
+                    reopenWhy = "旋转";
                     return true;
                 }
                 nextWatch = SystemClock.elapsedRealtime() + 200;
@@ -280,12 +304,12 @@ public final class LiveStream {
             if (key && csd != null && !containsNal(annex, 7)) {
                 annex = concat(csd, annex);
             }
-            long now = SystemClock.elapsedRealtime();
-            if (!key && now - lastOffer < 16) {
-                continue;
-            }
-            lastOffer = now;
-            if (annex.length > 1500000) {
+            if (annex.length > MAX_AU) {
+                sender.dropUntilKey();
+                syncWanted = true;
+                if (key) {
+                    AppState.log("实时操控关键帧过大，请求新关键帧");
+                }
                 continue;
             }
             sender.video(videoMessage(annex, key, System.currentTimeMillis()));
@@ -310,6 +334,29 @@ public final class LiveStream {
         }
         if ("sync".equals(op)) {
             syncWanted = true;
+            return;
+        }
+        if ("fps".equals(op)) {
+            applyFps(json);
+            return;
+        }
+        if ("wake".equals(op)) {
+            WakeActivity.launch(false);
+            return;
+        }
+        if ("unlock".equals(op)) {
+            WakeActivity.launch(true);
+            return;
+        }
+        if ("down".equals(op) || "move".equals(op) || "up".equals(op)) {
+            if (SESSION.get() != id) {
+                return;
+            }
+            try {
+                handlePointer(json, op, sender);
+            } catch (Exception e) {
+                AppState.log("实时操控手势失败 " + e.getMessage());
+            }
             return;
         }
         if ("global".equals(op)) {
@@ -356,6 +403,85 @@ public final class LiveStream {
             codec.setParameters(b);
         } catch (Exception ignored) {
         }
+    }
+
+    /** 30 (default) or 60. Anything at or above 60 is the 60 fps / 6 Mbps mode. */
+    private static void applyFps(String json) {
+        int requested = 30;
+        try {
+            requested = new JSONObject(json).optInt("max", 30);
+        } catch (Exception ignored) {
+        }
+        int fps = requested >= 60 ? 60 : 30;
+        int prev = MAX_FPS.getAndSet(fps);
+        if (prev != fps) {
+            FPS_GEN.incrementAndGet();
+            AppState.log("实时操控帧率 " + fps);
+        }
+    }
+
+    private static void handlePointer(String json, String op, Sender sender) throws Exception {
+        JSONObject o = new JSONObject(json);
+        double nx = o.optDouble("nx", 0);
+        double ny = o.optDouble("ny", 0);
+        Disp d = shown != null ? shown : readDisp();
+        int[] px = LiveCoords.toPhysical(nx, ny, d.w, d.h, d.rotDeg, false);
+        if ("down".equals(op) || "up".equals(op)) {
+            logMap(op, px[0], px[1], nx, ny, d);
+            sendMapped(sender, nx, ny, px[0], px[1], d);
+        }
+        LivePointer.input(op, px[0], px[1]);
+    }
+
+    /** Phone log line that also shows up in the PC console log. */
+    static void reportLive(String msg) {
+        if (msg == null || msg.length() == 0) {
+            return;
+        }
+        AppState.log(msg);
+        Sender s = activeSender;
+        if (s != null) {
+            try {
+                JSONObject o = new JSONObject();
+                o.put("op", "log");
+                o.put("msg", msg);
+                byte[] body = o.toString().getBytes(StandardCharsets.UTF_8);
+                byte[] frame = new byte[1 + body.length];
+                frame[0] = 3;
+                System.arraycopy(body, 0, frame, 1, body.length);
+                s.urgent(frame);
+                return;
+            } catch (Exception ignored) {
+            }
+        }
+        LanLink.tracePc(msg);
+    }
+
+    /** API &lt; 26, or no accessibility service: one swipe after release. Not used while a live finger is streaming. */
+    static void playFallback(final float[] xs, final float[] ys, final int ms) {
+        GESTURES.execute(new Runnable() {
+            @Override
+            public void run() {
+                if (xs == null || ys == null || xs.length == 0 || ys.length == 0) {
+                    return;
+                }
+                int n = Math.min(xs.length, ys.length);
+                int x0 = Math.round(xs[0]);
+                int y0 = Math.round(ys[0]);
+                boolean same = true;
+                for (int i = 1; i < n; i++) {
+                    if (Math.round(xs[i]) != x0 || Math.round(ys[i]) != y0) {
+                        same = false;
+                        break;
+                    }
+                }
+                if (n == 1 || same) {
+                    execHold(xs[0], ys[0], ms);
+                } else {
+                    execPath(xs, ys, n, ms);
+                }
+            }
+        });
     }
 
     private static void handleGlobal(String json) throws Exception {
@@ -485,6 +611,19 @@ public final class LiveStream {
         }
     }
 
+    /** Stationary press for the API &lt; 26 fallback. Duration is the real hold, so long-press can fire after release. */
+    private static void execHold(float x, float y, int ms) {
+        synchronized (DeviceGate.LOCK) {
+            AutoService auto = AppState.auto;
+            if (auto != null) {
+                auto.touch(x, y, ms);
+            } else {
+                AppState.log("实时操控无障碍未连，改用 input swipe");
+                ShellInput.swipe(x, y, x, y, ms);
+            }
+        }
+    }
+
     private static void execPath(float[] xs, float[] ys, int n, int ms) {
         synchronized (DeviceGate.LOCK) {
             AutoService auto = AppState.auto;
@@ -575,6 +714,7 @@ public final class LiveStream {
         try {
             codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
             tryConfigure(codec, w, h, 2);
+            lastEncLevel = 2;
             return codec;
         } catch (Exception first) {
             releaseCodec(codec);
@@ -582,6 +722,7 @@ public final class LiveStream {
         try {
             codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
             tryConfigure(codec, w, h, 1);
+            lastEncLevel = 1;
             return codec;
         } catch (Exception second) {
             releaseCodec(codec);
@@ -589,6 +730,7 @@ public final class LiveStream {
         try {
             codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
             tryConfigure(codec, w, h, 0);
+            lastEncLevel = 0;
             return codec;
         } catch (Exception third) {
             releaseCodec(codec);
@@ -597,19 +739,35 @@ public final class LiveStream {
         }
     }
 
-    /** level 2 = baseline + low latency, 1 = no profile, 0 = minimal. */
+    /**
+     * level 2 = baseline + low latency, 1 = no profile, 0 = minimal (no fps cap, no CBR).
+     * 30 fps is 3 Mbps / Level 3.1. 60 fps is 6 Mbps / Level 4.0. GOP stays 1 second.
+     * Intra refresh is left unset: one lost frame would smear for the whole period.
+     */
     private static void tryConfigure(MediaCodec codec, int w, int h, int level) {
+        int fps = MAX_FPS.get() >= 60 ? 60 : 30;
+        int bitrate = fps >= 60 ? 6_000_000 : 3_000_000;
+        int avcLevel = fps >= 60
+                ? MediaCodecInfo.CodecProfileLevel.AVCLevel4
+                : MediaCodecInfo.CodecProfileLevel.AVCLevel31;
         MediaFormat fmt = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h);
         fmt.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-        fmt.setInteger(MediaFormat.KEY_BIT_RATE, 3_000_000);
-        fmt.setInteger(MediaFormat.KEY_FRAME_RATE, 30);
+        fmt.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
+        fmt.setInteger(MediaFormat.KEY_FRAME_RATE, fps);
         fmt.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
         if (level >= 1 && Build.VERSION.SDK_INT >= 21) {
             fmt.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
         }
         if (level >= 1 && Build.VERSION.SDK_INT >= 23) {
             fmt.setInteger(MediaFormat.KEY_PRIORITY, 0);
-            fmt.setFloat(MediaFormat.KEY_OPERATING_RATE, 30f);
+            fmt.setFloat(MediaFormat.KEY_OPERATING_RATE, fps);
+        }
+        if (level >= 1 && Build.VERSION.SDK_INT >= 29) {
+            // String key: the public constant arrived in API 31, and many API 29 encoders honor it.
+            // The drop happens on input frames, so the bitstream stays decodable.
+            fmt.setInteger("max-fps-to-encoder", fps);
+            // String form: this SDK names the same key KEY_PREPEND_HEADER_TO_SYNC_FRAMES.
+            fmt.setInteger("prepend-sps-pps-to-idr-frames", 1);
         }
         if (level >= 2 && Build.VERSION.SDK_INT >= 29) {
             fmt.setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0);
@@ -619,7 +777,7 @@ public final class LiveStream {
         }
         if (level >= 2) {
             fmt.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline);
-            fmt.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel31);
+            fmt.setInteger(MediaFormat.KEY_LEVEL, avcLevel);
         }
         codec.configure(fmt, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
     }
@@ -657,25 +815,15 @@ public final class LiveStream {
     }
 
     static byte[] toAnnexB(ByteBuffer buf, int offset, int size) {
+        if (size <= 0) {
+            return new byte[0];
+        }
         ByteBuffer dup = buf.duplicate();
         dup.position(offset);
         dup.limit(offset + size);
         byte[] raw = new byte[size];
         dup.get(raw);
-        if (hasStart(raw)) {
-            return raw;
-        }
-        byte[] out = new byte[size + 4];
-        out[3] = 1;
-        System.arraycopy(raw, 0, out, 4, size);
-        return out;
-    }
-
-    private static boolean hasStart(byte[] d) {
-        if (d.length >= 4 && d[0] == 0 && d[1] == 0 && (d[2] == 1 || (d[2] == 0 && d[3] == 1))) {
-            return true;
-        }
-        return d.length >= 3 && d[0] == 0 && d[1] == 0 && d[2] == 1;
+        return LiveAnnex.toAnnexB(raw);
     }
 
     static boolean containsNal(byte[] annex, int type) {
@@ -714,12 +862,12 @@ public final class LiveStream {
         }
     }
 
-    /** Latest-video slot plus a short urgent queue. Drops late deltas. */
+    /** Three-frame video queue plus a short urgent queue. Overflow waits for the next keyframe. */
     static final class Sender implements Runnable {
         private final Wire wire;
         private final Object lock = new Object();
         private final ArrayDeque<byte[]> urgent = new ArrayDeque<byte[]>();
-        private byte[] video;
+        private final LiveAuQueue video = new LiveAuQueue();
         private boolean closed;
 
         Sender(Wire wire) {
@@ -740,15 +888,22 @@ public final class LiveStream {
         }
 
         void video(byte[] msg) {
+            boolean needKey;
             synchronized (lock) {
                 if (closed) {
                     return;
                 }
-                if (video != null && video.length > 1 && video[0] == 2 && (video[1] & 1) == 1
-                        && (msg.length < 2 || msg[0] != 2 || (msg[1] & 1) == 0)) {
-                    return;
-                }
-                video = msg;
+                needKey = video.offer(msg);
+                lock.notifyAll();
+            }
+            if (needKey) {
+                syncWanted = true;
+            }
+        }
+
+        void dropUntilKey() {
+            synchronized (lock) {
+                video.dropUntilKey();
                 lock.notifyAll();
             }
         }
@@ -765,7 +920,7 @@ public final class LiveStream {
             while (true) {
                 byte[] msg;
                 synchronized (lock) {
-                    while (!closed && urgent.isEmpty() && video == null) {
+                    while (!closed && urgent.isEmpty() && video.isEmpty()) {
                         try {
                             lock.wait();
                         } catch (InterruptedException e) {
@@ -775,9 +930,8 @@ public final class LiveStream {
                     }
                     if (!urgent.isEmpty()) {
                         msg = urgent.pollFirst();
-                    } else if (video != null) {
-                        msg = video;
-                        video = null;
+                    } else if (!video.isEmpty()) {
+                        msg = video.poll();
                     } else {
                         return;
                     }
@@ -818,7 +972,8 @@ public final class LiveStream {
                 try {
                     s.setTcpNoDelay(true);
                     s.setKeepAlive(true);
-                    s.setSendBufferSize(32 * 1024);
+                    s.setSendBufferSize(256 * 1024);
+                    s.setReceiveBufferSize(256 * 1024);
                     s.connect(new InetSocketAddress(host, 18766), 4000);
                     s.setSoTimeout(4000);
                     Wire w = new Wire(s);

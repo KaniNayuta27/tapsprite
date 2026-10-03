@@ -1,5 +1,5 @@
-/* 实时操控 page: WebSocket → WebCodecs canvas, normalized taps back to the phone.
-   Edge drags are classified by LiveGesture and sent as global actions. */
+/* 实时操控 page: WebSocket → WebCodecs canvas.
+   Pointer events are a live finger (down / move / up). System keys are the button bar. */
 (function () {
   var canvas = document.getElementById("liveCanvas");
   var toggle = document.getElementById("liveToggle");
@@ -13,20 +13,42 @@
   var debug = false;
   var meta = null;
   var decoder = null;
+  var decGen = 0;
   var configured = false;
   var sps = null;
   var pps = null;
-  var gesture = null;
+  var closing = false;
+  var rebuilding = false;
+  var needKey = true;
+  var lastPhoneTs = 0;
+  var GAP_MS = 120;
+  var finger = null;
+  var MOVE_MS = 16;
+  var MOVE_EPS = 2;
   var lastMap = null;
   var recvAt = new Map();
   var fpsN = 0;
   var fpsT = 0;
   var fps = 0;
   var latText = "—";
+  var picRatio = "";
 
   function videoSize() {
     if (meta && meta.encW > 0 && meta.encH > 0) return { w: meta.encW, h: meta.encH };
     return { w: 576, h: 1280 };
+  }
+
+  function fitPicture() {
+    var pic = canvas.parentElement;
+    if (!pic || !pic.classList || !pic.classList.contains("live-pic")) {
+      pic = document.querySelector("#page-live .live-pic");
+    }
+    if (!pic) return;
+    var v = videoSize();
+    var ratio = v.w + " / " + v.h;
+    if (picRatio === ratio) return;
+    picRatio = ratio;
+    pic.style.aspectRatio = ratio;
   }
 
   function prep() {
@@ -111,7 +133,20 @@
     try { ws.send(JSON.stringify(obj)); } catch (e) {}
   }
 
-  var BASE_KEYS = { back: 1, home: 1, recents: 1, notifications: 1, quicksettings: 1, power: 1 };
+  function fpsMax() {
+    var box = document.getElementById("liveFps30");
+    return box && box.checked ? 30 : 60;
+  }
+
+  function sendFps() {
+    send({ op: "fps", max: fpsMax() });
+  }
+
+  var fpsBox = document.getElementById("liveFps30");
+  if (fpsBox) fpsBox.addEventListener("change", sendFps);
+
+  var ALWAYS_KEYS = { wake: 1, unlock: 1 };
+  var BASE_KEYS = { back: 1, home: 1, recents: 1, notifications: 1, quicksettings: 1 };
 
   function capsFrom(m) {
     if (m && Array.isArray(m.actions)) {
@@ -123,7 +158,6 @@
       var set = {};
       if (m.api >= 16) set.back = set.home = set.recents = set.notifications = true;
       if (m.api >= 17) set.quicksettings = true;
-      if (m.api >= 21) set.power = true;
       if (m.api >= 28) set.lock = set.screenshot = true;
       return set;
     }
@@ -141,6 +175,10 @@
     var nodes = document.querySelectorAll("#liveKeys button[data-act]");
     for (var i = 0; i < nodes.length; i++) {
       var act = nodes[i].getAttribute("data-act");
+      if (ALWAYS_KEYS[act]) {
+        nodes[i].hidden = false;
+        continue;
+      }
       nodes[i].hidden = !(set ? set[act] : BASE_KEYS[act]);
     }
     syncKeyEnabled();
@@ -154,7 +192,9 @@
       if (!streaming || !ws || ws.readyState !== 1) return;
       var act = b.getAttribute("data-act");
       if (!act) return;
-      send({ op: "global", action: act });
+      if (act === "wake") send({ op: "wake" });
+      else if (act === "unlock") send({ op: "unlock" });
+      else send({ op: "global", action: act });
     });
   }
 
@@ -164,15 +204,25 @@
     return true;
   }
 
+  function detachDecoder() {
+    var d = decoder;
+    decoder = null;
+    decGen++;
+    if (d) {
+      try { d.close(); } catch (e) {}
+    }
+  }
+
   function stopDecoder() {
+    closing = true;
     configured = false;
     sps = null;
     pps = null;
-    if (decoder) {
-      try { decoder.close(); } catch (e) {}
-      decoder = null;
-    }
+    needKey = true;
+    lastPhoneTs = 0;
+    detachDecoder();
     recvAt.clear();
+    closing = false;
   }
 
   function ensureDecoder() {
@@ -181,14 +231,29 @@
       ind.textContent = "此 WebView2 没有 WebCodecs";
       return false;
     }
+    var gen = ++decGen;
     decoder = new VideoDecoder({
       output: function (frame) { paint(frame); },
       error: function () {
-        configured = false;
-        send({ op: "sync" });
+        if (closing || rebuilding || gen !== decGen) return;
+        rebuildDecoder();
       }
     });
     return true;
+  }
+
+  function rebuildDecoder() {
+    if (rebuilding || closing) return;
+    rebuilding = true;
+    configured = false;
+    needKey = true;
+    lastPhoneTs = 0;
+    detachDecoder();
+    recvAt.clear();
+    rebuilding = false;
+    if (!ensureDecoder()) return;
+    if (sps && pps) configure();
+    send({ op: "sync" });
   }
 
   function configure() {
@@ -222,8 +287,8 @@
   }
 
   function paint(frame) {
+    fitPicture();
     var p = prep();
-    // Hit-testing uses the same intrinsic size as this letterbox (encoder size).
     var v = videoSize();
     if (p.r.width >= 2 && p.r.height >= 2) {
       p.ctx.fillStyle = "#111018";
@@ -274,7 +339,11 @@
       if (key) send({ op: "sync" });
       return;
     }
-    if (!key && decoder && decoder.decodeQueueSize > 1) return;
+    if (!key && needKey) return;
+    if (!key && lastPhoneTs > 0 && (tsMs < lastPhoneTs || tsMs - lastPhoneTs > GAP_MS)) {
+      rebuildDecoder();
+      return;
+    }
     var tsUs = tsMs * 1000;
     while (recvAt.has(tsUs)) tsUs++;
     recvAt.set(tsUs, { t: performance.now(), phone: tsMs });
@@ -284,16 +353,19 @@
         timestamp: tsUs,
         data: LiveCoord.avccFromNals(vcl)
       }));
+      if (key) needKey = false;
+      lastPhoneTs = tsMs;
     } catch (e) {
-      configured = false;
-      send({ op: "sync" });
+      rebuildDecoder();
     }
   }
 
   function onControl(msg) {
     if (!msg || !msg.op) return;
+    if (msg.op === "log") return;
     if (msg.op === "state") {
       if (msg.err) {
+        releaseFinger(null, null);
         ind.textContent = msg.err;
         streaming = false;
         toggle.textContent = "开始";
@@ -331,6 +403,7 @@
     if (u[0] === 1) {
       try { meta = JSON.parse(new TextDecoder().decode(u.subarray(1))); } catch (e) { return; }
       ind.textContent = (meta.encW || "?") + "×" + (meta.encH || "?") + " · 屏 " + meta.physW + "×" + meta.physH + " rot " + meta.rot;
+      fitPicture();
       applyCaps(meta);
       renderMap();
       send({ op: "sync" });
@@ -350,69 +423,98 @@
     return LiveCoord.clientToNormalized(e.clientX, e.clientY, r.left, r.top, r.width, r.height, v.w, v.h);
   }
 
-  function travel(pts) {
-    var d = 0;
-    for (var i = 1; i < pts.length; i++) {
-      d += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+  function pictureMovePx(a, b) {
+    var r = canvas.getBoundingClientRect();
+    var v = videoSize();
+    var box = LiveCoord.contentRect(r.width, r.height, v.w, v.h);
+    var dx = (a.nx - b.nx) * (box.w || 0);
+    var dy = (a.ny - b.ny) * (box.h || 0);
+    return Math.hypot(dx, dy);
+  }
+
+  function flushMove() {
+    if (!finger) return;
+    finger.timer = 0;
+    if (!finger.dragged) return;
+    send({ op: "move", nx: finger.nx, ny: finger.ny });
+    finger.sentNx = finger.nx;
+    finger.sentNy = finger.ny;
+  }
+
+  function scheduleMove() {
+    if (!finger || finger.timer) return;
+    finger.timer = setTimeout(flushMove, MOVE_MS);
+  }
+
+  function releaseFinger(nx, ny) {
+    if (!finger) return;
+    var f = finger;
+    finger = null;
+    if (f.timer) {
+      clearTimeout(f.timer);
+      f.timer = 0;
     }
-    return d;
+    if (nx != null && ny != null) {
+      f.nx = nx;
+      f.ny = ny;
+    }
+    if (debug) showLocal({ nx: f.nx, ny: f.ny });
+    send({ op: "up", nx: f.nx, ny: f.ny });
   }
 
   canvas.addEventListener("pointerdown", function (e) {
     if (e.button != null && e.button !== 0) return;
     var n = normFromEvent(e);
     if (!n) return;
+    if (finger) releaseFinger(finger.nx, finger.ny);
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
-    gesture = { id: e.pointerId, t0: performance.now(), pts: [[n.nx, n.ny]] };
+    finger = {
+      id: e.pointerId,
+      nx: n.nx,
+      ny: n.ny,
+      downNx: n.nx,
+      downNy: n.ny,
+      sentNx: n.nx,
+      sentNy: n.ny,
+      dragged: false,
+      timer: 0
+    };
+    send({ op: "down", nx: n.nx, ny: n.ny });
     if (debug) showLocal(n);
     e.preventDefault();
   });
+
   canvas.addEventListener("pointermove", function (e) {
-    if (!gesture || e.pointerId !== gesture.id) return;
+    if (!finger || e.pointerId !== finger.id) return;
     var n = normFromEvent(e);
     if (!n) return;
-    var last = gesture.pts[gesture.pts.length - 1];
-    if (Math.hypot(n.nx - last[0], n.ny - last[1]) < 0.004) return;
-    if (gesture.pts.length < 64) gesture.pts.push([n.nx, n.ny]);
-    else gesture.pts[gesture.pts.length - 1] = [n.nx, n.ny];
-  });
-  function endGesture(e) {
-    if (!gesture) return;
-    if (e && e.pointerId != null && e.pointerId !== gesture.id) return;
-    var g = gesture;
-    gesture = null;
-    if (e) {
-      var n = normFromEvent(e);
-      if (n) {
-        var last = g.pts[g.pts.length - 1];
-        if (Math.hypot(n.nx - last[0], n.ny - last[1]) >= 0.004 && g.pts.length < 64) g.pts.push([n.nx, n.ny]);
-      }
-    }
-    var end = g.pts[g.pts.length - 1];
-    if (debug) showLocal({ nx: end[0], ny: end[1] });
-    if (!streaming || !ws || ws.readyState !== 1) return;
-    var ms = Math.max(40, Math.round(performance.now() - g.t0));
-    if (ms > 10000) ms = 10000;
-    if (typeof LiveGesture !== "undefined") {
-      var cls = LiveGesture.classify(g.pts, ms);
-      if (cls && cls.kind === "global" && cls.action) {
-        send({ op: "global", action: cls.action });
-        return;
-      }
-      if (cls && cls.kind === "tap") {
-        send({ op: "tap", nx: end[0], ny: end[1] });
-        return;
-      }
-      send({ op: "swipe", pts: g.pts, ms: ms });
+    if (!finger.dragged) {
+      if (pictureMovePx(n, { nx: finger.downNx, ny: finger.downNy }) < MOVE_EPS) return;
+      finger.dragged = true;
+    } else if (pictureMovePx(n, { nx: finger.sentNx, ny: finger.sentNy }) < MOVE_EPS) {
       return;
     }
-    if (g.pts.length < 2 || travel(g.pts) < 0.01) send({ op: "tap", nx: end[0], ny: end[1] });
-    else send({ op: "swipe", pts: g.pts, ms: ms });
+    finger.nx = n.nx;
+    finger.ny = n.ny;
+    scheduleMove();
+  });
+
+  function endPointer(e) {
+    if (!finger) return;
+    if (e && e.pointerId != null && e.pointerId !== finger.id) return;
+    var n = e ? normFromEvent(e) : null;
+    if (n) releaseFinger(n.nx, n.ny);
+    else releaseFinger(null, null);
   }
-  canvas.addEventListener("pointerup", endGesture);
-  canvas.addEventListener("pointercancel", endGesture);
+
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointercancel", endPointer);
+  canvas.addEventListener("lostpointercapture", endPointer);
+  canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  window.addEventListener("pagehide", function () { releaseFinger(null, null); });
 
   function shutdown(why) {
+    releaseFinger(null, null);
     streaming = false;
     toggle.textContent = "开始";
     if (ws) {
@@ -436,7 +538,11 @@
     toggle.textContent = "结束";
     ind.textContent = "正在连接…";
     streaming = true;
-    ws.onopen = function () { send({ op: "start" }); syncKeyEnabled(); };
+    ws.onopen = function () {
+      send({ op: "start" });
+      sendFps();
+      syncKeyEnabled();
+    };
     ws.onmessage = function (ev) {
       if (typeof ev.data === "string") {
         try { onControl(JSON.parse(ev.data)); } catch (e) {}
@@ -448,6 +554,7 @@
       if (streaming) ind.textContent = "连接失败";
     };
     ws.onclose = function () {
+      releaseFinger(null, null);
       streaming = false;
       toggle.textContent = "开始";
       stopDecoder();
@@ -465,6 +572,7 @@
   });
 
   window.liveOnShow = function () {
+    fitPicture();
     if (debug) redrawIdle();
     renderMap();
   };

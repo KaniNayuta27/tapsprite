@@ -28,18 +28,64 @@ func TestExe196NewerThan195(t *testing.T) {
 func TestLiveKeepFrameDropsLateDelta(t *testing.T) {
 	key := []byte{2, 1, 9}
 	delta := []byte{2, 0, 8}
-	newerKey := []byte{2, 1, 7}
-	if got := liveKeepFrame(key, delta); string(got) != string(key) {
-		t.Fatalf("kept %v", got)
+	newer := []byte{2, 0, 3}
+	q, wait, syncReq := livePush(nil, false, key)
+	q, wait, syncReq = livePush(q, wait, delta)
+	q, wait, syncReq = livePush(q, wait, newer)
+	if wait || syncReq || len(q) != 3 {
+		t.Fatalf("under cap want 3 frames wait=%v sync=%v q=%d", wait, syncReq, len(q))
 	}
-	if got := liveKeepFrame(delta, key); string(got) != string(key) {
-		t.Fatalf("replaced with key %v", got)
+	if string(q[0]) != string(key) || string(q[1]) != string(delta) || string(q[2]) != string(newer) {
+		t.Fatalf("order %v %v %v", q[0], q[1], q[2])
 	}
-	if got := liveKeepFrame(key, newerKey); string(got) != string(newerKey) {
-		t.Fatalf("newer key %v", got)
+	// A fourth delta flushes the queue and waits for a keyframe.
+	q, wait, syncReq = livePush(q, wait, []byte{2, 0, 4})
+	if !wait || !syncReq || len(q) != 0 {
+		t.Fatalf("overflow delta wait=%v sync=%v len=%d", wait, syncReq, len(q))
 	}
-	if got := liveKeepFrame(delta, []byte{2, 0, 3}); string(got) != string([]byte{2, 0, 3}) {
-		t.Fatalf("newer delta %v", got)
+	q, wait, syncReq = livePush(q, wait, []byte{2, 0, 5})
+	if !wait || syncReq || len(q) != 0 {
+		t.Fatalf("delta while waiting wait=%v sync=%v len=%d", wait, syncReq, len(q))
+	}
+	q, wait, syncReq = livePush(q, wait, []byte{2, 1, 6})
+	if wait || syncReq || len(q) != 1 || q[0][2] != 6 {
+		t.Fatalf("key resumes %+v wait=%v sync=%v", q, wait, syncReq)
+	}
+	// Overflow that is itself a keyframe replaces the queue and still requests sync.
+	q, wait, syncReq = livePush(q, wait, []byte{2, 0, 1})
+	q, wait, syncReq = livePush(q, wait, []byte{2, 0, 2})
+	if len(q) != 3 || wait || syncReq {
+		t.Fatalf("refill %d wait=%v sync=%v", len(q), wait, syncReq)
+	}
+	q, wait, syncReq = livePush(q, wait, []byte{2, 1, 8})
+	if wait || !syncReq || len(q) != 1 || q[0][2] != 8 {
+		t.Fatalf("overflow key %+v wait=%v sync=%v", q, wait, syncReq)
+	}
+}
+
+func TestLiveRememberFps(t *testing.T) {
+	resetLiveHub()
+	t.Cleanup(resetLiveHub)
+	liveHub.rememberFps([]byte(`{"op":"fps","max":60}`))
+	liveHub.mu.Lock()
+	got := liveHub.maxFps
+	liveHub.mu.Unlock()
+	if got != 60 {
+		t.Fatalf("60 -> %d", got)
+	}
+	liveHub.rememberFps([]byte(`{"op":"fps","max":30}`))
+	liveHub.mu.Lock()
+	got = liveHub.maxFps
+	liveHub.mu.Unlock()
+	if got != 30 {
+		t.Fatalf("30 -> %d", got)
+	}
+	liveHub.rememberFps([]byte(`{"op":"fps","max":120}`))
+	liveHub.mu.Lock()
+	got = liveHub.maxFps
+	liveHub.mu.Unlock()
+	if got != 60 {
+		t.Fatalf("120 caps at 60, got %d", got)
 	}
 }
 

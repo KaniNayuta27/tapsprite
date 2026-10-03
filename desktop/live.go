@@ -2,23 +2,27 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
 )
 
 // Live mirror hub. Phone and the WebView2 page each open a WebSocket on
-// port 18766. Video is relayed with a one-slot mailbox so a slow viewer
-// drops late frames instead of queueing them. Input JSON is forwarded
+// port 18766. Video is a 3-frame queue. Overflow flushes that queue and
+// drops deltas until the next keyframe, then asks the phone for a new one.
+// Frames are never dropped just to cap fps. Input JSON is forwarded
 // immediately to the phone (TCP_NODELAY on both sockets).
 
 type liveViewer struct {
-	c       *wsConn
-	mu      sync.Mutex
-	pending []byte
-	wake    chan struct{}
-	dead    chan struct{}
-	once    sync.Once
+	c        *wsConn
+	mu       sync.Mutex
+	queue    [][]byte
+	waitKey  bool
+	needSync bool
+	wake     chan struct{}
+	dead     chan struct{}
+	once     sync.Once
 }
 
 type liveState struct {
@@ -27,6 +31,7 @@ type liveState struct {
 	phoneID  string
 	views    map[*wsConn]*liveViewer
 	lastMeta []byte
+	maxFps   int
 }
 
 var liveHub = &liveState{views: map[*wsConn]*liveViewer{}}
@@ -44,24 +49,39 @@ func resetLiveHub() {
 	liveHub.phoneID = ""
 	liveHub.views = map[*wsConn]*liveViewer{}
 	liveHub.lastMeta = nil
+	liveHub.maxFps = 30
 }
 
-// liveKeepFrame keeps a not-yet-sent keyframe over a newer delta, otherwise
-// replaces with the newer frame (drop late).
-func liveKeepFrame(pending, incoming []byte) []byte {
-	if len(pending) >= 2 && pending[0] == 2 && pending[1]&1 == 1 {
-		if len(incoming) < 2 || incoming[0] != 2 || incoming[1]&1 == 0 {
-			return pending
-		}
+// livePush appends one access unit. The queue holds at most 3 frames, in order.
+// On overflow it is flushed: an incoming keyframe is kept, a delta is dropped,
+// and syncReq tells the caller to ask for a new keyframe. While waitKey is set,
+// further deltas are ignored so a P-frame cannot follow a hole.
+func livePush(queue [][]byte, waitKey bool, incoming []byte) (out [][]byte, wait bool, syncReq bool) {
+	if len(incoming) == 0 {
+		return queue, waitKey, false
 	}
-	out := make([]byte, len(incoming))
-	copy(out, incoming)
-	return out
+	key := len(incoming) >= 2 && incoming[0] == 2 && incoming[1]&1 == 1
+	if waitKey && !key {
+		return queue, true, false
+	}
+	cp := append([]byte(nil), incoming...)
+	if len(queue) >= 3 {
+		if key {
+			return [][]byte{cp}, false, true
+		}
+		return nil, true, true
+	}
+	return append(queue, cp), false, false
 }
 
 func (v *liveViewer) offer(frame []byte) {
 	v.mu.Lock()
-	v.pending = liveKeepFrame(v.pending, frame)
+	q, wait, syncReq := livePush(v.queue, v.waitKey, frame)
+	v.queue = q
+	v.waitKey = wait
+	if syncReq {
+		v.needSync = true
+	}
 	v.mu.Unlock()
 	select {
 	case v.wake <- struct{}{}:
@@ -90,15 +110,25 @@ func (v *liveViewer) loop() {
 			return
 		case <-v.wake:
 		}
-		v.mu.Lock()
-		frame := v.pending
-		v.pending = nil
-		v.mu.Unlock()
-		if frame == nil {
-			continue
-		}
-		if err := v.c.writeBinary(frame); err != nil {
-			return
+		for {
+			v.mu.Lock()
+			var frame []byte
+			if len(v.queue) > 0 {
+				frame = v.queue[0]
+				v.queue = v.queue[1:]
+			}
+			need := v.needSync
+			v.needSync = false
+			v.mu.Unlock()
+			if need {
+				liveHub.requestSync()
+			}
+			if frame == nil {
+				break
+			}
+			if err := v.c.writeBinary(frame); err != nil {
+				return
+			}
 		}
 	}
 }
@@ -159,6 +189,9 @@ func (h *liveState) onPhone(msg []byte) {
 		views = append(views, v)
 	}
 	h.mu.Unlock()
+	if msg[0] == 3 && len(msg) > 1 {
+		h.noteLiveLog(msg[1:])
+	}
 	for _, v := range views {
 		if msg[0] == 2 {
 			v.offer(msg)
@@ -183,6 +216,44 @@ func (h *liveState) forwardPhone(json []byte) {
 
 func (h *liveState) requestSync() {
 	h.forwardPhone([]byte(`{"op":"sync"}`))
+}
+
+// rememberFps caches the live-page choice. 60 and above is the 60 fps mode; every other value is 30.
+func (h *liveState) rememberFps(body []byte) {
+	var cmd struct {
+		Max int `json:"max"`
+	}
+	if json.Unmarshal(body, &cmd) != nil {
+		return
+	}
+	fps := 30
+	if cmd.Max >= 60 {
+		fps = 60
+	}
+	h.mu.Lock()
+	h.maxFps = fps
+	h.mu.Unlock()
+}
+
+func (h *liveState) pushFps() {
+	h.mu.Lock()
+	fps := h.maxFps
+	h.mu.Unlock()
+	if fps != 60 {
+		fps = 30
+	}
+	h.forwardPhone([]byte(fmt.Sprintf(`{"op":"fps","max":%d}`, fps)))
+}
+
+func (h *liveState) noteLiveLog(body []byte) {
+	var cmd struct {
+		Op  string `json:"op"`
+		Msg string `json:"msg"`
+	}
+	if json.Unmarshal(body, &cmd) != nil || cmd.Op != "log" || cmd.Msg == "" {
+		return
+	}
+	addLog(cmd.Msg)
 }
 
 func liveDeviceID() (string, bool) {
@@ -253,6 +324,9 @@ func handleLiveView(w http.ResponseWriter, r *http.Request) {
 			liveHub.forwardPhone([]byte(`{"op":"stop"}`))
 			addLog("实时操控结束")
 			_ = c.writeText([]byte(`{"op":"state","on":false}`))
+		case "fps":
+			liveHub.rememberFps(body)
+			liveHub.forwardPhone(body)
 		default:
 			liveHub.forwardPhone(body)
 		}
@@ -286,6 +360,7 @@ func handleLivePhone(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	liveHub.requestSync()
+	liveHub.pushFps()
 	for {
 		op, payload, err := c.readData()
 		if err != nil {

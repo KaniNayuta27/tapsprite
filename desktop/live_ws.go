@@ -60,7 +60,8 @@ func acceptWS(w http.ResponseWriter, r *http.Request) (*wsConn, error) {
 		_ = tcp.SetNoDelay(true)
 		_ = tcp.SetKeepAlive(true)
 		_ = tcp.SetKeepAlivePeriod(15 * time.Second)
-		_ = tcp.SetWriteBuffer(32 * 1024)
+		_ = tcp.SetReadBuffer(256 * 1024)
+		_ = tcp.SetWriteBuffer(256 * 1024)
 	}
 	sum := sha1.Sum([]byte(key + wsGUID))
 	accept := base64.StdEncoding.EncodeToString(sum[:])

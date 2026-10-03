@@ -45,6 +45,17 @@
             android:exported="false"
             android:configChanges="screenSize|screenLayout|orientation|keyboardHidden"/>
 
+        <activity
+            android:name=".WakeActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"/>
+
         <service
             android:name=".OverlayService"
             android:exported="false"

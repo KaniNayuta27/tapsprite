@@ -20,10 +20,22 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /* loaded from: classes.dex */
 public class AutoService extends AccessibilityService {
+    /** True while a script stroke is dispatching. The live finger must not continue across it. */
+    static volatile boolean scriptGesture;
     private GestureDescription.StrokeDescription continued;
     private float lastX;
     private float lastY;
     private final Handler main = new Handler(Looper.getMainLooper());
+
+    void beginScriptGesture() {
+        scriptGesture = true;
+        LivePointer.preempt();
+    }
+
+    void endScriptGesture() {
+        scriptGesture = false;
+        LivePointer.resumeAfterScript();
+    }
 
     @Override // android.accessibilityservice.AccessibilityService
     public void onAccessibilityEvent(AccessibilityEvent accessibilityEvent) {
@@ -177,21 +189,30 @@ public class AutoService extends AccessibilityService {
         this.main.post(new Runnable() { // from class: com.tapsprite.agent.AutoService.2
             @Override // java.lang.Runnable
             public void run() {
-                Path path = new Path();
-                path.moveTo(f, f2);
-                if (!AutoService.this.dispatchGesture(new GestureDescription.Builder().addStroke(new GestureDescription.StrokeDescription(path, 0L, 90L)).build(), new AccessibilityService.GestureResultCallback() { // from class: com.tapsprite.agent.AutoService.2.1
-                    @Override // android.accessibilityservice.AccessibilityService.GestureResultCallback
-                    public void onCompleted(GestureDescription gestureDescription) {
-                        atomicBoolean.set(true);
-                        countDownLatch.countDown();
-                    }
+                AutoService.this.beginScriptGesture();
+                try {
+                    Path path = new Path();
+                    path.moveTo(f, f2);
+                    if (!AutoService.this.dispatchGesture(new GestureDescription.Builder().addStroke(new GestureDescription.StrokeDescription(path, 0L, 90L)).build(), new AccessibilityService.GestureResultCallback() { // from class: com.tapsprite.agent.AutoService.2.1
+                        @Override // android.accessibilityservice.AccessibilityService.GestureResultCallback
+                        public void onCompleted(GestureDescription gestureDescription) {
+                            atomicBoolean.set(true);
+                            countDownLatch.countDown();
+                            AutoService.this.endScriptGesture();
+                        }
 
-                    @Override // android.accessibilityservice.AccessibilityService.GestureResultCallback
-                    public void onCancelled(GestureDescription gestureDescription) {
+                        @Override // android.accessibilityservice.AccessibilityService.GestureResultCallback
+                        public void onCancelled(GestureDescription gestureDescription) {
+                            countDownLatch.countDown();
+                            AutoService.this.endScriptGesture();
+                        }
+                    }, null)) {
                         countDownLatch.countDown();
+                        AutoService.this.endScriptGesture();
                     }
-                }, null)) {
+                } catch (Exception e) {
                     countDownLatch.countDown();
+                    AutoService.this.endScriptGesture();
                 }
             }
         });
@@ -224,6 +245,7 @@ public class AutoService extends AccessibilityService {
         this.main.post(new Runnable() {
             @Override
             public void run() {
+                AutoService.this.beginScriptGesture();
                 try {
                     Path p1 = new Path();
                     p1.moveTo(x1, y1);
@@ -242,9 +264,11 @@ public class AutoService extends AccessibilityService {
                     AutoService.this.continued = null;
                     if (!AutoService.this.dispatchGesture(b.build(), AutoService.this.cb(ok, latch), null)) {
                         latch.countDown();
+                        AutoService.this.endScriptGesture();
                     }
                 } catch (Exception e) {
                     latch.countDown();
+                    AutoService.this.endScriptGesture();
                 }
             }
         });
@@ -278,6 +302,7 @@ public class AutoService extends AccessibilityService {
         this.main.post(new Runnable() { // from class: com.tapsprite.agent.AutoService.3
             @Override // java.lang.Runnable
             public void run() {
+                AutoService.this.beginScriptGesture();
                 Path path = new Path();
                 path.moveTo(AutoService.this.lastX, AutoService.this.lastY);
                 path.lineTo(f, f2);
@@ -290,10 +315,12 @@ public class AutoService extends AccessibilityService {
                     AutoService autoService = AutoService.this;
                     if (!autoService.dispatchGesture(build, autoService.cb(atomicBoolean, countDownLatch), null)) {
                         countDownLatch.countDown();
+                        AutoService.this.endScriptGesture();
                     }
                 } catch (Exception e) {
                     AutoService.this.continued = null;
                     countDownLatch.countDown();
+                    AutoService.this.endScriptGesture();
                 }
             }
         });
@@ -306,28 +333,35 @@ public class AutoService extends AccessibilityService {
         this.main.post(new Runnable() { // from class: com.tapsprite.agent.AutoService.4
             @Override // java.lang.Runnable
             public void run() {
-                GestureDescription.StrokeDescription strokeDescription;
-                Path path = new Path();
-                path.moveTo(f, f2);
-                float f5 = f;
-                float f6 = f3;
-                if (f5 != f6 || f2 != f4) {
-                    path.lineTo(f6, f4);
-                }
-                int max = Math.max(40, i);
-                if (Build.VERSION.SDK_INT >= 26) {
-                    strokeDescription = new GestureDescription.StrokeDescription(path, 0L, max, z);
-                    AutoService.this.continued = z ? strokeDescription : null;
-                } else {
-                    strokeDescription = new GestureDescription.StrokeDescription(path, 0L, max);
-                    AutoService.this.continued = null;
-                }
-                AutoService.this.lastX = f3;
-                AutoService.this.lastY = f4;
-                GestureDescription build = new GestureDescription.Builder().addStroke(strokeDescription).build();
-                AutoService autoService = AutoService.this;
-                if (!autoService.dispatchGesture(build, autoService.cb(atomicBoolean, countDownLatch), null)) {
+                AutoService.this.beginScriptGesture();
+                try {
+                    GestureDescription.StrokeDescription strokeDescription;
+                    Path path = new Path();
+                    path.moveTo(f, f2);
+                    float f5 = f;
+                    float f6 = f3;
+                    if (f5 != f6 || f2 != f4) {
+                        path.lineTo(f6, f4);
+                    }
+                    int max = Math.max(40, i);
+                    if (Build.VERSION.SDK_INT >= 26) {
+                        strokeDescription = new GestureDescription.StrokeDescription(path, 0L, max, z);
+                        AutoService.this.continued = z ? strokeDescription : null;
+                    } else {
+                        strokeDescription = new GestureDescription.StrokeDescription(path, 0L, max);
+                        AutoService.this.continued = null;
+                    }
+                    AutoService.this.lastX = f3;
+                    AutoService.this.lastY = f4;
+                    GestureDescription build = new GestureDescription.Builder().addStroke(strokeDescription).build();
+                    AutoService autoService = AutoService.this;
+                    if (!autoService.dispatchGesture(build, autoService.cb(atomicBoolean, countDownLatch), null)) {
+                        countDownLatch.countDown();
+                        AutoService.this.endScriptGesture();
+                    }
+                } catch (Exception e) {
                     countDownLatch.countDown();
+                    AutoService.this.endScriptGesture();
                 }
             }
         });
@@ -347,6 +381,7 @@ public class AutoService extends AccessibilityService {
         this.main.post(new Runnable() {
             @Override
             public void run() {
+                AutoService.this.beginScriptGesture();
                 try {
                     Path path = new Path();
                     path.moveTo(xs[0], ys[0]);
@@ -361,11 +396,26 @@ public class AutoService extends AccessibilityService {
                     AutoService.this.lastX = xs[n - 1];
                     AutoService.this.lastY = ys[n - 1];
                     GestureDescription build = new GestureDescription.Builder().addStroke(stroke).build();
-                    if (!AutoService.this.dispatchGesture(build, AutoService.this.cb(atomicBoolean, countDownLatch), null)) {
+                    if (!AutoService.this.dispatchGesture(build, new AccessibilityService.GestureResultCallback() {
+                        @Override
+                        public void onCompleted(GestureDescription gestureDescription) {
+                            atomicBoolean.set(true);
+                            countDownLatch.countDown();
+                            AutoService.this.endScriptGesture();
+                        }
+
+                        @Override
+                        public void onCancelled(GestureDescription gestureDescription) {
+                            countDownLatch.countDown();
+                            AutoService.this.endScriptGesture();
+                        }
+                    }, null)) {
                         countDownLatch.countDown();
+                        AutoService.this.endScriptGesture();
                     }
                 } catch (Exception e) {
                     countDownLatch.countDown();
+                    AutoService.this.endScriptGesture();
                 }
             }
         });
@@ -385,11 +435,13 @@ public class AutoService extends AccessibilityService {
             public void onCompleted(GestureDescription gestureDescription) {
                 atomicBoolean.set(true);
                 countDownLatch.countDown();
+                AutoService.this.endScriptGesture();
             }
 
             @Override // android.accessibilityservice.AccessibilityService.GestureResultCallback
             public void onCancelled(GestureDescription gestureDescription) {
                 countDownLatch.countDown();
+                AutoService.this.endScriptGesture();
             }
         };
     }
