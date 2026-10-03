@@ -32,6 +32,7 @@
   var fps = 0;
   var latText = "—";
   var picRatio = "";
+  var pinQuiet = 0;
 
   function videoSize() {
     if (meta && meta.encW > 0 && meta.encH > 0) return { w: meta.encW, h: meta.encH };
@@ -145,7 +146,7 @@
   var fpsBox = document.getElementById("liveFps30");
   if (fpsBox) fpsBox.addEventListener("change", sendFps);
 
-  var ALWAYS_KEYS = { wake: 1, unlock: 1 };
+  var ALWAYS_KEYS = { wake: 1, unlock: 1, pinpad: 1 };
   var BASE_KEYS = { back: 1, home: 1, recents: 1, notifications: 1, quicksettings: 1 };
 
   function capsFrom(m) {
@@ -167,7 +168,13 @@
   function syncKeyEnabled() {
     var on = !!(streaming && ws && ws.readyState === 1);
     var nodes = document.querySelectorAll("#liveKeys button[data-act]");
-    for (var i = 0; i < nodes.length; i++) nodes[i].disabled = !on;
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].getAttribute("data-act") === "pinpad") {
+        nodes[i].disabled = false;
+        continue;
+      }
+      nodes[i].disabled = !on;
+    }
   }
 
   function applyCaps(m) {
@@ -187,13 +194,23 @@
   var keysEl = document.getElementById("liveKeys");
   if (keysEl) {
     keysEl.addEventListener("click", function (e) {
-      var b = e.target.closest ? e.target.closest("button[data-act]") : null;
-      if (!b || b.disabled || b.hidden) return;
-      if (!streaming || !ws || ws.readyState !== 1) return;
+      var t = e.target;
+      if (t && t.nodeType === 3) t = t.parentNode;
+      var b = t && t.closest ? t.closest("button[data-act]") : null;
+      if (!b || b.hidden) return;
       var act = b.getAttribute("data-act");
       if (!act) return;
+      if (act === "pinpad") {
+        setPinVisible(!!pinEl && pinEl.hidden);
+        return;
+      }
+      if (b.disabled) return;
+      if (!streaming || !ws || ws.readyState !== 1) return;
       if (act === "wake") send({ op: "wake" });
-      else if (act === "unlock") send({ op: "unlock" });
+      else if (act === "unlock") {
+        send({ op: "unlock" });
+        setPinVisible(true);
+      }
       else send({ op: "global", action: act });
     });
   }
@@ -387,6 +404,7 @@
       return;
     }
     if (msg.op === "mapped") {
+      if (pinQuiet && Date.now() < pinQuiet) return;
       if (!lastMap) lastMap = { n: { nx: msg.nx, ny: msg.ny }, px: null, phone: null };
       lastMap.n = { nx: msg.nx, ny: msg.ny };
       lastMap.phone = { x: msg.px, y: msg.py };
@@ -570,6 +588,126 @@
     renderMap();
     if (debug && !streaming) redrawIdle();
   });
+
+  var pinEl = document.getElementById("livePin");
+  var pinState = (typeof LivePin !== "undefined") ? LivePin.DEFAULT : { x: 0.15, y: 0.58, w: 0.6, h: 0.36 };
+  var pinDrag = null;
+
+  function setPinVisible(on) {
+    if (!pinEl) return;
+    pinEl.hidden = !on;
+    var b = document.querySelector('#liveKeys button[data-act="pinpad"]');
+    if (b) b.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+
+  function applyPin(r) {
+    if (!pinEl || typeof LivePin === "undefined") return;
+    pinState = LivePin.clamp(r);
+    pinEl.style.left = (pinState.x * 100) + "%";
+    pinEl.style.top = (pinState.y * 100) + "%";
+    pinEl.style.width = (pinState.w * 100) + "%";
+    pinEl.style.height = (pinState.h * 100) + "%";
+  }
+
+  function savePin() {
+    if (typeof LivePin === "undefined") return;
+    LivePin.save(window.localStorage, pinState);
+  }
+
+  function flashPin(btn) {
+    btn.classList.add("lit");
+    if (btn._lit) clearTimeout(btn._lit);
+    btn._lit = setTimeout(function () {
+      btn.classList.remove("lit");
+      btn._lit = 0;
+    }, 140);
+  }
+
+  function onPinKey(e) {
+    if (e.button != null && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var btn = e.currentTarget;
+    flashPin(btn);
+    var box = btn.getBoundingClientRect();
+    if (!(box.width > 0) || !(box.height > 0)) return;
+    var n = normFromEvent({ clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 });
+    if (!n) return;
+    if (finger) releaseFinger(finger.nx, finger.ny);
+    var taps = LivePin.tapMessages(n.nx, n.ny);
+    for (var ti = 0; ti < taps.length; ti++) send(taps[ti]);
+    pinQuiet = Date.now() + 600;
+    if (ws && ws.readyState === 1) send(LivePin.logMessage());
+    else if (typeof addLog === "function") addLog(LivePin.LOG);
+  }
+
+  function beginPinDrag(e, mode) {
+    if (!pinEl) return;
+    var pic = pinEl.parentElement.getBoundingClientRect();
+    if (!(pic.width > 0) || !(pic.height > 0)) return;
+    pinDrag = {
+      id: e.pointerId,
+      mode: mode,
+      x: pinState.x,
+      y: pinState.y,
+      w: pinState.w,
+      h: pinState.h,
+      px: e.clientX,
+      py: e.clientY,
+      pw: pic.width,
+      ph: pic.height
+    };
+    try { pinEl.setPointerCapture(e.pointerId); } catch (err) {}
+  }
+
+  function movePinDrag(e) {
+    if (!pinDrag || e.pointerId !== pinDrag.id) return;
+    var dx = (e.clientX - pinDrag.px) / pinDrag.pw;
+    var dy = (e.clientY - pinDrag.py) / pinDrag.ph;
+    if (pinDrag.mode === "resize") applyPin({ x: pinDrag.x, y: pinDrag.y, w: pinDrag.w + dx, h: pinDrag.h + dy });
+    else applyPin({ x: pinDrag.x + dx, y: pinDrag.y + dy, w: pinDrag.w, h: pinDrag.h });
+  }
+
+  function endPinDrag(e) {
+    if (!pinDrag || e.pointerId !== pinDrag.id) return;
+    pinDrag = null;
+    savePin();
+  }
+
+  if (pinEl && typeof LivePin !== "undefined") {
+    applyPin(LivePin.load(window.localStorage) || LivePin.DEFAULT);
+    var pinKeys = pinEl.querySelectorAll(".live-pin-key");
+    for (var pk = 0; pk < pinKeys.length; pk++) pinKeys[pk].addEventListener("pointerdown", onPinKey);
+    var pinClose = pinEl.querySelector(".live-pin-x");
+    if (pinClose) {
+      pinClose.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+      pinClose.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        setPinVisible(false);
+      });
+    }
+    var pinResize = pinEl.querySelector(".live-pin-resize");
+    if (pinResize) {
+      pinResize.addEventListener("pointerdown", function (e) {
+        if (e.button != null && e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        beginPinDrag(e, "resize");
+      });
+    }
+    pinEl.addEventListener("pointerdown", function (e) {
+      if (e.button != null && e.button !== 0) return;
+      var t = e.target;
+      if (t && t.closest && (t.closest(".live-pin-key") || t.closest(".live-pin-x") || t.closest(".live-pin-resize"))) return;
+      e.preventDefault();
+      beginPinDrag(e, "move");
+    });
+    pinEl.addEventListener("pointermove", movePinDrag);
+    pinEl.addEventListener("pointerup", endPinDrag);
+    pinEl.addEventListener("pointercancel", endPinDrag);
+    pinEl.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  }
 
   window.liveOnShow = function () {
     fitPicture();

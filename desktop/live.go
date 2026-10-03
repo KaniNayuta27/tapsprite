@@ -327,6 +327,9 @@ func handleLiveView(w http.ResponseWriter, r *http.Request) {
 		case "fps":
 			liveHub.rememberFps(body)
 			liveHub.forwardPhone(body)
+		case "pinlog":
+			// Blind PIN entry. Never forward this frame and never log which key.
+			addLog("密码键盘: 按下")
 		default:
 			liveHub.forwardPhone(body)
 		}

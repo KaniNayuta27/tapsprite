@@ -3,5 +3,5 @@
   "versionName": "0.9.87",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
   "exe": "https://tapsprite.pages.dev/tapsprite.exe",
-  "notes": "实时操控：实时拖动与长按、画面防花屏、锁定30帧、亮屏与解锁。已去掉边缘手势和电源菜单。PC 1.1.98 / App 0.9.87（versionCode 112）。下载仍走 pages.dev，自动更新以 dist-channel.json 为准"
+  "notes": "实时操控：密码键盘浮层，锁屏黑屏时盲输 PIN（不记录数字）。PC 1.1.99 / App 0.9.87（versionCode 112）。下载仍走 pages.dev，自动更新以 dist-channel.json 为准"
 }

@@ -31,7 +31,7 @@ const (
 	httpPort = 18766
 	udpPort  = 18766
 	phoneUDP = 18765
-	version  = "1.1.98"
+	version  = "1.1.99"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 	// After this silence, TCP-probe phone:18765; failure drops connected UI immediately.

@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.98</title>
+<title>触控精灵 v1.1.99</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -368,6 +368,10 @@ textarea {
 .live-key:disabled { opacity: .38; }
 .live-key:active:not(:disabled) { transform: scale(0.96); }
 .live-key:focus-visible { outline: 2px solid #c4b8ff; outline-offset: 1px; }
+.live-key-pin {
+  font-size: 11px; font-weight: 700; letter-spacing: 0; line-height: 1.15;
+}
+.live-key-pin[aria-pressed="true"] { background: rgba(196,184,255,.42); color: #fff; }
 @media (hover: hover) and (pointer: fine) {
   .live-key:hover:not(:disabled) { background: rgba(255,255,255,.18); }
 }
@@ -389,7 +393,39 @@ textarea {
 .live-map {
   position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px);
   padding: 6px 10px; border-radius: 8px; background: rgba(17,16,24,.78); color: #fff;
-  font: 12px/1.4 var(--mono); pointer-events: none; white-space: pre-wrap;
+  font: 12px/1.4 var(--mono); pointer-events: none; white-space: pre-wrap; z-index: 2;
+}
+.live-pin {
+  position: absolute; z-index: 5; box-sizing: border-box;
+  display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr);
+  gap: 5px; padding: 8px;
+  background: rgba(17, 16, 24, .42);
+  border: 1px solid rgba(255,255,255,.4);
+  border-radius: 14px;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+  cursor: move;
+}
+.live-pin[hidden] { display: none !important; pointer-events: none !important; }
+.live-pin-key {
+  border: 1px solid rgba(255,255,255,.42); border-radius: 10px;
+  background: rgba(255,255,255,.22); color: #fff;
+  font: 700 16px/1 var(--font); padding: 0; margin: 0; cursor: pointer;
+  min-width: 0; min-height: 0;
+  text-shadow: 0 1px 2px rgba(0,0,0,.5);
+}
+.live-pin-key.lit { background: rgba(255,255,255,.82); color: #1a1430; text-shadow: none; }
+.live-pin-zero { grid-column: 2; grid-row: 4; }
+.live-pin-x {
+  position: absolute; top: 3px; right: 3px; z-index: 2;
+  width: 22px; height: 22px; padding: 0; border: 0; border-radius: 999px;
+  background: rgba(17,16,24,.55); color: #fff;
+  font: 700 16px/1 var(--font); cursor: pointer;
+}
+.live-pin-resize {
+  position: absolute; right: 2px; bottom: 2px; z-index: 2;
+  width: 16px; height: 16px; padding: 0; border: 0; border-radius: 0 0 10px 0;
+  background: linear-gradient(135deg, transparent 50%, rgba(255,255,255,.9) 50%);
+  cursor: nwse-resize;
 }
 .lib-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex: none; }
 .lib-head h1 { margin: 0; }
@@ -475,7 +511,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.98</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.99</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -490,7 +526,7 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.98</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.99</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -650,10 +686,25 @@ textarea {
         <button type="button" class="live-key" data-act="screenshot" title="截图" aria-label="截图" hidden disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H5a1 1 0 0 0-1 1v3M16 4h3a1 1 0 0 1 1 1v3M8 20H5a1 1 0 0 1-1-1v-3M16 20h3a1 1 0 0 0 1-1v-3"/></svg></button>
         <button type="button" class="live-key" data-act="wake" title="亮屏。部分机型需开启「后台弹出界面」和「锁屏显示」权限" aria-label="亮屏" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg></button>
         <button type="button" class="live-key" data-act="unlock" title="解锁（弹出密码或 PIN）。部分机型需开启「后台弹出界面」和「锁屏显示」权限" aria-label="解锁" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.4-2"/></svg></button>
+        <button type="button" class="live-key live-key-pin" data-act="pinpad" title="密码键盘" aria-label="密码键盘" aria-pressed="false">密码<br>键盘</button>
       </div>
       <div class="live-pic">
         <canvas id="liveCanvas"></canvas>
         <div class="live-map" id="liveMap" hidden>自测网格 · 假定 1080×2400（未连接）</div>
+        <div id="livePin" class="live-pin" hidden title="拖动空白处移动，右下角调整大小">
+          <button type="button" class="live-pin-x" aria-label="关闭">×</button>
+          <button type="button" class="live-pin-key">1</button>
+          <button type="button" class="live-pin-key">2</button>
+          <button type="button" class="live-pin-key">3</button>
+          <button type="button" class="live-pin-key">4</button>
+          <button type="button" class="live-pin-key">5</button>
+          <button type="button" class="live-pin-key">6</button>
+          <button type="button" class="live-pin-key">7</button>
+          <button type="button" class="live-pin-key">8</button>
+          <button type="button" class="live-pin-key">9</button>
+          <button type="button" class="live-pin-key live-pin-zero">0</button>
+          <button type="button" class="live-pin-resize" aria-label="调整大小"></button>
+        </div>
       </div>
       <div class="log" id="liveLog" tabindex="0"></div>
     </div>
@@ -2697,6 +2748,7 @@ async function runAkeyTest() {
 
 </script>
 <script src="/live-coord.js"></script>
+<script src="/live-pin.js"></script>
 <script src="/live-page.js"></script>
 </body>
 </html>

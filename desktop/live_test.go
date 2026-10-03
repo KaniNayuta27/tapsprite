@@ -89,6 +89,95 @@ func TestLiveRememberFps(t *testing.T) {
 	}
 }
 
+func TestLivePinLogOmitsDigit(t *testing.T) {
+	resetLiveHub()
+	t.Cleanup(resetLiveHub)
+	httpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/live/view":
+			handleLiveView(w, r)
+		case "/api/live/phone":
+			handleLivePhone(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer httpSrv.Close()
+
+	view := dialWS(t, httpSrv.Listener.Addr().String(), "/api/live/view")
+	defer view.Close()
+	phone := dialWS(t, httpSrv.Listener.Addr().String(), "/api/live/phone?id=dev")
+	defer phone.Close()
+
+	// Phone connect pushes sync + fps. Drain those so a later read is only the pin result.
+	drained := 0
+	deadline := time.Now().Add(800 * time.Millisecond)
+	for time.Now().Before(deadline) && drained < 2 {
+		_ = phone.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+		_, _, err := readWS(phone)
+		if err != nil {
+			break
+		}
+		drained++
+	}
+	if drained < 1 {
+		t.Fatal("expected startup frames on the phone socket")
+	}
+
+	srv.mu.Lock()
+	before := len(srv.logs)
+	srv.mu.Unlock()
+
+	// Extra fields must not be copied into the PC log or forwarded.
+	body := []byte(`{"op":"pinlog","d":"8","nx":0.4242,"ny":0.7373}`)
+	if err := writeWS(view, 0x1, body, true); err != nil {
+		t.Fatal(err)
+	}
+	var got string
+	wait := time.Now().Add(2 * time.Second)
+	for time.Now().Before(wait) {
+		srv.mu.Lock()
+		if len(srv.logs) > before {
+			got = srv.logs[len(srv.logs)-1]
+		}
+		srv.mu.Unlock()
+		if got != "" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got == "" {
+		t.Fatal("pinlog did not reach the log")
+	}
+	msg := got
+	if i := strings.IndexByte(got, ' '); i >= 0 {
+		msg = got[i+1:]
+	}
+	if msg != "密码键盘: 按下" {
+		t.Fatalf("log body %q from %q", msg, got)
+	}
+	if strings.Contains(got, "0.4242") || strings.Contains(got, "0.7373") || strings.Contains(got, "\"8\"") || strings.Contains(msg, "8") {
+		t.Fatalf("digit or coordinate leaked into log %q", got)
+	}
+
+	_ = phone.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
+	if _, frame, err := readWS(phone); err == nil {
+		t.Fatalf("pinlog must not be forwarded, got %q", frame)
+	}
+
+	down := []byte(`{"op":"down","nx":0.25,"ny":0.5}`)
+	if err := writeWS(view, 0x1, down, true); err != nil {
+		t.Fatal(err)
+	}
+	op, frame, err := readWS(phone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if op != 0x2 || len(frame) < 2 || frame[0] != 3 || !strings.Contains(string(frame), `"op":"down"`) {
+		t.Fatalf("down not forwarded op=%d %q", op, frame)
+	}
+}
+
 func TestLiveWSRelay(t *testing.T) {
 	resetLiveHub()
 	t.Cleanup(resetLiveHub)
