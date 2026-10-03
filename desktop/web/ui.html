@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.95</title>
+<title>触控精灵 v1.1.96</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -343,6 +343,17 @@ textarea {
 #page-home { display: flex; flex-direction: column; flex: 1; min-height: 0; height: 100%; overflow: hidden; }
 #page-grab { display: none; flex: 1; min-height: 0; height: 100%; }
 #page-lib { display: none; flex-direction: column; flex: 1; min-height: 0; height: 100%; overflow: hidden; }
+#page-live { display: none; flex-direction: column; flex: 1; min-height: 0; height: 100%; overflow: hidden; }
+.live-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex: none; }
+.live-head h1 { margin: 0; }
+.live-ind { margin-left: auto; color: var(--muted); font: 12px/1.4 var(--mono); font-variant-numeric: tabular-nums; }
+.live-stage { position: relative; flex: 1; min-height: 0; background: #111018; border-radius: var(--radius-lg); overflow: hidden; }
+#liveCanvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+.live-map {
+  position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 20px);
+  padding: 6px 10px; border-radius: 8px; background: rgba(17,16,24,.78); color: #fff;
+  font: 12px/1.4 var(--mono); pointer-events: none; white-space: pre-wrap;
+}
 .lib-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex: none; }
 .lib-head h1 { margin: 0; }
 .lib-split { display: grid; grid-template-columns: 248px 1fr; gap: 14px; flex: 1; min-height: 0; }
@@ -427,7 +438,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.95</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.96</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -442,11 +453,12 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.95</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.96</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
     <button id="navLib">脚本库</button>
+    <button id="navLive">实时操控</button>
   </div>
   <div class="devbox">
     <label>设备</label>
@@ -582,6 +594,18 @@ textarea {
       </div>
     </div>
   </section>
+  <section id="page-live">
+    <div class="live-head">
+      <h1>实时操控</h1>
+      <button class="btn primary" type="button" id="liveToggle">开始</button>
+      <button class="btn ghost" type="button" id="liveDbg">网格</button>
+      <span class="live-ind" id="liveInd">未开始</span>
+    </div>
+    <div class="live-stage">
+      <canvas id="liveCanvas"></canvas>
+      <div class="live-map" id="liveMap" hidden>自测网格 · 假定 1080×2400（未连接）</div>
+    </div>
+  </section>
   <section id="page-lib">
     <div class="lib-head">
       <h1>脚本库</h1>
@@ -699,11 +723,14 @@ function show(p) {
   document.getElementById("page-home").style.display = p === "home" ? "flex" : "none";
   document.getElementById("page-grab").style.display = p === "grab" ? "block" : "none";
   document.getElementById("page-lib").style.display = p === "lib" ? "flex" : "none";
+  document.getElementById("page-live").style.display = p === "live" ? "flex" : "none";
   document.getElementById("navHome").className = p === "home" ? "on" : "";
   document.getElementById("navGrab").className = p === "grab" ? "on" : "";
   document.getElementById("navLib").className = p === "lib" ? "on" : "";
+  document.getElementById("navLive").className = p === "live" ? "on" : "";
   hideHud();
   hideCtx();
+  if (p === "live" && typeof window.liveOnShow === "function") window.liveOnShow();
   if (p === "lib") {
     if (typeof window.loadLib === "function") window.loadLib();
     if (window.libEd) window.libEd.layout();
@@ -713,6 +740,7 @@ function show(p) {
 document.getElementById("navHome").onclick = () => show("home");
 document.getElementById("navGrab").onclick = () => show("grab");
 document.getElementById("navLib").onclick = () => show("lib");
+document.getElementById("navLive").onclick = () => show("live");
 (function setupLib() {
   const DEFAULT = 'KeyPress("Home")\nDelay(1000)\nTap(167, 775)\nDelay(2000)\nKeyPress("Back")\nDelay(2000)\n';
   let current = "test.lua";
@@ -2608,5 +2636,7 @@ async function runAkeyTest() {
 })();
 
 </script>
+<script src="/live-coord.js"></script>
+<script src="/live-page.js"></script>
 </body>
 </html>

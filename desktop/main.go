@@ -31,7 +31,7 @@ const (
 	httpPort = 18766
 	udpPort  = 18766
 	phoneUDP = 18765
-	version  = "1.1.95"
+	version  = "1.1.96"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 	// After this silence, TCP-probe phone:18765; failure drops connected UI immediately.
@@ -136,6 +136,8 @@ func main() {
 	mux.HandleFunc("/api/apkstatus", handleApkStatus)
 	mux.HandleFunc("/api/apkfile", handleApkFile)
 	mux.HandleFunc("/api/win", handleWin)
+	mux.HandleFunc("/api/live/view", handleLiveView)
+	mux.HandleFunc("/api/live/phone", handleLivePhone)
 
 	// Bind all interfaces so phones can reach LAN IP (same as 0.0.0.0:18766).
 	addr := fmt.Sprintf(":%d", httpPort)

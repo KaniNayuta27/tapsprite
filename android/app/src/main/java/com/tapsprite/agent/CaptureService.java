@@ -17,11 +17,16 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.util.DisplayMetrics;
+import android.view.Surface;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.zip.Deflater;
 
 /* loaded from: classes.dex */
@@ -31,8 +36,13 @@ public class CaptureService extends Service {
     static volatile CaptureService instance;
     static volatile Bitmap lastSrc;
     static volatile boolean ready;
+    /** True while the single projection display is feeding the live encoder. */
+    static volatile boolean surfaceLent;
     private static volatile boolean starting;
     private VirtualDisplay display;
+    private int shotW;
+    private int shotH;
+    private int shotDpi = 480;
     private Handler handler;
     private Bitmap last;
     private final Object lock = new Object();
@@ -60,7 +70,7 @@ public class CaptureService extends Service {
     @Override // android.app.Service
     public int onStartCommand(Intent intent, int i, int i2) {
         startAsForeground();
-        if (intent == null || !intent.hasExtra("code") || !intent.hasExtra("data") || ((ready && this.projection != null) || starting)) {
+        if (intent == null || !intent.hasExtra("code") || !intent.hasExtra("data") || ((ready && this.projection != null) || surfaceLent || starting)) {
             return 1;
         }
         starting = true;
@@ -135,7 +145,9 @@ public class CaptureService extends Service {
                 @Override // android.media.projection.MediaProjection.Callback
                 public void onStop() {
                     CaptureService.ready = false;
+                    CaptureService.surfaceLent = false;
                     boolean unused = CaptureService.starting = false;
+                    LiveStream.onProjectionStopped();
                     AppState.log("截屏已停止");
                     LanLink.onCaptureChanged();
                 }
@@ -219,6 +231,9 @@ public class CaptureService extends Service {
                 }
             }, this.handler);
             try {
+                this.shotW = max;
+                this.shotH = max2;
+                this.shotDpi = i2;
                 this.display = this.projection.createVirtualDisplay("tapsprite", max, max2, i2, 16, this.reader.getSurface(), null, this.handler);
                 AppState.log("截屏已打开 " + max + "x" + max2 + "，找色可用");
             } catch (Exception e) {
@@ -232,7 +247,9 @@ public class CaptureService extends Service {
 
     private void stopProjection() {
         ready = false;
+        surfaceLent = false;
         starting = false;
+        LiveStream.requestStop();
         try {
             VirtualDisplay virtualDisplay = this.display;
             if (virtualDisplay != null) {
@@ -348,7 +365,114 @@ public class CaptureService extends Service {
      * Pack the latest MediaProjection frame for 抓抓 (phone→PC).
      * Projection only: if copyLatest is null, fail — do not fall back to screencap.
      */
+    static boolean hasDisplay() {
+        CaptureService s = instance;
+        return s != null && s.projection != null && s.display != null;
+    }
+
+    static boolean surfaceLent() {
+        return surfaceLent;
+    }
+
+    /**
+     * Point the one MediaProjection VirtualDisplay at the encoder surface.
+     * targetSdk 34 allows createVirtualDisplay only once per grant, so a live
+     * session resizes and setSurface()s instead of allocating a second display.
+     */
+    static boolean attachLiveSurface(final Surface surface, final int w, final int h) {
+        final CaptureService s = instance;
+        if (s == null || surface == null || w < 2 || h < 2) {
+            return false;
+        }
+        if (Looper.myLooper() == s.handler.getLooper()) {
+            return s.attachOnHandler(surface, w, h);
+        }
+        final AtomicBoolean ok = new AtomicBoolean(false);
+        final CountDownLatch latch = new CountDownLatch(1);
+        s.handler.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    ok.set(s.attachOnHandler(surface, w, h));
+                } finally {
+                    latch.countDown();
+                }
+            }
+        });
+        try {
+            if (!latch.await(2, TimeUnit.SECONDS)) {
+                return false;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        return ok.get();
+    }
+
+    private boolean attachOnHandler(Surface surface, int w, int h) {
+        if (projection == null || display == null) {
+            return false;
+        }
+        int dpi = shotDpi > 0 ? shotDpi : 480;
+        try {
+            display.resize(w, h, dpi);
+            display.setSurface(surface);
+            surfaceLent = true;
+            return true;
+        } catch (Exception e) {
+            AppState.log("实时操控切面失败 " + e.getMessage());
+            return false;
+        }
+    }
+
+    static void restoreShotSurface() {
+        final CaptureService s = instance;
+        if (s == null) {
+            surfaceLent = false;
+            return;
+        }
+        if (Looper.myLooper() == s.handler.getLooper()) {
+            s.restoreOnHandler();
+            return;
+        }
+        final CountDownLatch latch = new CountDownLatch(1);
+        s.handler.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    s.restoreOnHandler();
+                } finally {
+                    latch.countDown();
+                }
+            }
+        });
+        try {
+            latch.await(2, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void restoreOnHandler() {
+        surfaceLent = false;
+        if (display == null || reader == null || projection == null || shotW < 2 || shotH < 2) {
+            return;
+        }
+        int dpi = shotDpi > 0 ? shotDpi : 480;
+        try {
+            display.resize(shotW, shotH, dpi);
+            display.setSurface(reader.getSurface());
+        } catch (Exception e) {
+            AppState.log("恢复截屏表面失败 " + e.getMessage());
+        }
+    }
+
     public static PackedShot packShot() {
+        if (surfaceLent) {
+            AppState.log("实时操控进行中，抓抓暂停");
+            return null;
+        }
         CaptureService captureService = instance;
         Bitmap bitmap = captureService == null ? null : captureService.copyLatest();
         if (bitmap == null) {

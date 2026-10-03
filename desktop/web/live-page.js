@@ -1,0 +1,405 @@
+/* 实时操控 page: WebSocket → WebCodecs canvas, normalized taps back to the phone. */
+(function () {
+  var canvas = document.getElementById("liveCanvas");
+  var toggle = document.getElementById("liveToggle");
+  var dbgBtn = document.getElementById("liveDbg");
+  var ind = document.getElementById("liveInd");
+  var mapEl = document.getElementById("liveMap");
+  if (!canvas || !toggle || typeof LiveCoord === "undefined") return;
+
+  var ws = null;
+  var streaming = false;
+  var debug = false;
+  var meta = null;
+  var decoder = null;
+  var configured = false;
+  var sps = null;
+  var pps = null;
+  var gesture = null;
+  var lastMap = null;
+  var recvAt = new Map();
+  var fpsN = 0;
+  var fpsT = 0;
+  var fps = 0;
+  var latText = "—";
+
+  function videoSize() {
+    if (meta && meta.encW > 0 && meta.encH > 0) return { w: meta.encW, h: meta.encH };
+    return { w: 576, h: 1280 };
+  }
+
+  function prep() {
+    var dpr = window.devicePixelRatio || 1;
+    var r = canvas.getBoundingClientRect();
+    var bw = Math.max(1, Math.round(r.width * dpr));
+    var bh = Math.max(1, Math.round(r.height * dpr));
+    if (canvas.width !== bw || canvas.height !== bh) {
+      canvas.width = bw;
+      canvas.height = bh;
+    }
+    var ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx: ctx, r: r };
+  }
+
+  function drawGrid(ctx, box) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,.28)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (var i = 0; i <= 10; i++) {
+      var x = box.x + (box.w * i) / 10;
+      var y = box.y + (box.h * i) / 10;
+      ctx.moveTo(x, box.y);
+      ctx.lineTo(x, box.y + box.h);
+      ctx.moveTo(box.x, y);
+      ctx.lineTo(box.x + box.w, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function redrawIdle() {
+    if (!debug) return;
+    var p = prep();
+    if (p.r.width < 2 || p.r.height < 2) return;
+    var v = videoSize();
+    p.ctx.fillStyle = "#111018";
+    p.ctx.fillRect(0, 0, p.r.width, p.r.height);
+    var box = LiveCoord.contentRect(p.r.width, p.r.height, v.w, v.h);
+    p.ctx.strokeStyle = "rgba(255,255,255,.45)";
+    p.ctx.strokeRect(box.x + 0.5, box.y + 0.5, Math.max(0, box.w - 1), Math.max(0, box.h - 1));
+    drawGrid(p.ctx, box);
+  }
+
+  function renderMap() {
+    if (!mapEl) return;
+    if (!debug) {
+      mapEl.hidden = true;
+      return;
+    }
+    mapEl.hidden = false;
+    if (!lastMap) {
+      mapEl.textContent = meta ? "网格已开 · 点击画面" : "自测网格 · 假定 1080×2400（未连接）";
+      return;
+    }
+    var px = lastMap.phone || lastMap.px;
+    var tag = lastMap.phone ? "手机" : (meta ? "预计" : "自测");
+    var rot = meta ? meta.rot : 0;
+    var pw = meta ? meta.physW : 1080;
+    var ph = meta ? meta.physH : 2400;
+    mapEl.textContent = "n " + lastMap.n.nx.toFixed(4) + "," + lastMap.n.ny.toFixed(4)
+      + " → " + (px ? px.x + "," + px.y : "—")
+      + "  " + tag + "  rot " + rot + "  " + pw + "×" + ph;
+  }
+
+  function showLocal(n) {
+    var physW = meta && meta.physW ? meta.physW : 1080;
+    var physH = meta && meta.physH ? meta.physH : 2400;
+    var rot = meta && meta.rot ? meta.rot : 0;
+    var px = null;
+    try {
+      px = LiveCoord.normalizedToPhysical(n.nx, n.ny, physW, physH, rot, false);
+    } catch (e) { px = null; }
+    lastMap = { n: n, px: px, phone: null };
+    renderMap();
+  }
+
+  function send(obj) {
+    if (!ws || ws.readyState !== 1) return;
+    try { ws.send(JSON.stringify(obj)); } catch (e) {}
+  }
+
+  function bytesEq(a, b) {
+    if (!a || !b || a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+
+  function stopDecoder() {
+    configured = false;
+    sps = null;
+    pps = null;
+    if (decoder) {
+      try { decoder.close(); } catch (e) {}
+      decoder = null;
+    }
+    recvAt.clear();
+  }
+
+  function ensureDecoder() {
+    if (decoder && decoder.state !== "closed") return true;
+    if (typeof VideoDecoder === "undefined") {
+      ind.textContent = "此 WebView2 没有 WebCodecs";
+      return false;
+    }
+    decoder = new VideoDecoder({
+      output: function (frame) { paint(frame); },
+      error: function () {
+        configured = false;
+        send({ op: "sync" });
+      }
+    });
+    return true;
+  }
+
+  function configure() {
+    if (!ensureDecoder() || !sps || !pps) return;
+    var codec = LiveCoord.avcCodecString(sps);
+    var description = LiveCoord.avcCDescription(sps, pps);
+    var w = meta && meta.encW;
+    var h = meta && meta.encH;
+    var attempts = [
+      { codec: codec, description: description, optimizeForLatency: true, hardwareAcceleration: "prefer-hardware", codedWidth: w, codedHeight: h },
+      { codec: codec, description: description, optimizeForLatency: true, hardwareAcceleration: "prefer-hardware" },
+      { codec: codec, description: description }
+    ];
+    if (decoder.state === "configured") {
+      try { decoder.reset(); } catch (e) {}
+    }
+    for (var i = 0; i < attempts.length; i++) {
+      var cfg = attempts[i];
+      if (!cfg.codedWidth) {
+        delete cfg.codedWidth;
+        delete cfg.codedHeight;
+      }
+      try {
+        decoder.configure(cfg);
+        configured = true;
+        return;
+      } catch (e) {}
+    }
+    configured = false;
+    ind.textContent = "解码配置失败";
+  }
+
+  function paint(frame) {
+    var p = prep();
+    // Hit-testing uses the same intrinsic size as this letterbox (encoder size).
+    var v = videoSize();
+    if (p.r.width >= 2 && p.r.height >= 2) {
+      p.ctx.fillStyle = "#111018";
+      p.ctx.fillRect(0, 0, p.r.width, p.r.height);
+      var box = LiveCoord.contentRect(p.r.width, p.r.height, v.w, v.h);
+      try { p.ctx.drawImage(frame, box.x, box.y, box.w, box.h); } catch (e) {}
+      if (debug) drawGrid(p.ctx, box);
+    }
+    var info = recvAt.get(frame.timestamp);
+    recvAt.delete(frame.timestamp);
+    var dec = info ? (performance.now() - info.t) : 0;
+    var clock = info ? (Date.now() - info.phone) : -1;
+    fpsN++;
+    var now = performance.now();
+    if (!fpsT) fpsT = now;
+    if (now - fpsT >= 500) {
+      fps = Math.round(fpsN * 1000 / (now - fpsT));
+      fpsN = 0;
+      fpsT = now;
+      var parts = [fps + " fps", "解码 " + Math.max(0, Math.round(dec)) + "ms"];
+      if (clock >= 0 && clock <= 1500) parts.push("估 " + Math.round(clock) + "ms");
+      latText = parts.join(" · ");
+      if (streaming) ind.textContent = latText;
+    }
+    frame.close();
+  }
+
+  function feed(flags, tsMs, annex) {
+    if (typeof VideoDecoder === "undefined") {
+      ind.textContent = "此 WebView2 没有 WebCodecs";
+      return;
+    }
+    var nals = LiveCoord.splitAnnexB(annex);
+    var spsN = null, ppsN = null, vcl = [], key = (flags & 1) !== 0;
+    for (var i = 0; i < nals.length; i++) {
+      var t = LiveCoord.nalType(nals[i]);
+      if (t === 7) spsN = nals[i];
+      else if (t === 8) ppsN = nals[i];
+      else if (t === 5) { key = true; vcl.push(nals[i]); }
+      else if (t === 1) vcl.push(nals[i]);
+    }
+    if (spsN && ppsN && (!bytesEq(sps, spsN) || !bytesEq(pps, ppsN) || !configured)) {
+      sps = spsN;
+      pps = ppsN;
+      configure();
+    }
+    if (!configured || !vcl.length) {
+      if (key) send({ op: "sync" });
+      return;
+    }
+    if (!key && decoder && decoder.decodeQueueSize > 1) return;
+    var tsUs = tsMs * 1000;
+    while (recvAt.has(tsUs)) tsUs++;
+    recvAt.set(tsUs, { t: performance.now(), phone: tsMs });
+    try {
+      decoder.decode(new EncodedVideoChunk({
+        type: key ? "key" : "delta",
+        timestamp: tsUs,
+        data: LiveCoord.avccFromNals(vcl)
+      }));
+    } catch (e) {
+      configured = false;
+      send({ op: "sync" });
+    }
+  }
+
+  function onControl(msg) {
+    if (!msg || !msg.op) return;
+    if (msg.op === "state") {
+      if (msg.err) {
+        ind.textContent = msg.err;
+        streaming = false;
+        toggle.textContent = "开始";
+        var sock = ws;
+        ws = null;
+        stopDecoder();
+        if (sock) {
+          try { sock.close(); } catch (e) {}
+        }
+      } else if (msg.on) {
+        streaming = true;
+        toggle.textContent = "结束";
+        ind.textContent = "等待画面…";
+      } else if (!streaming) {
+        ind.textContent = "已结束";
+      }
+      return;
+    }
+    if (msg.op === "mapped") {
+      if (!lastMap) lastMap = { n: { nx: msg.nx, ny: msg.ny }, px: null, phone: null };
+      lastMap.n = { nx: msg.nx, ny: msg.ny };
+      lastMap.phone = { x: msg.px, y: msg.py };
+      if (!meta) meta = {};
+      if (msg.physW) meta.physW = msg.physW;
+      if (msg.physH) meta.physH = msg.physH;
+      if (msg.rot != null) meta.rot = msg.rot;
+      renderMap();
+    }
+  }
+
+  function onBinary(u) {
+    if (!u || !u.length) return;
+    if (u[0] === 1) {
+      try { meta = JSON.parse(new TextDecoder().decode(u.subarray(1))); } catch (e) { return; }
+      ind.textContent = (meta.encW || "?") + "×" + (meta.encH || "?") + " · 屏 " + meta.physW + "×" + meta.physH + " rot " + meta.rot;
+      renderMap();
+      send({ op: "sync" });
+      return;
+    }
+    if (u[0] === 3) {
+      try { onControl(JSON.parse(new TextDecoder().decode(u.subarray(1)))); } catch (e) {}
+      return;
+    }
+    if (u[0] !== 2 || u.length < 10) return;
+    feed(u[1], LiveCoord.readU64BE(u, 2), u.subarray(10));
+  }
+
+  function normFromEvent(e) {
+    var r = canvas.getBoundingClientRect();
+    var v = videoSize();
+    return LiveCoord.clientToNormalized(e.clientX, e.clientY, r.left, r.top, r.width, r.height, v.w, v.h);
+  }
+
+  function travel(pts) {
+    var d = 0;
+    for (var i = 1; i < pts.length; i++) {
+      d += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    }
+    return d;
+  }
+
+  canvas.addEventListener("pointerdown", function (e) {
+    if (e.button != null && e.button !== 0) return;
+    var n = normFromEvent(e);
+    if (!n) return;
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    gesture = { id: e.pointerId, t0: performance.now(), pts: [[n.nx, n.ny]] };
+    if (debug) showLocal(n);
+    e.preventDefault();
+  });
+  canvas.addEventListener("pointermove", function (e) {
+    if (!gesture || e.pointerId !== gesture.id) return;
+    var n = normFromEvent(e);
+    if (!n) return;
+    var last = gesture.pts[gesture.pts.length - 1];
+    if (Math.hypot(n.nx - last[0], n.ny - last[1]) < 0.004) return;
+    if (gesture.pts.length < 64) gesture.pts.push([n.nx, n.ny]);
+    else gesture.pts[gesture.pts.length - 1] = [n.nx, n.ny];
+  });
+  function endGesture(e) {
+    if (!gesture) return;
+    if (e && e.pointerId != null && e.pointerId !== gesture.id) return;
+    var g = gesture;
+    gesture = null;
+    if (e) {
+      var n = normFromEvent(e);
+      if (n) {
+        var last = g.pts[g.pts.length - 1];
+        if (Math.hypot(n.nx - last[0], n.ny - last[1]) >= 0.004 && g.pts.length < 64) g.pts.push([n.nx, n.ny]);
+      }
+    }
+    var end = g.pts[g.pts.length - 1];
+    if (debug) showLocal({ nx: end[0], ny: end[1] });
+    if (!streaming || !ws || ws.readyState !== 1) return;
+    var ms = Math.max(40, Math.round(performance.now() - g.t0));
+    if (ms > 10000) ms = 10000;
+    if (g.pts.length < 2 || travel(g.pts) < 0.01) send({ op: "tap", nx: end[0], ny: end[1] });
+    else send({ op: "swipe", pts: g.pts, ms: ms });
+  }
+  canvas.addEventListener("pointerup", endGesture);
+  canvas.addEventListener("pointercancel", endGesture);
+
+  function shutdown(why) {
+    streaming = false;
+    toggle.textContent = "开始";
+    if (ws) {
+      try { send({ op: "stop" }); } catch (e) {}
+      try { ws.close(); } catch (e2) {}
+      ws = null;
+    }
+    stopDecoder();
+    ind.textContent = why || "已结束";
+  }
+
+  toggle.addEventListener("click", function () {
+    if (ws && (ws.readyState === 0 || ws.readyState === 1)) {
+      shutdown("已结束");
+      return;
+    }
+    var proto = location.protocol === "https:" ? "wss:" : "ws:";
+    ws = new WebSocket(proto + "//" + location.host + "/api/live/view");
+    ws.binaryType = "arraybuffer";
+    toggle.textContent = "结束";
+    ind.textContent = "正在连接…";
+    streaming = true;
+    ws.onopen = function () { send({ op: "start" }); };
+    ws.onmessage = function (ev) {
+      if (typeof ev.data === "string") {
+        try { onControl(JSON.parse(ev.data)); } catch (e) {}
+        return;
+      }
+      onBinary(new Uint8Array(ev.data));
+    };
+    ws.onerror = function () {
+      if (streaming) ind.textContent = "连接失败";
+    };
+    ws.onclose = function () {
+      streaming = false;
+      toggle.textContent = "开始";
+      stopDecoder();
+      if (ind.textContent.indexOf("失败") < 0 && ind.textContent.indexOf("没有") < 0) ind.textContent = "已结束";
+      ws = null;
+    };
+  });
+
+  dbgBtn.addEventListener("click", function () {
+    debug = !debug;
+    dbgBtn.className = debug ? "btn primary" : "btn ghost";
+    renderMap();
+    if (debug && !streaming) redrawIdle();
+  });
+
+  window.liveOnShow = function () {
+    if (debug) redrawIdle();
+    renderMap();
+  };
+})();

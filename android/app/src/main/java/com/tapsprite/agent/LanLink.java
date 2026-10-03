@@ -665,6 +665,12 @@ public final class LanLink {
                         if ("shot".equals(extractString3) || "capture".equals(extractString3)) {
                             LanLink.sendShot();
                             return;
+                        } else if ("livestart".equals(extractString3)) {
+                            LiveStream.start();
+                            return;
+                        } else if ("livestop".equals(extractString3)) {
+                            LiveStream.stop();
+                            return;
                         }
                         return;
                     }

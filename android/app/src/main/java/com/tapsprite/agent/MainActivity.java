@@ -36,6 +36,7 @@ public class MainActivity extends Activity {
     private static MainActivity live;
     static volatile boolean pendingCapturePrompt;
     static volatile boolean pendingShotAfterCapture;
+    static volatile boolean pendingLiveAfterCapture;
     private TextView a11yStatus;
     private Switch awakeSwitch;
     private boolean captureAsking;
@@ -130,10 +131,26 @@ public class MainActivity extends Activity {
         });
     }
 
+    /** Bring App to front and pop the system MediaProjection dialog (实时操控). */
+    static void askCaptureForLive() {
+        if (CaptureService.hasDisplay()) {
+            pendingLiveAfterCapture = false;
+            LiveStream.start();
+            return;
+        }
+        pendingLiveAfterCapture = true;
+        pendingCapturePrompt = true;
+        bringUpForCapture();
+    }
+
     /** Bring App to front and pop the system MediaProjection dialog (抓抓 / LAN shot). */
     static void askCaptureForShot() {
         pendingShotAfterCapture = true;
         pendingCapturePrompt = true;
+        bringUpForCapture();
+    }
+
+    private static void bringUpForCapture() {
         final android.content.Context ctx = App.ctx;
         if (ctx == null) {
             return;
@@ -1130,8 +1147,27 @@ public class MainActivity extends Activity {
                     }
                 }, 400L);
             }
+            if (pendingLiveAfterCapture) {
+                final Handler h = new Handler(Looper.getMainLooper());
+                h.postDelayed(new Runnable() {
+                    int tries;
+                    @Override
+                    public void run() {
+                        if (CaptureService.hasDisplay()) {
+                            pendingLiveAfterCapture = false;
+                            LiveStream.start();
+                        } else if (tries++ < 25) {
+                            h.postDelayed(this, 200L);
+                        } else {
+                            pendingLiveAfterCapture = false;
+                            AppState.log("实时操控：截屏未就绪");
+                        }
+                    }
+                }, 300L);
+            }
         } else {
             pendingShotAfterCapture = false;
+            pendingLiveAfterCapture = false;
             AppState.log("未授权截屏，找色会失败");
             Toast.makeText(this, "没有截屏权限，FindColor 会失败", 0).show();
         }

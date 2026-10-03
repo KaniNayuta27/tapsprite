@@ -1,7 +1,7 @@
 {
-  "versionCode": 29,
-  "versionName": "0.9.5",
+  "versionCode": 110,
+  "versionName": "0.9.85",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
   "exe": "https://tapsprite.pages.dev/tapsprite.exe",
-  "notes": "抓抓全分辨率；截图走 JSON 避免迅雷；窗口 1600x1000"
+  "notes": "实时操控：同网画面镜像与点击/拖动。PC 1.1.96 / App 0.9.85（versionCode 110）。下载仍走 pages.dev，自动更新以 dist-channel.json 为准"
 }

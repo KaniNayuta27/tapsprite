@@ -299,6 +299,50 @@ public class AutoService extends AccessibilityService {
         return await(countDownLatch, atomicBoolean);
     }
 
+    /** One press-move-release stroke along a polyline. Duration is the real drag time. */
+    public boolean strokePath(final float[] xs, final float[] ys, final int n, final int durationMs) {
+        if (xs == null || ys == null || n <= 0) {
+            return false;
+        }
+        if (n == 1) {
+            return tap(xs[0], ys[0]);
+        }
+        final CountDownLatch countDownLatch = new CountDownLatch(1);
+        final AtomicBoolean atomicBoolean = new AtomicBoolean(false);
+        this.main.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Path path = new Path();
+                    path.moveTo(xs[0], ys[0]);
+                    for (int i = 1; i < n; i++) {
+                        if (xs[i] != xs[i - 1] || ys[i] != ys[i - 1]) {
+                            path.lineTo(xs[i], ys[i]);
+                        }
+                    }
+                    int dur = Math.max(40, durationMs);
+                    GestureDescription.StrokeDescription stroke = new GestureDescription.StrokeDescription(path, 0L, dur);
+                    AutoService.this.continued = null;
+                    AutoService.this.lastX = xs[n - 1];
+                    AutoService.this.lastY = ys[n - 1];
+                    GestureDescription build = new GestureDescription.Builder().addStroke(stroke).build();
+                    if (!AutoService.this.dispatchGesture(build, AutoService.this.cb(atomicBoolean, countDownLatch), null)) {
+                        countDownLatch.countDown();
+                    }
+                } catch (Exception e) {
+                    countDownLatch.countDown();
+                }
+            }
+        });
+        try {
+            countDownLatch.await(Math.min(15000L, Math.max(3000L, durationMs + 800L)), TimeUnit.MILLISECONDS);
+            return atomicBoolean.get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
     /* JADX INFO: Access modifiers changed from: private */
     public AccessibilityService.GestureResultCallback cb(final AtomicBoolean atomicBoolean, final CountDownLatch countDownLatch) {
         return new AccessibilityService.GestureResultCallback() { // from class: com.tapsprite.agent.AutoService.5
