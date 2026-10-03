@@ -1,7 +1,6 @@
 package com.tapsprite.agent;
 
 import android.app.Activity;
-import android.app.KeyguardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
@@ -9,26 +8,26 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.view.View;
 import android.view.WindowManager;
 
 /**
  * Transparent activity that turns the screen on over the lock screen.
- * Unlock additionally asks the system to show the PIN / password bouncer.
- * Some ROMs still require the vendor 「后台弹出界面」 and 「锁屏显示」 switches.
+ * Unlock wakes the screen, waits, then swipes up from the bottom center so the
+ * PIN pad appears. {@code requestDismissKeyguard} is not used: on this phone it
+ * returns cancel and can swallow the swipe. Some ROMs still require the vendor
+ * 「后台弹出界面」 and 「锁屏显示」 switches.
  */
 public class WakeActivity extends Activity {
-    private static final long UNLOCK_TIMEOUT_MS = 20000L;
-
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean unlock;
     private boolean asked;
-    private boolean reported;
     private PowerManager.WakeLock wakeLock;
-    private final Runnable timeout = new Runnable() {
+    private final Runnable swipeTask = new Runnable() {
         @Override
         public void run() {
-            report("error");
+            swipeUnlock();
         }
     };
     private final Runnable finishSoon = new Runnable() {
@@ -83,7 +82,7 @@ public class WakeActivity extends Activity {
         setIntent(intent);
         unlock = intent != null && intent.getBooleanExtra("unlock", false);
         asked = false;
-        reported = false;
+        handler.removeCallbacks(swipeTask);
         applyWakeFlags();
     }
 
@@ -99,12 +98,14 @@ public class WakeActivity extends Activity {
             return;
         }
         asked = true;
-        dismissKeyguard();
+        pokeScreen(this);
+        LiveStream.reportLive("实时操控解锁 亮屏");
+        LiveStream.reportLive("实时操控解锁 跳过 dismiss（requestDismissKeyguard 会 cancel）");
+        handler.postDelayed(swipeTask, LiveUnlock.WAKE_WAIT_MS);
     }
 
     @Override
     protected void onDestroy() {
-        handler.removeCallbacks(timeout);
         handler.removeCallbacks(finishSoon);
         releaseWakeLock();
         super.onDestroy();
@@ -153,51 +154,46 @@ public class WakeActivity extends Activity {
         }
     }
 
-    private void dismissKeyguard() {
-        if (Build.VERSION.SDK_INT < 26) {
-            report("error");
-            return;
-        }
-        KeyguardManager km = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
-        if (km == null) {
-            report("error");
-            return;
-        }
-        handler.postDelayed(timeout, UNLOCK_TIMEOUT_MS);
+    /** Keep the panel lit after this activity finishes, so the swipe hits the keyguard. */
+    @SuppressWarnings("deprecation")
+    private static void pokeScreen(Context ctx) {
         try {
-            km.requestDismissKeyguard(this, new KeyguardManager.KeyguardDismissCallback() {
-                @Override
-                public void onDismissSucceeded() {
-                    report("success");
-                }
-
-                @Override
-                public void onDismissCancelled() {
-                    report("cancel");
-                }
-
-                @Override
-                public void onDismissError() {
-                    report("error");
-                }
-            });
-        } catch (Exception e) {
-            String m = e.getMessage() == null ? e.toString() : e.getMessage();
-            LiveStream.reportLive("实时操控解锁 error " + m);
-            reported = true;
-            finish();
+            PowerManager pm = (PowerManager) ctx.getSystemService(POWER_SERVICE);
+            if (pm == null) {
+                return;
+            }
+            PowerManager.WakeLock wl = pm.newWakeLock(
+                    PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                    "tapsprite:unlock");
+            wl.setReferenceCounted(false);
+            wl.acquire(4000);
+        } catch (Exception ignored) {
         }
     }
 
-    private void report(String result) {
-        if (reported) {
-            return;
-        }
-        reported = true;
-        handler.removeCallbacks(timeout);
-        LiveStream.reportLive("实时操控解锁 " + result);
+    private void swipeUnlock() {
+        LiveStream.Disp d = LiveStream.readDisp();
+        final int[] s = LiveUnlock.swipePx(d.w, d.h);
+        LiveStream.reportLive("实时操控解锁 上滑 " + s[0] + "," + s[1]
+                + " → " + s[0] + "," + s[2] + " " + s[3] + "ms");
         if (!isFinishing()) {
             finish();
         }
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                // Let the translucent activity leave so the swipe lands on the keyguard.
+                SystemClock.sleep(80);
+                AutoService auto = AppState.auto;
+                if (auto == null) {
+                    LiveStream.reportLive("实时操控解锁 上滑失败 无障碍未连");
+                    return;
+                }
+                boolean ok = auto.swipe(s[0], s[1], s[0], s[2], s[3]);
+                LiveStream.reportLive(ok ? "实时操控解锁 上滑完成" : "实时操控解锁 上滑失败");
+            }
+        }, "tapsprite-unlock");
+        t.setDaemon(true);
+        t.start();
     }
 }

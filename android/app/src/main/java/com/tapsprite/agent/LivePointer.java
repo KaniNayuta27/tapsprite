@@ -7,36 +7,39 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import java.util.ArrayDeque;
 
 /**
- * Real-time finger for 实时操控. The network thread only publishes the latest
- * target. The main thread dispatches the next accessibility segment from
- * {@code onCompleted}, never before, and does not hold {@link DeviceGate}
- * across the drag.
+ * Real-time finger for 实时操控. The network thread only enqueues the latest
+ * samples. The main thread asks {@link LiveGesture} what to dispatch, and
+ * never starts the next segment before {@code onCompleted}.
  *
- * <p>API 26+ chains short {@code continueStroke} segments so a held mouse is a
- * held finger (long-press runs while the button is down). Older APIs, or no
- * accessibility service, record the path and play one swipe on release.
+ * <p>A click (button up before the hold threshold, tiny movement) is one
+ * 60ms tap with {@code willContinue=false}. A hold of {@link LiveGesture#HOLD_MS}
+ * becomes a long press. A drag streams short {@code continueStroke} segments.
+ * Keep-alives run only after that choice, so they cannot turn a click into a
+ * long press by adding segment time while {@code up} waits.
  */
 final class LivePointer {
     private static final int DOWN = 1;
+    private static final int MOVE = 2;
+    private static final int UP = 3;
+    private static final int LIFT = 4;
+    private static final int TICK = 5;
+    private static final int QCAP = 48;
     private static final int SAMPLE_CAP = 64;
 
-    private static final Object PUB = new Object();
-    private static int pubPhase;
-    private static int pubX;
-    private static int pubY;
-    private static int pubDownX;
-    private static int pubDownY;
-    private static boolean needPress;
+    private static final Object Q = new Object();
+    private static final ArrayDeque<Ev> QUEUE = new ArrayDeque<Ev>();
+    private static final LiveGesture GESTURE = new LiveGesture();
 
-    private static final Object SAMPLES = new Object();
-    private static final int[] SX = new int[SAMPLE_CAP];
-    private static final int[] SY = new int[SAMPLE_CAP];
-    private static int sn;
-    private static boolean sampleOpen;
-    private static long sampleT0;
-    private static boolean cancelFallback;
+    private static final class Ev {
+        int k;
+        int x;
+        int y;
+        long t;
+        long held;
+    }
 
     private static Handler main;
     private static final Runnable PUMP = new Runnable() {
@@ -45,82 +48,45 @@ final class LivePointer {
             pump();
         }
     };
-    private static final Runnable FAIL = new Runnable() {
+    private static final Runnable HOLD = new Runnable() {
         @Override
         public void run() {
-            afterGesture(true);
+            enqueue(TICK, 0, 0, SystemClock.uptimeMillis(), -1);
+            pump();
         }
     };
 
     private static GestureDescription.StrokeDescription stroke;
-    private static boolean dispatching;
     private static int strokeGen;
     private static boolean suppressed;
-    private static int mode;
-    private static boolean dragged;
-    private static int anchorX;
-    private static int anchorY;
-    private static int lastX;
-    private static int lastY;
-    private static long lastDispatchAt;
-    private static int burst;
-    private static boolean abortIfIdle;
+
+    private static final int[] SX = new int[SAMPLE_CAP];
+    private static final int[] SY = new int[SAMPLE_CAP];
+    private static int sn;
 
     private LivePointer() {
     }
 
     /** Network thread. {@code op} is down, move, or up. Coordinates are physical pixels. */
     static void input(String op, int x, int y) {
-        synchronized (PUB) {
-            if ("down".equals(op)) {
-                pubDownX = x;
-                pubDownY = y;
-                pubX = x;
-                pubY = y;
-                pubPhase = DOWN;
-                needPress = true;
-                abortIfIdle = false;
-            } else if ("move".equals(op)) {
-                if (pubPhase != DOWN && !needPress) {
-                    return;
-                }
-                pubX = x;
-                pubY = y;
-            } else if ("up".equals(op)) {
-                pubX = x;
-                pubY = y;
-                pubPhase = 0;
-            } else {
-                return;
-            }
+        input(op, x, y, -1);
+    }
+
+    /**
+     * @param clientHeldMs for {@code up}: how long the PC button was down, or -1.
+     */
+    static void input(String op, int x, int y, long clientHeldMs) {
+        int k = "down".equals(op) ? DOWN : "move".equals(op) ? MOVE : "up".equals(op) ? UP : 0;
+        if (k == 0) {
+            return;
         }
-        synchronized (SAMPLES) {
-            if ("down".equals(op)) {
-                sn = 0;
-                sampleOpen = true;
-                cancelFallback = false;
-                sampleT0 = SystemClock.uptimeMillis();
-                pushSample(x, y);
-            } else if ("move".equals(op) && sampleOpen) {
-                pushSample(x, y);
-            } else if ("up".equals(op) && sampleOpen) {
-                pushSample(x, y);
-                sampleOpen = false;
-            }
-        }
+        enqueue(k, x, y, SystemClock.uptimeMillis(), clientHeldMs);
         kick();
     }
 
     /** Socket drop, stop, or a new session: lift an open finger and do not replay a fallback swipe. */
     static void lift() {
-        synchronized (PUB) {
-            pubPhase = 0;
-        }
-        synchronized (SAMPLES) {
-            cancelFallback = true;
-            sampleOpen = false;
-        }
-        abortIfIdle = true;
+        enqueue(LIFT, 0, 0, SystemClock.uptimeMillis(), -1);
         kick();
     }
 
@@ -128,13 +94,54 @@ final class LivePointer {
     static void preempt() {
         suppressed = true;
         strokeGen++;
-        dispatching = false;
         stroke = null;
+        GESTURE.lostStroke();
     }
 
     static void resumeAfterScript() {
         suppressed = false;
         kick();
+    }
+
+    private static void enqueue(int k, int x, int y, long t, long held) {
+        synchronized (Q) {
+            if (k == MOVE) {
+                Ev last = QUEUE.peekLast();
+                if (last != null && last.k == MOVE) {
+                    last.x = x;
+                    last.y = y;
+                    last.t = t;
+                    return;
+                }
+            }
+            if (QUEUE.size() >= QCAP) {
+                boolean dropped = false;
+                java.util.Iterator<Ev> it = QUEUE.iterator();
+                while (it.hasNext()) {
+                    if (it.next().k == MOVE) {
+                        it.remove();
+                        dropped = true;
+                        break;
+                    }
+                }
+                if (!dropped) {
+                    QUEUE.pollFirst();
+                }
+            }
+            Ev e = new Ev();
+            e.k = k;
+            e.x = x;
+            e.y = y;
+            e.t = t;
+            e.held = held;
+            QUEUE.addLast(e);
+        }
+    }
+
+    private static Ev poll() {
+        synchronized (Q) {
+            return QUEUE.pollFirst();
+        }
     }
 
     private static void kick() {
@@ -156,7 +163,94 @@ final class LivePointer {
         return main;
     }
 
-    private static void pushSample(int x, int y) {
+    private static void arm(LiveGesture.Step step) {
+        if (step == null || step.armAt < 0) {
+            return;
+        }
+        Handler h = handler();
+        if (h == null) {
+            return;
+        }
+        h.removeCallbacks(HOLD);
+        if (step.armAt == 0) {
+            return;
+        }
+        long delay = step.armAt - SystemClock.uptimeMillis();
+        if (delay < 1) {
+            delay = 1;
+        }
+        h.postDelayed(HOLD, delay);
+    }
+
+    private static void log(LiveGesture.Step step) {
+        if (step != null && step.reason != null && step.reason.length() > 0) {
+            LiveStream.reportLive("实时操控手势 " + step.reason);
+        }
+    }
+
+    private static void pump() {
+        if (suppressed || AutoService.scriptGesture) {
+            return;
+        }
+        if (GESTURE.busy()) {
+            return;
+        }
+        GESTURE.setInstant(!canStream());
+        for (int guard = 0; guard < 8; guard++) {
+            if (GESTURE.busy()) {
+                return;
+            }
+            Ev ev = poll();
+            LiveGesture.Step step = ev != null ? apply(ev) : GESTURE.follow(SystemClock.uptimeMillis());
+            arm(step);
+            log(step);
+            if (step.op == LiveGesture.OP_NONE) {
+                if (ev == null) {
+                    return;
+                }
+                continue;
+            }
+            if (!canStream()) {
+                if (GESTURE.aborted()) {
+                    sn = 0;
+                } else {
+                    recordAndMaybePlay(step);
+                }
+                GESTURE.noteDone(false);
+                continue;
+            }
+            if (!launch(step)) {
+                GESTURE.noteDone(true);
+                continue;
+            }
+            return;
+        }
+    }
+
+    private static LiveGesture.Step apply(Ev e) {
+        switch (e.k) {
+            case DOWN:
+                sn = 0;
+                return GESTURE.down(e.t, e.x, e.y);
+            case MOVE:
+                return GESTURE.move(e.t, e.x, e.y);
+            case UP:
+                return GESTURE.up(e.t, e.x, e.y, e.held);
+            case LIFT:
+                sn = 0;
+                return GESTURE.lift(e.t);
+            case TICK:
+                return GESTURE.tick(e.t);
+            default:
+                return LiveGesture.Step.KEEP;
+        }
+    }
+
+    private static boolean canStream() {
+        return Build.VERSION.SDK_INT >= 26 && AppState.auto != null;
+    }
+
+    private static void remember(int x, int y) {
         if (sn > 0 && SX[sn - 1] == x && SY[sn - 1] == y) {
             return;
         }
@@ -170,150 +264,51 @@ final class LivePointer {
         sn++;
     }
 
-    private static void pump() {
-        if (dispatching) {
+    private static void recordAndMaybePlay(LiveGesture.Step s) {
+        if (s.op == LiveGesture.OP_TAP || s.op == LiveGesture.OP_HOLD
+                || s.op == LiveGesture.OP_SWIPE || s.op == LiveGesture.OP_START) {
+            sn = 0;
+        }
+        remember(s.x0, s.y0);
+        remember(s.x1, s.y1);
+        if (s.cont) {
             return;
         }
-        if (suppressed || AutoService.scriptGesture) {
+        int n = sn;
+        sn = 0;
+        if (n <= 0) {
             return;
         }
-        int phase;
-        int x;
-        int y;
-        int dx;
-        int dy;
-        boolean press;
-        synchronized (PUB) {
-            phase = pubPhase;
-            x = pubX;
-            y = pubY;
-            dx = pubDownX;
-            dy = pubDownY;
-            press = needPress;
+        float[] xs = new float[n];
+        float[] ys = new float[n];
+        for (int i = 0; i < n; i++) {
+            xs[i] = SX[i];
+            ys[i] = SY[i];
         }
-        if (abortIfIdle && mode == 0) {
-            abortIfIdle = false;
-            synchronized (PUB) {
-                needPress = false;
-            }
-            discardSamples();
-            return;
-        }
-        if (mode == 0 && (phase == DOWN || press)) {
-            mode = canStream() ? 1 : 2;
-            dragged = false;
-            anchorX = dx;
-            anchorY = dy;
-            lastX = dx;
-            lastY = dy;
-        }
-        if (mode == 1) {
-            if (!canStream()) {
-                stroke = null;
-                mode = 2;
-            } else {
-                streamStep(phase, x, y);
-                return;
-            }
-        }
-        if (mode == 2 && phase != DOWN) {
-            boolean cancel;
-            synchronized (SAMPLES) {
-                cancel = cancelFallback;
-            }
-            if (cancel || abortIfIdle) {
-                discardSamples();
-                synchronized (PUB) {
-                    needPress = false;
-                }
-            } else {
-                playFallback();
-            }
-            mode = 0;
-            abortIfIdle = false;
-            synchronized (SAMPLES) {
-                cancelFallback = false;
-            }
-        }
+        LiveStream.playFallback(xs, ys, s.durMs);
     }
 
-    private static boolean canStream() {
-        return Build.VERSION.SDK_INT >= 26 && AppState.auto != null;
-    }
-
-    private static void streamStep(int phase, int x, int y) {
-        if (stroke == null) {
-            boolean press;
-            synchronized (PUB) {
-                press = needPress;
-                if (press || phase == DOWN) {
-                    needPress = false;
-                }
-            }
-            if (!press && phase != DOWN) {
-                mode = 0;
-                return;
-            }
-            Path path = new Path();
-            path.moveTo(anchorX, anchorY);
-            lastX = anchorX;
-            lastY = anchorY;
-            dragged = false;
-            dispatch(path, 20L, true, true);
-            return;
-        }
-        if (phase != DOWN) {
-            Path path = new Path();
-            path.moveTo(lastX, lastY);
-            if (x != lastX || y != lastY) {
-                path.lineTo(x, y);
-            }
-            lastX = x;
-            lastY = y;
-            dispatch(path, 20L, false, false);
-            return;
-        }
-        if (!dragged && !LiveTouch.leftSlop(anchorX, anchorY, x, y)) {
-            Path path = new Path();
-            path.moveTo(lastX, lastY);
-            dispatch(path, 50L, true, false);
-            return;
-        }
-        dragged = true;
-        if (x == lastX && y == lastY) {
-            Path path = new Path();
-            path.moveTo(lastX, lastY);
-            dispatch(path, 50L, true, false);
-            return;
-        }
-        int dur = LiveTouch.moveDurationMs(SystemClock.uptimeMillis() - lastDispatchAt);
-        Path path = new Path();
-        path.moveTo(lastX, lastY);
-        path.lineTo(x, y);
-        lastX = x;
-        lastY = y;
-        dispatch(path, dur, true, false);
-    }
-
-    private static void dispatch(Path path, long dur, final boolean cont, boolean fresh) {
+    private static boolean launch(LiveGesture.Step s) {
         AutoService auto = AppState.auto;
         if (auto == null || Build.VERSION.SDK_INT < 26) {
-            stroke = null;
-            dispatching = false;
-            mode = 2;
-            return;
+            return false;
+        }
+        Path path = new Path();
+        path.moveTo(s.x0, s.y0);
+        if (s.x0 != s.x1 || s.y0 != s.y1) {
+            path.lineTo(s.x1, s.y1);
         }
         final int my = ++strokeGen;
-        dispatching = true;
-        lastDispatchAt = SystemClock.uptimeMillis();
+        boolean fresh = s.op == LiveGesture.OP_TAP || s.op == LiveGesture.OP_HOLD
+                || s.op == LiveGesture.OP_SWIPE || s.op == LiveGesture.OP_START || stroke == null;
         try {
             GestureDescription.StrokeDescription next;
             if (fresh || stroke == null) {
-                next = new GestureDescription.StrokeDescription(path, 0L, dur, cont);
+                next = new GestureDescription.StrokeDescription(path, 0L, s.durMs, s.cont);
             } else {
-                next = stroke.continueStroke(path, 0L, dur, cont);
+                next = stroke.continueStroke(path, 0L, s.durMs, s.cont);
             }
-            stroke = cont ? next : null;
+            stroke = s.cont ? next : null;
             GestureDescription gesture = new GestureDescription.Builder().addStroke(next).build();
             boolean ok = auto.dispatchGesture(gesture, new AccessibilityService.GestureResultCallback() {
                 @Override
@@ -321,11 +316,8 @@ final class LivePointer {
                     if (my != strokeGen) {
                         return;
                     }
-                    dispatching = false;
-                    if (!cont) {
-                        stroke = null;
-                    }
-                    afterGesture(false);
+                    GESTURE.noteDone(false);
+                    pump();
                 }
 
                 @Override
@@ -333,119 +325,21 @@ final class LivePointer {
                     if (my != strokeGen) {
                         return;
                     }
-                    dispatching = false;
                     stroke = null;
-                    afterGesture(true);
+                    GESTURE.noteDone(true);
+                    pump();
                 }
             }, handler());
             if (!ok) {
-                dispatching = false;
                 stroke = null;
                 strokeGen++;
-                Handler h = handler();
-                if (h != null) {
-                    h.post(FAIL);
-                }
+                return false;
             }
+            return true;
         } catch (RuntimeException ex) {
-            dispatching = false;
             stroke = null;
             strokeGen++;
-            Handler h = handler();
-            if (h != null) {
-                h.post(FAIL);
-            }
+            return false;
         }
-    }
-
-    private static void afterGesture(boolean cancelled) {
-        if (suppressed || AutoService.scriptGesture) {
-            return;
-        }
-        int phase;
-        synchronized (PUB) {
-            phase = pubPhase;
-        }
-        if (cancelled) {
-            if (phase == DOWN) {
-                repressAnchor();
-                burst++;
-                if (burst > 4) {
-                    burst = 0;
-                    Handler h = handler();
-                    if (h != null) {
-                        h.postDelayed(PUMP, 60);
-                    }
-                    return;
-                }
-                pump();
-                return;
-            }
-            mode = 0;
-            return;
-        }
-        burst = 0;
-        if (phase != DOWN && stroke == null) {
-            mode = 0;
-        }
-        pump();
-    }
-
-    private static void repressAnchor() {
-        synchronized (PUB) {
-            anchorX = pubX;
-            anchorY = pubY;
-            pubDownX = pubX;
-            pubDownY = pubY;
-        }
-        lastX = anchorX;
-        lastY = anchorY;
-        dragged = false;
-        stroke = null;
-    }
-
-    private static void discardSamples() {
-        synchronized (SAMPLES) {
-            sn = 0;
-            sampleOpen = false;
-        }
-    }
-
-    private static void playFallback() {
-        final int n;
-        final int[] xs;
-        final int[] ys;
-        final long t0;
-        synchronized (SAMPLES) {
-            n = sn;
-            xs = new int[n];
-            ys = new int[n];
-            System.arraycopy(SX, 0, xs, 0, n);
-            System.arraycopy(SY, 0, ys, 0, n);
-            t0 = sampleT0;
-            sn = 0;
-            sampleOpen = false;
-        }
-        synchronized (PUB) {
-            needPress = false;
-        }
-        if (n <= 0) {
-            return;
-        }
-        long ms = SystemClock.uptimeMillis() - t0;
-        if (ms < 40) {
-            ms = 40;
-        }
-        if (ms > 10000) {
-            ms = 10000;
-        }
-        final int dur = (int) ms;
-        final float[] fx = new float[n];
-        final float[] fy = new float[n];
-        for (int i = 0; i < n; i++) {
-            fx[i] = xs[i];
-            fy[i] = ys[i];
-        }
-        LiveStream.playFallback(fx, fy, dur);
     }
 }

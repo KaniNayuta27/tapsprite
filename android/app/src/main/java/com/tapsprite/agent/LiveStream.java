@@ -430,7 +430,11 @@ public final class LiveStream {
             logMap(op, px[0], px[1], nx, ny, d);
             sendMapped(sender, nx, ny, px[0], px[1], d);
         }
-        LivePointer.input(op, px[0], px[1]);
+        long held = -1;
+        if ("up".equals(op) && o.has("held")) {
+            held = o.optLong("held", -1);
+        }
+        LivePointer.input(op, px[0], px[1], held);
     }
 
     /** Phone log line that also shows up in the PC console log. */

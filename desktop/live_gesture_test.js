@@ -51,6 +51,7 @@ for (const s of [
   'op: "down"',
   'op: "move"',
   'op: "up"',
+  "held: held",
   'op: "fps"',
   'op: "wake"',
   'op: "unlock"',

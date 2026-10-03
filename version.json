@@ -1,7 +1,7 @@
 {
-  "versionCode": 112,
-  "versionName": "0.9.87",
+  "versionCode": 113,
+  "versionName": "0.9.88",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
   "exe": "https://tapsprite.pages.dev/tapsprite.exe",
-  "notes": "实时操控：密码键盘浮层，锁屏黑屏时盲输 PIN（不记录数字）。PC 1.1.99 / App 0.9.87（versionCode 112）。下载仍走 pages.dev，自动更新以 dist-channel.json 为准"
+  "notes": "实时操控：快击改为短按，不再被识别成长按；解锁改为亮屏后上滑出密码盘。PC 1.1.100 / App 0.9.88（versionCode 113）。下载仍走 pages.dev，自动更新以 dist-channel.json 为准"
 }

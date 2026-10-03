@@ -477,7 +477,9 @@
       f.ny = ny;
     }
     if (debug) showLocal({ nx: f.nx, ny: f.ny });
-    send({ op: "up", nx: f.nx, ny: f.ny });
+    var held = Date.now() - (f.t0 || Date.now());
+    if (held < 0) held = 0;
+    send({ op: "up", nx: f.nx, ny: f.ny, held: held });
   }
 
   canvas.addEventListener("pointerdown", function (e) {
@@ -495,7 +497,8 @@
       sentNx: n.nx,
       sentNy: n.ny,
       dragged: false,
-      timer: 0
+      timer: 0,
+      t0: Date.now()
     };
     send({ op: "down", nx: n.nx, ny: n.ny });
     if (debug) showLocal(n);
@@ -529,6 +532,10 @@
   canvas.addEventListener("pointercancel", endPointer);
   canvas.addEventListener("lostpointercapture", endPointer);
   canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  // Capture can miss a release outside the picture. A stuck down becomes a long press.
+  window.addEventListener("pointerup", endPointer);
+  window.addEventListener("pointercancel", endPointer);
+  window.addEventListener("blur", function () { releaseFinger(null, null); });
   window.addEventListener("pagehide", function () { releaseFinger(null, null); });
 
   function shutdown(why) {

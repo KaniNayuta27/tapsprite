@@ -1,9 +1,9 @@
 {
-  "versionCode": 112,
-  "versionName": "0.9.87",
-  "apk_ver": "0.9.87",
-  "exe_ver": "1.1.99",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-87.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-99.exe",
-  "notes": "实时操控：密码键盘浮层，锁屏黑屏时盲输 PIN（不记录数字）。PC 1.1.99 / App 0.9.87（versionCode 112）"
+  "versionCode": 113,
+  "versionName": "0.9.88",
+  "apk_ver": "0.9.88",
+  "exe_ver": "1.1.100",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-88.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-100.exe",
+  "notes": "实时操控：快击改为短按，不再被识别成长按；解锁改为亮屏后上滑出密码盘。PC 1.1.100 / App 0.9.88（versionCode 113）"
 }
