@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.100</title>
+<title>触控精灵 v1.1.101</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -388,7 +388,14 @@ textarea {
 .live-fps input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
 #page-live .log {
   flex: 1 1 280px; min-width: 220px; min-height: 0; height: auto;
-  margin: 10px 10px 10px 8px;
+  margin: 10px 10px 10px 0;
+}
+.live-divider {
+  flex: none; width: 14px; position: relative;
+}
+.live-divider::after {
+  content: ""; position: absolute; top: 16px; bottom: 16px; left: 50%;
+  width: 1px; background: rgba(255,255,255,.28);
 }
 .live-map {
   position: absolute; left: 8px; bottom: 8px; max-width: calc(100% - 16px);
@@ -421,6 +428,15 @@ textarea {
   background: rgba(17,16,24,.55); color: #fff;
   font: 700 16px/1 var(--font); cursor: pointer;
 }
+.live-pin-lock {
+  position: absolute; top: 3px; left: 3px; z-index: 2;
+  height: 22px; padding: 0 7px; border: 0; border-radius: 999px;
+  background: rgba(17,16,24,.55); color: #fff;
+  font: 700 11px/22px var(--font); cursor: pointer;
+}
+.live-pin-lock[aria-pressed="true"] { background: rgba(196,184,255,.75); color: #1a1430; }
+.live-pin.locked { cursor: default; }
+.live-pin.locked .live-pin-resize { pointer-events: none; opacity: .35; }
 .live-pin-resize {
   position: absolute; right: 2px; bottom: 2px; z-index: 2;
   width: 16px; height: 16px; padding: 0; border: 0; border-radius: 0 0 10px 0;
@@ -511,7 +527,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.100</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.101</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -526,7 +542,7 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.100</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.101</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -691,7 +707,8 @@ textarea {
       <div class="live-pic">
         <canvas id="liveCanvas"></canvas>
         <div class="live-map" id="liveMap" hidden>自测网格 · 假定 1080×2400（未连接）</div>
-        <div id="livePin" class="live-pin" hidden title="拖动空白处移动，右下角调整大小">
+        <div id="livePin" class="live-pin" hidden title="拖动空白处移动，右下角调整大小。锁定后不可移动">
+          <button type="button" class="live-pin-lock" aria-pressed="false" aria-label="锁定">锁定</button>
           <button type="button" class="live-pin-x" aria-label="关闭">×</button>
           <button type="button" class="live-pin-key">1</button>
           <button type="button" class="live-pin-key">2</button>
@@ -706,6 +723,7 @@ textarea {
           <button type="button" class="live-pin-resize" aria-label="调整大小"></button>
         </div>
       </div>
+      <div class="live-divider" aria-hidden="true"></div>
       <div class="log" id="liveLog" tabindex="0"></div>
     </div>
   </section>

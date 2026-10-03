@@ -31,7 +31,7 @@ const (
 	httpPort = 18766
 	udpPort  = 18766
 	phoneUDP = 18765
-	version  = "1.1.100"
+	version  = "1.1.101"
 	// deviceLiveFor: phone is shown as connected only while hello/pull is fresh.
 	deviceLiveFor = 8 * time.Second
 	// After this silence, TCP-probe phone:18765; failure drops connected UI immediately.
@@ -144,6 +144,7 @@ func main() {
 	lanIP := preferredLocalIPv4()
 	log.Printf("tapsprite desktop %s listening on http://0.0.0.0%s (lanIP=%s)", version, addr, lanIP)
 	refreshLANSub(lanIP)
+	restoreApkMark()
 	go allowFirewall()
 	scheduleStartupCleanup()
 

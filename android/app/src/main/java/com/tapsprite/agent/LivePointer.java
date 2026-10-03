@@ -14,11 +14,11 @@ import java.util.ArrayDeque;
  * samples. The main thread asks {@link LiveGesture} what to dispatch, and
  * never starts the next segment before {@code onCompleted}.
  *
- * <p>A click (button up before the hold threshold, tiny movement) is one
- * 60ms tap with {@code willContinue=false}. A hold of {@link LiveGesture#HOLD_MS}
- * becomes a long press. A drag streams short {@code continueStroke} segments.
- * Keep-alives run only after that choice, so they cannot turn a click into a
- * long press by adding segment time while {@code up} waits.
+ * <p>Down dispatches immediately: a short {@code willContinue=true} segment.
+ * Further segments are chained from {@code onCompleted}, so a held button is
+ * already a press and a drag is not stuck behind a 560ms first stroke. Up
+ * ends the stroke. API &lt; 26 cannot continue a stroke, so that path sends
+ * one shot after the gesture is known.
  */
 final class LivePointer {
     private static final int DOWN = 1;

@@ -65,6 +65,10 @@ public final class LiveStream {
     private static volatile Sender activeSender;
     private static volatile String reopenWhy = "";
     private static int lastEncLevel = -1;
+    /** Encoder input while a session is running. 抓抓 borrows the projection around it. */
+    private static volatile Surface encSurface;
+    private static volatile int encW;
+    private static volatile int encH;
 
     private LiveStream() {
     }
@@ -185,20 +189,26 @@ public final class LiveStream {
                     AppState.log("实时操控编码器打开失败");
                     break;
                 }
+                int fpsNow = LiveFps.normalize(MAX_FPS.get());
                 Surface surface = codec.createInputSurface();
                 codec.start();
+                limitSurfaceFps(surface, fpsNow);
                 if (!CaptureService.attachLiveSurface(surface, enc[0], enc[1])) {
                     AppState.log("实时操控无法挂上投影");
                     break;
                 }
-                int fpsNow = MAX_FPS.get() >= 60 ? 60 : 30;
+                encSurface = surface;
+                encW = enc[0];
+                encH = enc[1];
                 AppState.log("实时操控开始 " + enc[0] + "x" + enc[1]
                         + " 屏 " + d.w + "x" + d.h + " rot " + d.rotDeg
-                        + " L" + lastEncLevel + " " + fpsNow + "fps "
+                        + " L" + lastEncLevel + " " + fpsNow + "fps"
+                        + (fpsNow <= LiveFps.LOW ? " 锁定" : "") + " "
                         + (fpsNow >= 60 ? 6 : 3) + "Mbps");
                 sender.urgent(metaMessage(d, enc[0], enc[1]));
                 requestSync(codec);
                 boolean reopen = pump(codec, sender, id, d, enc[0], enc[1]);
+                encSurface = null;
                 releaseCodec(codec);
                 codec = null;
                 CaptureService.restoreShotSurface();
@@ -212,6 +222,7 @@ public final class LiveStream {
         } catch (Throwable t) {
             AppState.log("实时操控中断 " + t.getMessage());
         } finally {
+            encSurface = null;
             releaseCodec(codec);
             LivePointer.lift();
             if (activeSender == sender) {
@@ -405,6 +416,59 @@ public final class LiveStream {
         }
     }
 
+    /**
+     * Ask SurfaceFlinger to deliver frames at {@code fps}. KEY_FRAME_RATE alone
+     * is a hint; many encoders still emit the panel refresh (often 60) unless
+     * the input surface requests a fixed rate. API 31 must pass ALWAYS or the
+     * change from the display rate is refused as non-seamless.
+     */
+    private static void limitSurfaceFps(Surface surface, int fps) {
+        if (surface == null || Build.VERSION.SDK_INT < 30) {
+            return;
+        }
+        float rate = LiveFps.normalize(fps);
+        try {
+            if (Build.VERSION.SDK_INT >= 31) {
+                surface.setFrameRate(rate, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE,
+                        Surface.CHANGE_FRAME_RATE_ALWAYS);
+            } else {
+                surface.setFrameRate(rate, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
+            }
+        } catch (Throwable t) {
+            AppState.log("实时操控帧率限制失败 " + t.getMessage());
+        }
+    }
+
+    /**
+     * Point the one MediaProjection display back at the screenshot reader for a
+     * single fresh frame, then return it to the encoder. targetSdk 34 allows
+     * only one virtual display per grant, so 抓抓 and 实时操控 cannot capture at
+     * the same time without this borrow.
+     *
+     * @return true when a new reader frame arrived
+     */
+    static boolean lendForShot() {
+        Surface surface = encSurface;
+        int w = encW;
+        int h = encH;
+        if (surface == null || w < 2 || h < 2) {
+            return false;
+        }
+        long prev = CaptureService.frameSeq();
+        CaptureService.restoreShotSurface();
+        boolean fresh = CaptureService.awaitFrameAfter(prev, 800);
+        if (encSurface != surface) {
+            return fresh;
+        }
+        if (!CaptureService.attachLiveSurface(surface, w, h)) {
+            AppState.log("抓抓后未能挂回实时画面");
+            return fresh;
+        }
+        limitSurfaceFps(surface, MAX_FPS.get());
+        syncWanted = true;
+        return fresh;
+    }
+
     /** 30 (default) or 60. Anything at or above 60 is the 60 fps / 6 Mbps mode. */
     private static void applyFps(String json) {
         int requested = 30;
@@ -412,7 +476,7 @@ public final class LiveStream {
             requested = new JSONObject(json).optInt("max", 30);
         } catch (Exception ignored) {
         }
-        int fps = requested >= 60 ? 60 : 30;
+        int fps = LiveFps.normalize(requested);
         int prev = MAX_FPS.getAndSet(fps);
         if (prev != fps) {
             FPS_GEN.incrementAndGet();
@@ -647,6 +711,7 @@ public final class LiveStream {
                 + ",\"rot\":" + d.rotDeg
                 + ",\"api\":" + api
                 + ",\"actions\":" + LiveActions.actionsJson(api)
+                + ",\"fps\":" + LiveFps.normalize(MAX_FPS.get())
                 + ",\"ts\":" + System.currentTimeMillis() + "}";
         byte[] body = json.getBytes(StandardCharsets.UTF_8);
         byte[] msg = new byte[1 + body.length];
@@ -749,7 +814,7 @@ public final class LiveStream {
      * Intra refresh is left unset: one lost frame would smear for the whole period.
      */
     private static void tryConfigure(MediaCodec codec, int w, int h, int level) {
-        int fps = MAX_FPS.get() >= 60 ? 60 : 30;
+        int fps = LiveFps.normalize(MAX_FPS.get());
         int bitrate = fps >= 60 ? 6_000_000 : 3_000_000;
         int avcLevel = fps >= 60
                 ? MediaCodecInfo.CodecProfileLevel.AVCLevel4

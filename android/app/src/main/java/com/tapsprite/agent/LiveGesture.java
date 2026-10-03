@@ -1,29 +1,24 @@
 package com.tapsprite.agent;
 
 /**
- * Tap / long-press / drag decisions for one live finger. Time is the caller's
- * clock (uptime millis). No Android types, so unit tests can run the timing.
+ * One live finger. Time is the caller's clock (uptime millis). No Android types.
  *
- * <p>A click must not start a continued stroke. Chaining {@code willContinue}
- * keep-alives on pointer-down holds the finger for the sum of every segment
- * (plus the gap while {@code up} waits for {@code onCompleted}). That sum
- * crosses the system long-press timeout (~400–500ms) on an ordinary click.
- * Nothing is dispatched until the gesture is known:
- * <ul>
- *   <li>up before {@link #HOLD_MS} with tiny movement → one 60ms tap</li>
- *   <li>still down at {@link #HOLD_MS} → a stationary press long enough to
- *       fire long-press</li>
- *   <li>movement past the slop → a short real-time stroke</li>
- * </ul>
+ * <p>On API 26+ the finger goes down on the down event. Short
+ * {@code willContinue=true} segments keep it down while the button is held, so
+ * a held mouse is already a press on the phone. A move is applied on the next
+ * segment (tens of milliseconds, not a 560ms first stroke). Up ends the stroke.
+ *
+ * <p>API &lt; 26 has no {@code continueStroke}. That path waits and sends one
+ * shot: a short tap, a long hold, or a swipe.
  */
 final class LiveGesture {
     static final int HOLD_MS = 450;
-    /** One-shot click. Inside the 50–80ms window so the phone treats it as a tap. */
     static final int TAP_MS = 60;
-    /** Longer than OEM long-press timeouts (400ms, some 500ms). */
     static final int LONG_MS = 560;
     static final int END_MS = 20;
-    static final int KEEPALIVE_MS = 50;
+    /** Live segment. Short so a drag is not stuck behind a long first stroke. */
+    static final int SEG_MS = 32;
+    static final int KEEPALIVE_MS = SEG_MS;
 
     static final int OP_NONE = 0;
     static final int OP_TAP = 1;
@@ -51,17 +46,16 @@ final class LiveGesture {
     private int cx;
     private int cy;
     private long t0;
-    private long lastEmit;
     private long heldHint = -1;
     private boolean upSeen;
     private boolean abort;
     private boolean dispatching;
-    private boolean open;
     private boolean fresh = true;
     private boolean cancelNext;
     private boolean waitingRetry;
     private boolean instant;
     private boolean queued;
+    private boolean ending;
     private int contact;
     private int burst;
     private int shotTries;
@@ -110,7 +104,7 @@ final class LiveGesture {
         }
     }
 
-    /** API &lt; 26 has no continueStroke. Stationary keep-alives are skipped. */
+    /** API &lt; 26 has no continueStroke. */
     void setInstant(boolean on) {
         instant = on;
     }
@@ -128,6 +122,209 @@ final class LiveGesture {
     }
 
     Step down(long now, int x, int y) {
+        if (instant) {
+            return downInstant(now, x, y);
+        }
+        if (phase == STREAM || phase == ONESHOT || phase == PENDING) {
+            queued = true;
+            qx = x;
+            qy = y;
+            qt = now;
+            upSeen = true;
+            if (dispatching) {
+                return Step.KEEP;
+            }
+            return follow(now);
+        }
+        return beginStream(now, x, y);
+    }
+
+    Step move(long now, int x, int y) {
+        if (instant) {
+            return moveInstant(now, x, y);
+        }
+        if (phase != STREAM || ending) {
+            return Step.KEEP;
+        }
+        cx = x;
+        cy = y;
+        if (dispatching || upSeen) {
+            return Step.KEEP;
+        }
+        return followStream(now);
+    }
+
+    Step up(long now, int x, int y, long clientHeldMs) {
+        if (instant) {
+            return upInstant(now, x, y, clientHeldMs);
+        }
+        if (phase == IDLE) {
+            return Step.KEEP;
+        }
+        cx = x;
+        cy = y;
+        upSeen = true;
+        if (clientHeldMs >= 0) {
+            heldHint = clientHeldMs;
+        }
+        if (dispatching) {
+            return Step.KEEP;
+        }
+        return follow(now);
+    }
+
+    Step tick(long now) {
+        if (instant) {
+            return tickInstant(now);
+        }
+        if (waitingRetry) {
+            waitingRetry = false;
+        }
+        if (dispatching) {
+            return Step.KEEP;
+        }
+        return follow(now);
+    }
+
+    Step lift(long now) {
+        abort = true;
+        upSeen = true;
+        queued = false;
+        if (phase == IDLE) {
+            return Step.DISARM;
+        }
+        if (instant && phase == PENDING && !dispatching) {
+            return goIdle();
+        }
+        if (dispatching) {
+            return Step.KEEP;
+        }
+        return follow(now);
+    }
+
+    /** The in-flight segment finished. Does not choose the next one. */
+    void noteDone(boolean cancelled) {
+        dispatching = false;
+        if (cancelled) {
+            fresh = true;
+            pendingCont = false;
+            cancelNext = true;
+            return;
+        }
+        if (pendingCont) {
+            contact += pendingDur;
+        }
+        pendingCont = false;
+        burst = 0;
+        cancelNext = false;
+    }
+
+    /** Accessibility took the stroke away (script gesture). */
+    void lostStroke() {
+        dispatching = false;
+        fresh = true;
+        pendingCont = false;
+        cancelNext = false;
+        if (phase == ONESHOT) {
+            phase = IDLE;
+            upSeen = false;
+            kind = 0;
+        }
+    }
+
+    Step follow(long now) {
+        if (dispatching) {
+            return Step.KEEP;
+        }
+        if (phase == ONESHOT) {
+            return finishOrRestart(now);
+        }
+        if (instant || phase == PENDING) {
+            return followInstant(now);
+        }
+        return followStream(now);
+    }
+
+    private Step followStream(long now) {
+        if (waitingRetry) {
+            return Step.KEEP;
+        }
+        if (cancelNext) {
+            cancelNext = false;
+            return onCancelStream(now);
+        }
+        if (phase != STREAM) {
+            return Step.KEEP;
+        }
+        if (upSeen || abort) {
+            if (ending) {
+                return finishOrRestart(now);
+            }
+            ending = true;
+            int dur = END_MS;
+            if (cx != lx || cy != ly) {
+                dur = Math.min(120, Math.max(END_MS, SEG_MS));
+            }
+            int op = fresh ? OP_START : OP_END;
+            return emit(now, op, lx, ly, cx, cy, dur, false, 0, "up");
+        }
+        boolean drag = (cx != lx || cy != ly) && LiveTouch.leftSlop(ax, ay, cx, cy);
+        if (drag) {
+            String reason = kind == KIND_DRAG ? null : "drag";
+            kind = KIND_DRAG;
+            int logKind = reason != null ? KIND_DRAG : 0;
+            return emit(now, fresh ? OP_START : OP_CONT, lx, ly, cx, cy, SEG_MS, true, logKind, reason);
+        }
+        return emit(now, fresh ? OP_START : OP_CONT, lx, ly, lx, ly, SEG_MS, true, 0, null);
+    }
+
+    private Step onCancelStream(long now) {
+        if (abort) {
+            return finishOrRestart(now);
+        }
+        if (ending || upSeen) {
+            if (!queued && kind != KIND_DRAG && contact < HOLD_MS && shotTries < 1) {
+                shotTries++;
+                phase = ONESHOT;
+                kind = KIND_TAP;
+                fresh = true;
+                return emit(now, OP_TAP, ax, ay, ax, ay, TAP_MS, false, 0, null);
+            }
+            return finishOrRestart(now);
+        }
+        burst++;
+        if (burst > 4) {
+            burst = 0;
+            waitingRetry = true;
+            return Step.armAt(now + 60);
+        }
+        fresh = true;
+        return emit(now, OP_START, cx, cy, cx, cy, SEG_MS, true, 0, null);
+    }
+
+    private Step beginStream(long now, int x, int y) {
+        phase = STREAM;
+        kind = 0;
+        ax = lx = cx = x;
+        ay = ly = cy = y;
+        t0 = now;
+        heldHint = -1;
+        upSeen = false;
+        abort = false;
+        dispatching = false;
+        fresh = true;
+        cancelNext = false;
+        waitingRetry = false;
+        queued = false;
+        ending = false;
+        contact = 0;
+        burst = 0;
+        shotTries = 0;
+        pendingCont = false;
+        return emit(now, OP_START, x, y, x, y, SEG_MS, true, 0, "down");
+    }
+
+    private Step downInstant(long now, int x, int y) {
         if (phase == IDLE || (phase == PENDING && !dispatching)) {
             return beginPending(now, x, y);
         }
@@ -139,35 +336,19 @@ final class LiveGesture {
         if (dispatching) {
             return Step.KEEP;
         }
-        return follow(now);
+        return followInstant(now);
     }
 
-    Step move(long now, int x, int y) {
+    private Step moveInstant(long now, int x, int y) {
         if (phase == IDLE || phase == ONESHOT) {
             return Step.KEEP;
         }
         cx = x;
         cy = y;
-        if (dispatching) {
-            return Step.KEEP;
-        }
-        if (phase == PENDING) {
-            if (!LiveTouch.leftSlop(ax, ay, x, y)) {
-                return Step.KEEP;
-            }
-            return beginDrag(now);
-        }
-        if (waitingRetry) {
-            waitingRetry = false;
-        }
-        return follow(now);
+        return Step.KEEP;
     }
 
-    /**
-     * @param clientHeldMs button-down time measured by the PC page, or -1 if absent.
-     *                     Arrival delay must not turn that into a long press.
-     */
-    Step up(long now, int x, int y, long clientHeldMs) {
+    private Step upInstant(long now, int x, int y, long clientHeldMs) {
         if (phase == IDLE) {
             return Step.KEEP;
         }
@@ -183,122 +364,39 @@ final class LiveGesture {
         if (phase == PENDING) {
             return classifyPending(now);
         }
-        if (waitingRetry) {
-            waitingRetry = false;
-        }
-        return follow(now);
+        return followInstant(now);
     }
 
-    Step tick(long now) {
+    private Step tickInstant(long now) {
         if (waitingRetry) {
             waitingRetry = false;
-            if (!dispatching) {
-                return onCancel(now);
-            }
         }
         if (dispatching) {
             return Step.KEEP;
         }
         if (phase == PENDING && !upSeen && now - t0 >= HOLD_MS) {
             if (LiveTouch.leftSlop(ax, ay, cx, cy)) {
-                return beginDrag(now);
+                return beginSwipe(now, Math.max(0, now - t0));
             }
-            return beginLong(now);
-        }
-        if (phase == STREAM) {
-            return follow(now);
+            return beginHold(now, Math.max(0, now - t0));
         }
         return Step.KEEP;
     }
 
-    Step lift(long now) {
-        abort = true;
-        upSeen = true;
-        queued = false;
-        if (phase == IDLE) {
-            return Step.DISARM;
-        }
-        if (phase == PENDING && !dispatching) {
-            return goIdle();
-        }
-        if (dispatching) {
-            return Step.KEEP;
-        }
-        return follow(now);
-    }
-
-    /** The in-flight segment finished. Does not choose the next one. */
-    void noteDone(boolean cancelled) {
-        dispatching = false;
-        if (cancelled) {
-            open = false;
-            fresh = true;
-            pendingCont = false;
-            cancelNext = true;
-            return;
-        }
-        if (pendingCont) {
-            contact += pendingDur;
-            open = true;
-        } else {
-            open = false;
-        }
-        pendingCont = false;
-        burst = 0;
-        cancelNext = false;
-    }
-
-    /** Accessibility took the stroke away (script gesture). */
-    void lostStroke() {
-        dispatching = false;
-        open = false;
-        fresh = true;
-        pendingCont = false;
-        cancelNext = false;
-        if (phase == ONESHOT) {
-            phase = IDLE;
-            upSeen = false;
-            kind = 0;
-        }
-    }
-
-    Step follow(long now) {
-        if (dispatching) {
-            return Step.KEEP;
-        }
+    private Step followInstant(long now) {
         if (cancelNext) {
             cancelNext = false;
-            return onCancel(now);
-        }
-        if (waitingRetry) {
-            return Step.KEEP;
-        }
-        if (phase == ONESHOT) {
-            return finishOrRestart(now);
-        }
-        if (phase != STREAM) {
-            return Step.KEEP;
-        }
-        if (!open) {
-            if (!upSeen && !abort) {
-                return onCancel(now);
+            if (phase == ONESHOT && kind == KIND_TAP && shotTries < 2 && !abort && !queued) {
+                shotTries++;
+                fresh = true;
+                return emit(now, OP_TAP, ax, ay, ax, ay, TAP_MS, false, 0, null);
             }
             return finishOrRestart(now);
         }
-        if (upSeen || abort) {
-            if (!abort && kind == KIND_LONG && contact < LONG_MS) {
-                int dur = Math.min(80, LONG_MS - contact);
-                return emit(now, fresh ? OP_START : OP_CONT, lx, ly, cx, cy, dur, true, 0, null);
-            }
-            return emitEnd(now);
+        if (phase == ONESHOT || phase == PENDING) {
+            return finishOrRestart(now);
         }
-        if (cx != lx || cy != ly) {
-            return emit(now, fresh ? OP_START : OP_CONT, lx, ly, cx, cy, segDur(now), true, 0, null);
-        }
-        if (instant) {
-            return Step.KEEP;
-        }
-        return emit(now, fresh ? OP_START : OP_CONT, lx, ly, lx, ly, KEEPALIVE_MS, true, 0, null);
+        return Step.KEEP;
     }
 
     private Step beginPending(long now, int x, int y) {
@@ -307,16 +405,15 @@ final class LiveGesture {
         ax = lx = cx = x;
         ay = ly = cy = y;
         t0 = now;
-        lastEmit = 0;
         heldHint = -1;
         upSeen = false;
         abort = false;
         dispatching = false;
-        open = false;
         fresh = true;
         cancelNext = false;
         waitingRetry = false;
         queued = false;
+        ending = false;
         contact = 0;
         burst = 0;
         shotTries = 0;
@@ -342,7 +439,6 @@ final class LiveGesture {
         phase = ONESHOT;
         kind = KIND_TAP;
         shotTries = 1;
-        open = false;
         fresh = true;
         return emit(now, OP_TAP, ax, ay, ax, ay, TAP_MS, false, KIND_TAP,
                 "tap " + TAP_MS + "ms 抬起" + held + "ms");
@@ -352,37 +448,15 @@ final class LiveGesture {
         phase = ONESHOT;
         kind = KIND_LONG;
         shotTries = 1;
-        open = false;
         fresh = true;
         return emit(now, OP_HOLD, ax, ay, ax, ay, LONG_MS, false, KIND_LONG,
                 "long 按住" + held + "ms");
-    }
-
-    private Step beginLong(long now) {
-        phase = STREAM;
-        kind = KIND_LONG;
-        open = false;
-        fresh = true;
-        long held = Math.max(0, now - t0);
-        lx = ax;
-        ly = ay;
-        return emit(now, OP_START, ax, ay, ax, ay, LONG_MS, true, KIND_LONG,
-                "long 按住" + held + "ms");
-    }
-
-    private Step beginDrag(long now) {
-        phase = STREAM;
-        kind = KIND_DRAG;
-        open = false;
-        fresh = true;
-        return emit(now, OP_START, ax, ay, cx, cy, segDur(now), true, KIND_DRAG, "drag 移动出容差");
     }
 
     private Step beginSwipe(long now, long held) {
         phase = ONESHOT;
         kind = KIND_DRAG;
         shotTries = 1;
-        open = false;
         fresh = true;
         int dur = (int) held;
         if (dur < 40) {
@@ -394,19 +468,6 @@ final class LiveGesture {
         return emit(now, OP_SWIPE, ax, ay, cx, cy, dur, false, KIND_DRAG, "drag 移动出容差");
     }
 
-    private Step emitEnd(long now) {
-        int dur = END_MS;
-        if (instant) {
-            long held = Math.max(0, now - t0);
-            dur = (int) Math.max(40, Math.min(10000, held));
-            if (kind == KIND_LONG && dur < LONG_MS) {
-                dur = LONG_MS;
-            }
-        }
-        int op = fresh ? OP_START : OP_END;
-        return emit(now, op, lx, ly, cx, cy, dur, false, 0, null);
-    }
-
     private Step emit(long now, int op, int x0, int y0, int x1, int y1, int dur, boolean cont, int logKind, String reason) {
         if (dur < 1) {
             dur = 1;
@@ -414,84 +475,34 @@ final class LiveGesture {
         dispatching = true;
         pendingDur = dur;
         pendingCont = cont;
-        lastEmit = now;
         fresh = false;
         lx = x1;
         ly = y1;
         return Step.go(op, x0, y0, x1, y1, dur, cont, logKind, reason);
     }
 
-    private int segDur(long now) {
-        long since = lastEmit > 0 ? now - lastEmit : now - t0;
-        if (since < 0) {
-            since = 0;
-        }
-        return LiveTouch.moveDurationMs(since);
-    }
-
-    private Step onCancel(long now) {
-        if (abort) {
-            return finishOrRestart(now);
-        }
-        if (phase == ONESHOT) {
-            if (queued) {
-                return finishOrRestart(now);
-            }
-            if (kind == KIND_TAP && shotTries < 2) {
-                shotTries++;
-                fresh = true;
-                return emit(now, OP_TAP, ax, ay, ax, ay, TAP_MS, false, 0, null);
-            }
-            if (kind == KIND_LONG && shotTries < 2) {
-                shotTries++;
-                fresh = true;
-                return emit(now, OP_HOLD, ax, ay, ax, ay, LONG_MS, false, 0, null);
-            }
-            return finishOrRestart(now);
-        }
-        if (phase == STREAM && upSeen && kind == KIND_LONG && contact < LONG_MS) {
-            phase = ONESHOT;
-            shotTries = 1;
-            fresh = true;
-            return emit(now, OP_HOLD, cx, cy, cx, cy, LONG_MS, false, 0, null);
-        }
-        if (phase == STREAM && !upSeen) {
-            burst++;
-            if (burst > 4) {
-                burst = 0;
-                waitingRetry = true;
-                return Step.armAt(now + 60);
-            }
-            fresh = true;
-            if (kind == KIND_LONG && contact < LONG_MS) {
-                return emit(now, OP_START, cx, cy, cx, cy, LONG_MS, true, 0, null);
-            }
-            int dur = segDur(now);
-            return emit(now, OP_START, cx, cy, cx, cy, dur, true, 0, null);
-        }
-        return finishOrRestart(now);
-    }
-
     private Step finishOrRestart(long now) {
         phase = IDLE;
-        open = false;
         dispatching = false;
         upSeen = false;
         kind = 0;
         fresh = true;
+        ending = false;
         if (queued && !abort) {
             queued = false;
             int x = qx;
             int y = qy;
             long t = qt;
-            return beginPending(t, x, y);
+            if (instant) {
+                return beginPending(t, x, y);
+            }
+            return beginStream(t, x, y);
         }
         return goIdle();
     }
 
     private Step goIdle() {
         phase = IDLE;
-        open = false;
         dispatching = false;
         upSeen = false;
         abort = false;
@@ -500,6 +511,7 @@ final class LiveGesture {
         queued = false;
         waitingRetry = false;
         cancelNext = false;
+        ending = false;
         return Step.DISARM;
     }
 }

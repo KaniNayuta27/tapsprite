@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -50,7 +51,73 @@ var (
 
 	apkMu    sync.Mutex
 	apkState = apkJob{}
+
+	quietDownloadStatus atomic.Bool
+	apkPulls            atomic.Int32
 )
+
+// updateLane is one side of a combined PC+App update.
+type updateLane struct {
+	On   bool
+	Pct  int
+	Done bool
+	Err  string
+}
+
+// dualReport builds the shared progress line. The exe relaunches only after its
+// own download and, when an apk update was started, after that download too.
+func dualReport(exe, apk updateLane) (phase string, pct int, msg string, relaunch bool) {
+	var parts []string
+	if exe.On {
+		switch {
+		case exe.Err != "":
+			parts = append(parts, "电脑 "+exe.Err)
+		case exe.Done:
+			parts = append(parts, "电脑 100%")
+		default:
+			parts = append(parts, fmt.Sprintf("电脑 %d%%", exe.Pct))
+		}
+	}
+	if apk.On {
+		switch {
+		case apk.Err != "":
+			parts = append(parts, "App "+apk.Err)
+		case apk.Done:
+			parts = append(parts, "App 100%")
+		default:
+			parts = append(parts, fmt.Sprintf("App %d%%", apk.Pct))
+		}
+	}
+	msg = strings.Join(parts, " · ")
+	pct = 100
+	busy := false
+	if exe.On && !exe.Done && exe.Err == "" {
+		busy = true
+		if exe.Pct < pct {
+			pct = exe.Pct
+		}
+	}
+	if apk.On && !apk.Done && apk.Err == "" {
+		busy = true
+		if apk.Pct < pct {
+			pct = apk.Pct
+		}
+	}
+	if !busy {
+		pct = 100
+	}
+	if exe.Err != "" || apk.Err != "" {
+		return "error", pct, msg, false
+	}
+	relaunch = exe.On && exe.Done && (!apk.On || apk.Done)
+	if relaunch {
+		return "launching", 100, msg, true
+	}
+	if apk.On && apk.Done && !exe.On {
+		return "idle", 100, msg, false
+	}
+	return "downloading", pct, msg, false
+}
 
 func setUpdate(phase string, percent int, got, total int64, msg string) {
 	updMu.Lock()
@@ -412,6 +479,58 @@ func markApkReady(dest, name string, size int64, verCode int) {
 	apkState.Total = size
 	apkState.Msg = "下载完成"
 	apkMu.Unlock()
+	writeApkMark()
+}
+
+type apkReadyMark struct {
+	Path    string `json:"path"`
+	Name    string `json:"name"`
+	VerCode int    `json:"versionCode"`
+	Size    int64  `json:"size"`
+}
+
+func apkMarkPath() string {
+	return filepath.Join(downloadsDir(), "tapsprite-apk-ready.json")
+}
+
+func writeApkMark() {
+	apkMu.Lock()
+	m := apkReadyMark{
+		Path:    apkState.Path,
+		Name:    apkState.Name,
+		VerCode: apkState.VerCode,
+		Size:    apkState.Total,
+	}
+	apkMu.Unlock()
+	if m.Path == "" {
+		return
+	}
+	st, err := os.Stat(m.Path)
+	if err != nil || st.Size() < 10000 {
+		return
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(apkMarkPath(), b, 0o644)
+}
+
+// restoreApkMark lets a phone still pull the apk after the exe restarts.
+func restoreApkMark() {
+	b, err := os.ReadFile(apkMarkPath())
+	if err != nil {
+		return
+	}
+	var m apkReadyMark
+	if json.Unmarshal(b, &m) != nil || m.Path == "" {
+		return
+	}
+	st, err := os.Stat(m.Path)
+	if err != nil || st.Size() < 10000 {
+		return
+	}
+	markApkReady(m.Path, m.Name, st.Size(), m.VerCode)
 }
 
 func setPCNotice(msg string) {
@@ -556,56 +675,217 @@ func handleSelfUpdate(w http.ResponseWriter, r *http.Request) {
 			updMu.Lock()
 			updBusy = false
 			updMu.Unlock()
+			apkMu.Lock()
+			apkState.Busy = false
+			apkMu.Unlock()
 		}()
-		ch, err := fetchChannel()
-		if err != nil {
-			msg := "检测失败：" + shortNetErr(err)
-			setUpdate("error", 0, 0, 0, msg)
-			writeDesktopLog(msg)
-			return
-		}
-		remote := ch.ExeVer
-		if remote == "" {
-			remote = ch.VersionName
-		}
-		if compareVer(remote, version) <= 0 {
-			setUpdate("idle", 100, 0, 0, "已是最新 "+version)
-			return
-		}
-		url := ch.Exe
-		if url == "" {
-			msg := "清单缺少 exe 下载地址"
-			setUpdate("error", 0, 0, 0, msg)
-			writeDesktopLog(msg)
-			return
-		}
-		name := verToFileStem(remote, "exe")
-		dest := filepath.Join(downloadsDir(), name)
-		setUpdate("downloading", 0, 0, 0, "发现 "+remote+"，开始下载")
-		if err := downloadFile(url, dest, func(got, total int64) {
-			pct := 0
-			if total > 0 {
-				pct = int(got * 100 / total)
-			}
-			setUpdate("downloading", pct, got, total, fmt.Sprintf("下载中 %d%%", pct))
-		}); err != nil {
-			msg := "下载失败：" + shortNetErr(err)
-			setUpdate("error", 0, 0, 0, msg)
-			writeDesktopLog(msg)
-			return
-		}
-		setUpdate("launching", 100, 0, 0, "下载完成，正在启动新版本…")
-		if err := launchUpdatedExe(dest); err != nil {
-			msg := "启动新版本失败：" + err.Error()
-			setUpdate("error", 100, 0, 0, msg)
-			writeDesktopLog(msg)
-			return
-		}
-		cleanupOldDownloads("exe", dest)
-		time.Sleep(400 * time.Millisecond)
-		quitWebView()
-		os.Exit(0)
+		runCombinedUpdate()
 	}()
+}
+
+// runCombinedUpdate checks the exe and the phone app together. The two files
+// may download at the same time. The exe is not restarted until the apk file
+// is fully on disk, and not while the phone is still pulling that file.
+func runCombinedUpdate() {
+	ch, err := fetchChannel()
+	if err != nil {
+		msg := "检测失败：" + shortNetErr(err)
+		setUpdate("error", 0, 0, 0, msg)
+		writeDesktopLog(msg)
+		return
+	}
+	remoteExe := strings.TrimSpace(ch.ExeVer)
+	if remoteExe == "" {
+		remoteExe = strings.TrimSpace(ch.VersionName)
+	}
+	exeNewer := remoteExe != "" && compareVer(remoteExe, version) > 0
+	if exeNewer && strings.TrimSpace(ch.Exe) == "" {
+		msg := "清单缺少 exe 下载地址"
+		setUpdate("error", 0, 0, 0, msg)
+		writeDesktopLog(msg)
+		return
+	}
+	remoteName := strings.TrimSpace(ch.ApkVer)
+	if remoteName == "" {
+		remoteName = strings.TrimSpace(ch.VersionName)
+	}
+	id, live, localCode, localName := selectedLiveDevice()
+	apkOn := strings.TrimSpace(ch.Apk) != "" && apkUpdateNeeded(ch.VersionCode, localCode, remoteName, localName)
+	exeOn := exeNewer
+	if !exeOn && !apkOn {
+		setUpdate("idle", 100, 0, 0, "已是最新 "+version)
+		return
+	}
+	if remoteName == "" {
+		remoteName = "update"
+	}
+
+	var mu sync.Mutex
+	exe := updateLane{On: exeOn}
+	apk := updateLane{On: apkOn}
+	publish := func() {
+		mu.Lock()
+		e, a := exe, apk
+		mu.Unlock()
+		phase, pct, msg, _ := dualReport(e, a)
+		setUpdate(phase, pct, 0, 0, msg)
+	}
+	publish()
+
+	quietDownloadStatus.Store(true)
+	defer quietDownloadStatus.Store(false)
+
+	var wg sync.WaitGroup
+	var exeDest, apkDest string
+
+	if exeOn {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			dest := filepath.Join(downloadsDir(), verToFileStem(remoteExe, "exe"))
+			err := downloadFile(ch.Exe, dest, func(got, total int64) {
+				pct := 0
+				if total > 0 {
+					pct = int(got * 100 / total)
+				}
+				mu.Lock()
+				exe.Pct = pct
+				mu.Unlock()
+				publish()
+			})
+			mu.Lock()
+			if err != nil {
+				exe.Err = "下载失败"
+			} else {
+				exe.Done = true
+				exe.Pct = 100
+				exeDest = dest
+			}
+			mu.Unlock()
+			publish()
+			if err != nil {
+				writeDesktopLog("电脑下载失败：" + shortNetErr(err))
+			}
+		}()
+	}
+
+	if apkOn {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			fname := apkFileName(remoteName)
+			dest := filepath.Join(downloadsDir(), fname)
+			apkMu.Lock()
+			apkState = apkJob{Busy: true, Ready: false, Name: remoteName, Msg: "开始下载"}
+			apkMu.Unlock()
+			if fi, e := os.Stat(dest); e == nil && fi.Size() >= 10000 {
+				markApkReady(dest, remoteName, fi.Size(), ch.VersionCode)
+				mu.Lock()
+				apk.Done = true
+				apk.Pct = 100
+				apkDest = dest
+				mu.Unlock()
+				publish()
+				logApkDownloadDone(remoteName)
+				return
+			}
+			logApkDownloadStart(remoteName)
+			err := downloadFile(ch.Apk, dest, func(got, total int64) {
+				pct := 0
+				if total > 0 {
+					pct = int(got * 100 / total)
+				}
+				setApkBytes(got, total)
+				mu.Lock()
+				apk.Pct = pct
+				mu.Unlock()
+				publish()
+			})
+			if err != nil {
+				mu.Lock()
+				apk.Err = "下载失败"
+				mu.Unlock()
+				publish()
+				writeDesktopLog("App 下载失败：" + shortNetErr(err))
+				apkMu.Lock()
+				apkState.Err = shortNetErr(err)
+				apkState.Busy = false
+				apkMu.Unlock()
+				return
+			}
+			var size int64
+			if fi, e := os.Stat(dest); e == nil {
+				size = fi.Size()
+			}
+			markApkReady(dest, remoteName, size, ch.VersionCode)
+			logApkDownloadDone(remoteName)
+			cleanupOldDownloads("apk", dest)
+			mu.Lock()
+			apk.Done = true
+			apk.Pct = 100
+			apkDest = dest
+			mu.Unlock()
+			publish()
+		}()
+	}
+
+	wg.Wait()
+
+	mu.Lock()
+	e, a := exe, apk
+	exePath, apkPath := exeDest, apkDest
+	mu.Unlock()
+	phase, pct, msg, relaunch := dualReport(e, a)
+	if phase == "error" {
+		setUpdate("error", pct, 0, 0, msg)
+		return
+	}
+	if a.On && a.Done {
+		setPCNotice("请去 App 里更新")
+		if live && id != "" {
+			enqueue(id, map[string]any{"type": "control", "action": "update"})
+		}
+		// The phone pulls /api/apkfile on the still-running process. Do not
+		// exit underneath that transfer. A later pull still works: the new
+		// process restores tapsprite-apk-ready.json.
+		if relaunch {
+			setUpdate("downloading", 100, 0, 0, "App 已下载，等待手机取走后再重启电脑")
+			time.Sleep(1500 * time.Millisecond)
+			deadline := time.Now().Add(60 * time.Second)
+			for apkPulls.Load() > 0 && time.Now().Before(deadline) {
+				setUpdate("downloading", 100, 0, 0, "App 安装包传输中，完成后再重启电脑")
+				time.Sleep(200 * time.Millisecond)
+			}
+		}
+	}
+	if !relaunch {
+		if a.On && a.Done {
+			label := remoteName
+			setUpdate("idle", 100, 0, 0, "App "+label+" 已下载，请去 App 里更新")
+		}
+		return
+	}
+	_ = apkPath
+	setUpdate("launching", 100, 0, 0, "下载完成，正在启动新版本…")
+	if err := launchUpdatedExe(exePath); err != nil {
+		msg := "启动新版本失败：" + err.Error()
+		setUpdate("error", 100, 0, 0, msg)
+		writeDesktopLog(msg)
+		return
+	}
+	cleanupOldDownloads("exe", exePath)
+	time.Sleep(400 * time.Millisecond)
+	quitWebView()
+	os.Exit(0)
+}
+
+func setApkBytes(got, total int64) {
+	apkMu.Lock()
+	apkState.Got = got
+	apkState.Total = total
+	apkState.Busy = true
+	apkState.Msg = "电脑下载中"
+	apkMu.Unlock()
 }
 
 func downloadFile(url, dest string, progress func(got, total int64)) error {
@@ -637,8 +917,10 @@ func downloadFileOnce(url, dest string, progress func(got, total int64)) error {
 	req.Header.Set("User-Agent", "TapSprite-PC/"+version)
 	pl := proxyLabel(req)
 	writeDesktopLog(fmt.Sprintf("download url=%s %s", url, pl))
-	setUpdate("downloading", getUpdate().Percent, getUpdate().Got, getUpdate().Total,
-		fmt.Sprintf("下载 %s %s", shortURLDisp(url), pl))
+	if !quietDownloadStatus.Load() {
+		setUpdate("downloading", getUpdate().Percent, getUpdate().Got, getUpdate().Total,
+			fmt.Sprintf("下载 %s %s", shortURLDisp(url), pl))
+	}
 	resp, err := cli.Do(req)
 	if err != nil {
 		writeDesktopLog(fmt.Sprintf("download fail %s %s: %v", shortURLDisp(url), pl, err))
@@ -805,6 +1087,8 @@ func handleApkStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleApkFile(w http.ResponseWriter, r *http.Request) {
+	apkPulls.Add(1)
+	defer apkPulls.Add(-1)
 	apkMu.Lock()
 	path := apkState.Path
 	ready := apkState.Ready

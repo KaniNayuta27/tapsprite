@@ -499,3 +499,91 @@ func TestApkUpdateToastWhenOffline(t *testing.T) {
 		t.Fatalf("offline must not enqueue update cmd, queues=%d", qlen)
 	}
 }
+
+func TestDualReportGatesRelaunchOnApk(t *testing.T) {
+	phase, pct, msg, relaunch := dualReport(updateLane{On: true, Pct: 40}, updateLane{})
+	if relaunch || phase != "downloading" || pct != 40 || msg != "电脑 40%" {
+		t.Fatalf("exe only %+v %d %q %v", phase, pct, msg, relaunch)
+	}
+	phase, pct, msg, relaunch = dualReport(
+		updateLane{On: true, Done: true, Pct: 100},
+		updateLane{On: true, Pct: 20},
+	)
+	if relaunch || phase != "downloading" || pct != 20 || msg != "电脑 100% · App 20%" {
+		t.Fatalf("apk still going %+v %d %q %v", phase, pct, msg, relaunch)
+	}
+	phase, pct, msg, relaunch = dualReport(
+		updateLane{On: true, Pct: 80},
+		updateLane{On: true, Pct: 10},
+	)
+	if relaunch || pct != 10 || !strings.Contains(msg, "电脑 80%") || !strings.Contains(msg, "App 10%") {
+		t.Fatalf("min pct %+v %d %q", phase, pct, msg)
+	}
+	phase, pct, msg, relaunch = dualReport(
+		updateLane{On: true, Done: true},
+		updateLane{On: true, Done: true},
+	)
+	if !relaunch || phase != "launching" || pct != 100 || msg != "电脑 100% · App 100%" {
+		t.Fatalf("both done %+v %d %q %v", phase, pct, msg, relaunch)
+	}
+	phase, pct, msg, relaunch = dualReport(
+		updateLane{On: true, Done: true},
+		updateLane{On: true, Err: "下载失败"},
+	)
+	if relaunch || phase != "error" || !strings.Contains(msg, "App 下载失败") {
+		t.Fatalf("apk error must not relaunch %+v %q %v", phase, msg, relaunch)
+	}
+	phase, pct, msg, relaunch = dualReport(updateLane{}, updateLane{On: true, Done: true})
+	if relaunch || phase != "idle" || msg != "App 100%" {
+		t.Fatalf("apk only %+v %d %q %v", phase, pct, msg, relaunch)
+	}
+	phase, _, msg, relaunch = dualReport(updateLane{On: true, Done: true}, updateLane{})
+	if !relaunch || phase != "launching" || msg != "电脑 100%" {
+		t.Fatalf("exe only done %+v %q %v", phase, msg, relaunch)
+	}
+}
+
+func TestApkMarkSkipsMissingOrTinyFile(t *testing.T) {
+	resetUpdateState()
+	dir := t.TempDir()
+	withDownloads(t, dir, filepath.Join(dir, "tapsprite1-1-101.exe"))
+	markApkReady(filepath.Join(dir, "missing.apk"), "0.9.89", 12000, 114)
+	if _, err := os.Stat(filepath.Join(dir, "tapsprite-apk-ready.json")); !os.IsNotExist(err) {
+		t.Fatal("missing apk must not write a sidecar")
+	}
+	tiny := filepath.Join(dir, "tiny.apk")
+	if err := os.WriteFile(tiny, []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	markApkReady(tiny, "0.9.89", 2, 114)
+	if _, err := os.Stat(filepath.Join(dir, "tapsprite-apk-ready.json")); !os.IsNotExist(err) {
+		t.Fatal("tiny apk must not write a sidecar")
+	}
+}
+
+func TestApkMarkRestoresAfterRestart(t *testing.T) {
+	resetUpdateState()
+	dir := t.TempDir()
+	withDownloads(t, dir, filepath.Join(dir, "tapsprite1-1-101.exe"))
+	apk := filepath.Join(dir, "tapsprite0-9-89.apk")
+	if err := os.WriteFile(apk, bytes.Repeat([]byte("a"), 12000), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	markApkReady(apk, "0.9.89", 12000, 114)
+	if _, err := os.Stat(filepath.Join(dir, "tapsprite-apk-ready.json")); err != nil {
+		t.Fatal(err)
+	}
+	apkMu.Lock()
+	apkState = apkJob{}
+	apkMu.Unlock()
+	restoreApkMark()
+	rr := httptest.NewRecorder()
+	handleApkStatus(rr, httptest.NewRequest(http.MethodGet, "/api/apkstatus", nil))
+	var st map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st["ready"] != true || st["name"] != "0.9.89" || jsonInt(st["versionCode"]) != 114 {
+		t.Fatalf("restored %+v", st)
+	}
+}

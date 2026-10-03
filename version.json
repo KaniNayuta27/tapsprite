@@ -1,7 +1,7 @@
 {
-  "versionCode": 113,
-  "versionName": "0.9.88",
+  "versionCode": 114,
+  "versionName": "0.9.89",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
   "exe": "https://tapsprite.pages.dev/tapsprite.exe",
-  "notes": "实时操控：快击改为短按，不再被识别成长按；解锁改为亮屏后上滑出密码盘。PC 1.1.100 / App 0.9.88（versionCode 113）。下载仍走 pages.dev，自动更新以 dist-channel.json 为准"
+  "notes": "实时操控：检查更新同时下载 App，电脑重启会等安装包下完；长按按下即按住；解锁上滑从近底部到约 20% 高度。PC 1.1.101 / App 0.9.89（versionCode 114）。下载仍走 pages.dev，自动更新以 dist-channel.json 为准"
 }

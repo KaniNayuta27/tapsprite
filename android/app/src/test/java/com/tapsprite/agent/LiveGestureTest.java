@@ -1,7 +1,5 @@
 package com.tapsprite.agent;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -10,256 +8,198 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Timing of the live finger. A fast click must be one short tap. Segment
- * keep-alives must not run before that decision, or their durations add up
- * past the long-press timeout.
+ * The live finger goes down immediately and stays down in short continued
+ * segments. A click is that stroke ended quickly. A hold is the same stroke
+ * still down. A drag updates on the next short segment, not after 560ms.
  */
 public class LiveGestureTest {
     private static boolean fired(LiveGesture.Step s) {
         return s.op != LiveGesture.OP_NONE;
     }
 
-    private static int continuedMs(List<LiveGesture.Step> steps) {
-        int ms = 0;
-        for (int i = 0; i < steps.size(); i++) {
-            LiveGesture.Step s = steps.get(i);
-            if (s.cont) {
-                ms += s.durMs;
-            }
-        }
-        return ms;
+    @Test
+    public void downDispatchesImmediately() {
+        LiveGesture g = new LiveGesture();
+        LiveGesture.Step s = g.down(1000, 100, 200);
+        assertEquals(LiveGesture.OP_START, s.op);
+        assertTrue(s.cont);
+        assertTrue(s.durMs <= 40);
+        assertEquals(LiveGesture.SEG_MS, s.durMs);
+        assertEquals(100, s.x0);
+        assertEquals(200, s.y0);
+        assertEquals(s.x0, s.x1);
+        assertEquals(s.y0, s.y1);
+        assertEquals("down", s.reason);
+        assertNotEquals(LiveGesture.LONG_MS, s.durMs);
     }
 
     @Test
-    public void fastClickIsOneShortTap() {
+    public void fastClickEndsWhileHeldTimeIsStillATap() {
         LiveGesture g = new LiveGesture();
-        List<LiveGesture.Step> fired = new ArrayList<LiveGesture.Step>();
-        assertFalse(fired(g.down(1000, 100, 200)));
-        // The old path dispatched a 20ms continued stroke here, then a 50ms
-        // keep-alive on every completion while up was still queued.
-        for (int t = 1020; t <= 1240; t += 20) {
-            LiveGesture.Step tick = g.tick(t);
-            assertEquals(LiveGesture.OP_NONE, tick.op);
-            if (fired(tick)) {
-                fired.add(tick);
-            }
-        }
-        LiveGesture.Step up = g.up(1250, 100, 204, 180);
-        assertTrue(fired(up));
-        fired.add(up);
+        LiveGesture.Step down = g.down(1000, 100, 200);
+        assertTrue(down.cont);
+        // Released while the first segment is still in flight. Nothing else
+        // may be queued behind a long stroke.
+        assertFalse(fired(g.up(1080, 100, 204, 80)));
+        g.noteDone(false);
+        LiveGesture.Step end = g.follow(1080);
+        assertEquals(LiveGesture.OP_END, end.op);
+        assertFalse(end.cont);
+        assertTrue(end.durMs <= 40);
+        assertNotEquals(LiveGesture.OP_TAP, end.op);
+        assertNotEquals(LiveGesture.OP_HOLD, end.op);
+        assertTrue(g.contactMs() < LiveGesture.HOLD_MS);
+        assertTrue(g.contactMs() <= down.durMs);
 
-        assertEquals(1, fired.size());
+        g.noteDone(false);
+        assertEquals(LiveGesture.OP_NONE, g.follow(1200).op);
+    }
+
+    @Test
+    public void holdStaysDownBeforeRelease() {
+        LiveGesture g = new LiveGesture();
+        LiveGesture.Step first = g.down(0, 30, 40);
+        assertTrue(first.cont);
+        g.noteDone(false);
+        int guard = 0;
+        while (g.contactMs() < LiveGesture.HOLD_MS && guard++ < 40) {
+            LiveGesture.Step s = g.follow(guard * LiveGesture.SEG_MS);
+            assertTrue(s.cont);
+            assertTrue(s.durMs <= 40);
+            assertNotEquals(LiveGesture.OP_TAP, s.op);
+            assertNotEquals(LiveGesture.OP_HOLD, s.op);
+            g.noteDone(false);
+        }
+        assertTrue(g.contactMs() >= LiveGesture.HOLD_MS);
+        LiveGesture.Step still = g.follow(5000);
+        assertTrue(still.cont);
+        assertEquals(30, still.x0);
+        assertEquals(40, still.y0);
+        // up arrives while that keep-alive is in flight, so the phone is
+        // already pressing. The completion ends the stroke.
+        assertFalse(fired(g.up(5200, 30, 40, 5200)));
+        g.noteDone(false);
+        LiveGesture.Step end = g.follow(5300);
+        assertEquals(LiveGesture.OP_END, end.op);
+        assertFalse(end.cont);
+    }
+
+    @Test
+    public void dragDuringFirstSegmentIsNotStuckFor560ms() {
+        LiveGesture g = new LiveGesture();
+        LiveGesture.Step first = g.down(0, 0, 0);
+        assertTrue(first.durMs <= 40);
+        assertNotEquals(LiveGesture.LONG_MS, first.durMs);
+        // Move while that first segment is in flight. It must land on the
+        // next segment, whose duration is also short.
+        assertFalse(fired(g.move(10, 80, 5)));
+        g.noteDone(false);
+        LiveGesture.Step drag = g.follow(first.durMs);
+        assertEquals(LiveGesture.OP_CONT, drag.op);
+        assertEquals(LiveGesture.KIND_DRAG, drag.kind);
+        assertTrue(drag.cont);
+        assertTrue(drag.durMs <= 40);
+        assertEquals(0, drag.x0);
+        assertEquals(80, drag.x1);
+        assertEquals(5, drag.y1);
+        assertEquals("drag", drag.reason);
+        assertTrue(g.contactMs() <= first.durMs);
+    }
+
+    @Test
+    public void laterDragSegmentHasNoRepeatReason() {
+        LiveGesture g = new LiveGesture();
+        g.down(0, 0, 0);
+        g.noteDone(false);
+        LiveGesture.Step first = g.move(10, 40, 0);
+        assertEquals("drag", first.reason);
+        assertEquals(LiveGesture.OP_CONT, first.op);
+        g.noteDone(false);
+        LiveGesture.Step next = g.move(40, 90, 0);
+        assertEquals(LiveGesture.OP_CONT, next.op);
+        assertEquals(90, next.x1);
+        assertEquals(null, next.reason);
+        assertTrue(next.durMs <= 40);
+    }
+
+    @Test
+    public void slopDoesNotDrag() {
+        LiveGesture g = new LiveGesture();
+        g.down(0, 0, 0);
+        g.noteDone(false);
+        LiveGesture.Step s = g.move(20, 10, 0);
+        assertTrue(s.cont);
+        assertEquals(0, s.x1);
+        assertEquals(0, s.y1);
+        assertEquals(0, s.kind);
+    }
+
+    @Test
+    public void cancelledDownRestartsAShortSegment() {
+        LiveGesture g = new LiveGesture();
+        assertEquals(LiveGesture.OP_START, g.down(0, 3, 4).op);
+        g.noteDone(true);
+        LiveGesture.Step again = g.follow(40);
+        assertEquals(LiveGesture.OP_START, again.op);
+        assertTrue(again.cont);
+        assertTrue(again.durMs <= 40);
+        assertTrue(again.durMs < LiveGesture.HOLD_MS);
+    }
+
+    @Test
+    public void instantFastClickIsOneShortTap() {
+        LiveGesture g = new LiveGesture();
+        g.setInstant(true);
+        assertFalse(fired(g.down(1000, 100, 200)));
+        assertEquals(LiveGesture.OP_NONE, g.tick(1200).op);
+        LiveGesture.Step up = g.up(1250, 100, 204, 180);
         assertEquals(LiveGesture.OP_TAP, up.op);
         assertEquals(LiveGesture.KIND_TAP, up.kind);
         assertFalse(up.cont);
-        assertTrue(up.durMs >= 50 && up.durMs <= 80);
-        assertEquals(60, up.durMs);
-        assertEquals(100, up.x0);
-        assertEquals(200, up.y0);
+        assertEquals(LiveGesture.TAP_MS, up.durMs);
         assertTrue(up.reason.contains("tap"));
-        assertEquals(0, continuedMs(fired));
-        assertEquals(0, g.contactMs());
-
         g.noteDone(false);
         assertEquals(LiveGesture.OP_NONE, g.follow(1320).op);
     }
 
     @Test
-    public void clickWithin250msIsTapNotLong() {
+    public void instantHoldIsOneShot() {
         LiveGesture g = new LiveGesture();
-        g.down(0, 10, 10);
-        g.tick(100);
-        g.tick(200);
-        LiveGesture.Step up = g.up(240, 12, 14, 250);
-        assertEquals(LiveGesture.OP_TAP, up.op);
-        assertFalse(up.cont);
-        assertTrue(up.durMs <= 80);
-        assertTrue(up.reason.startsWith("tap "));
-    }
-
-    @Test
-    public void releaseJustUnderHoldThresholdIsStillTap() {
-        LiveGesture g = new LiveGesture();
-        g.down(0, 4, 8);
-        assertEquals(LiveGesture.OP_NONE, g.tick(449).op);
-        LiveGesture.Step up = g.up(449, 4, 8, 449);
-        assertEquals(LiveGesture.OP_TAP, up.op);
-        assertFalse(up.cont);
-    }
-
-    @Test
-    public void holdAtThresholdBecomesLongPress() {
-        LiveGesture g = new LiveGesture();
-        g.down(0, 30, 40);
-        assertEquals(LiveGesture.OP_NONE, g.tick(449).op);
-        LiveGesture.Step s = g.tick(450);
-        assertEquals(LiveGesture.OP_START, s.op);
-        assertEquals(LiveGesture.KIND_LONG, s.kind);
-        assertTrue(s.cont);
-        assertTrue(s.durMs >= 500);
-        assertEquals(LiveGesture.LONG_MS, s.durMs);
-        assertTrue(s.reason.startsWith("long "));
-        assertEquals(30, s.x0);
-        assertEquals(40, s.y0);
-        assertEquals(s.x0, s.x1);
-        assertEquals(s.y0, s.y1);
-
-        // Released a moment later, while the long segment is still in flight.
-        // up must not replace it with a 60ms tap, and must not wait behind
-        // another keep-alive once the segment completes.
-        assertEquals(LiveGesture.OP_NONE, g.up(460, 30, 40, 460).op);
-        g.noteDone(false);
-        LiveGesture.Step end = g.follow(450 + s.durMs);
-        assertEquals(LiveGesture.OP_END, end.op);
-        assertFalse(end.cont);
-        assertTrue(end.durMs <= 40);
-        assertNotEquals(LiveGesture.OP_TAP, end.op);
-        assertTrue(g.contactMs() >= 500);
-    }
-
-    @Test
-    public void upAtThresholdBeforeTimerIsOneLongHold() {
-        LiveGesture g = new LiveGesture();
+        g.setInstant(true);
         g.down(0, 1, 2);
         LiveGesture.Step s = g.up(450, 1, 2, 450);
         assertEquals(LiveGesture.OP_HOLD, s.op);
         assertEquals(LiveGesture.KIND_LONG, s.kind);
         assertFalse(s.cont);
-        assertTrue(s.durMs >= 500);
-        assertTrue(s.reason.contains("long"));
+        assertEquals(LiveGesture.LONG_MS, s.durMs);
     }
 
     @Test
-    public void clientHeldBeatsLateArrival() {
-        // up packet shows up late on the phone clock, but the page measured 90ms.
+    public void instantClientHeldBeatsLateArrival() {
         LiveGesture g = new LiveGesture();
+        g.setInstant(true);
         g.down(0, 8, 8);
         LiveGesture.Step s = g.up(800, 8, 9, 90);
         assertEquals(LiveGesture.OP_TAP, s.op);
         assertFalse(s.cont);
-        assertTrue(s.durMs <= 80);
     }
 
     @Test
-    public void dragIsRealtimeAndNotATap() {
-        LiveGesture g = new LiveGesture();
-        g.down(0, 0, 0);
-        LiveGesture.Step start = g.move(30, 40, 0);
-        assertEquals(LiveGesture.OP_START, start.op);
-        assertEquals(LiveGesture.KIND_DRAG, start.kind);
-        assertTrue(start.cont);
-        assertTrue(start.durMs >= 20 && start.durMs <= 40);
-        assertEquals(0, start.x0);
-        assertEquals(40, start.x1);
-        assertTrue(start.reason.contains("drag"));
-
-        g.noteDone(false);
-        LiveGesture.Step keep = g.follow(40);
-        assertEquals(LiveGesture.OP_CONT, keep.op);
-        assertEquals(LiveGesture.KEEPALIVE_MS, keep.durMs);
-        assertTrue(keep.cont);
-        assertEquals(0, keep.kind);
-
-        assertEquals(LiveGesture.OP_NONE, g.move(55, 80, 5).op);
-        g.noteDone(false);
-        LiveGesture.Step cont = g.follow(70);
-        assertEquals(LiveGesture.OP_CONT, cont.op);
-        assertEquals(80, cont.x1);
-        assertEquals(5, cont.y1);
-        assertTrue(cont.durMs <= 40);
-        assertTrue(cont.cont);
-
-        assertEquals(LiveGesture.OP_NONE, g.up(100, 80, 5, 100).op);
-        g.noteDone(false);
-        LiveGesture.Step end = g.follow(110);
-        assertEquals(LiveGesture.OP_END, end.op);
-        assertFalse(end.cont);
-        assertTrue(end.durMs <= 40);
-        assertTrue(g.contactMs() < LiveGesture.HOLD_MS);
-    }
-
-    @Test
-    public void slopBoundary() {
-        LiveGesture g = new LiveGesture();
-        g.down(0, 0, 0);
-        assertEquals(LiveGesture.OP_NONE, g.move(20, 15, 0).op);
-        assertEquals(LiveGesture.OP_TAP, g.up(80, 15, 0, 80).op);
-
-        LiveGesture d = new LiveGesture();
-        d.down(0, 0, 0);
-        LiveGesture.Step drag = d.move(20, 16, 0);
-        assertEquals(LiveGesture.OP_START, drag.op);
-        assertEquals(LiveGesture.KIND_DRAG, drag.kind);
-    }
-
-    @Test
-    public void upPastSlopWithoutMovesIsAShortSwipe() {
-        LiveGesture g = new LiveGesture();
-        g.down(0, 0, 0);
-        LiveGesture.Step s = g.up(90, 30, 0, 90);
-        assertEquals(LiveGesture.OP_SWIPE, s.op);
-        assertEquals(LiveGesture.KIND_DRAG, s.kind);
-        assertFalse(s.cont);
-        assertTrue(s.durMs <= 180);
-        assertEquals(0, s.x0);
-        assertEquals(30, s.x1);
-    }
-
-    @Test
-    public void cancelledTapRetriesOnceAndDoesNotHold() {
-        LiveGesture g = new LiveGesture();
-        g.down(0, 3, 3);
-        LiveGesture.Step tap = g.up(70, 3, 3, 70);
-        assertEquals(LiveGesture.OP_TAP, tap.op);
-        g.noteDone(true);
-        LiveGesture.Step retry = g.follow(120);
-        assertEquals(LiveGesture.OP_TAP, retry.op);
-        assertFalse(retry.cont);
-        assertEquals(0, retry.kind);
-        assertTrue(retry.durMs <= 80);
-        g.noteDone(true);
-        LiveGesture.Step done = g.follow(180);
-        assertEquals(LiveGesture.OP_NONE, done.op);
-        assertEquals(0, g.contactMs());
-    }
-
-    @Test
-    public void cancelledLongBeforeContactStillHoldsWhenUpArrives() {
-        LiveGesture g = new LiveGesture();
-        g.down(0, 30, 40);
-        assertEquals(LiveGesture.OP_START, g.tick(450).op);
-        g.noteDone(true);
-        LiveGesture.Step again = g.up(500, 30, 40, 500);
-        assertEquals(LiveGesture.OP_HOLD, again.op);
-        assertFalse(again.cont);
-        assertTrue(again.durMs >= 500);
-        assertNotEquals(LiveGesture.OP_TAP, again.op);
-    }
-
-    @Test
-    public void cancelledDragDoesNotBecomeLongPress() {
-        LiveGesture g = new LiveGesture();
-        g.down(0, 0, 0);
-        assertEquals(LiveGesture.OP_START, g.move(25, 40, 0).op);
-        g.noteDone(true);
-        LiveGesture.Step again = g.follow(50);
-        assertEquals(LiveGesture.OP_START, again.op);
-        assertTrue(again.cont);
-        assertTrue(again.durMs <= 80);
-        assertEquals(0, again.kind);
-        assertTrue(again.durMs < LiveGesture.HOLD_MS);
-    }
-
-    @Test
-    public void unlockSwipeRunsBottomCenterUpward() {
-        assertTrue(LiveUnlock.WAKE_WAIT_MS >= 400 && LiveUnlock.WAKE_WAIT_MS <= 600);
-        assertTrue(LiveUnlock.SWIPE_MS >= 250 && LiveUnlock.SWIPE_MS <= 350);
+    public void unlockSwipeRunsFromNearTheBottomToHigh() {
+        assertTrue(LiveUnlock.WAKE_WAIT_MS >= 800);
+        assertTrue(LiveUnlock.SWIPE_MS >= 400 && LiveUnlock.SWIPE_MS <= 600);
+        assertTrue(LiveUnlock.PASSES >= 2);
         int[] s = LiveUnlock.swipePx(1080, 2400);
         assertEquals(LiveCoords.axisToPx(0.50, 1080), s[0]);
-        assertEquals(LiveCoords.axisToPx(0.95, 2400), s[1]);
-        assertEquals(LiveCoords.axisToPx(0.40, 2400), s[2]);
+        assertEquals(LiveCoords.axisToPx(0.98, 2400), s[1]);
+        assertEquals(LiveCoords.axisToPx(0.20, 2400), s[2]);
         assertEquals(LiveUnlock.SWIPE_MS, s[3]);
-        assertTrue(s[1] > s[2]);
         assertEquals(540, s[0]);
+        assertTrue(s[1] > s[2]);
+        assertTrue(s[1] > 2300);
+        assertTrue(s[2] < 600);
+        // The old 95% → 40% stroke on a 2400px panel was 2279 → 960.
+        assertTrue(s[1] > 2279);
+        assertTrue(s[2] < 960);
     }
 }

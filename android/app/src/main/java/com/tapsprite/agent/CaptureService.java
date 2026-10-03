@@ -27,6 +27,7 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.zip.Deflater;
 
 /* loaded from: classes.dex */
@@ -38,6 +39,8 @@ public class CaptureService extends Service {
     static volatile boolean ready;
     /** True while the single projection display is feeding the live encoder. */
     static volatile boolean surfaceLent;
+    /** Bumps once per ImageReader frame so 抓抓 can tell a borrowed frame from a stale one. */
+    private static final AtomicLong FRAME_SEQ = new AtomicLong();
     private static volatile boolean starting;
     private VirtualDisplay display;
     private int shotW;
@@ -213,6 +216,7 @@ public class CaptureService extends Service {
                                     CaptureService.this.last.recycle();
                                 }
                                 CaptureService.this.last = bitmap;
+                                CaptureService.FRAME_SEQ.incrementAndGet();
                             }
                             CaptureService.ready = true;
                             boolean unused = CaptureService.starting = false;
@@ -374,6 +378,27 @@ public class CaptureService extends Service {
         return surfaceLent;
     }
 
+    static long frameSeq() {
+        return FRAME_SEQ.get();
+    }
+
+    static boolean secureBlocked() {
+        CaptureService s = instance;
+        return s != null && s.secureWarned;
+    }
+
+    /** True once {@link #frameSeq()} moves past {@code prev}, or the wait expires. */
+    static boolean awaitFrameAfter(long prev, long timeoutMs) {
+        long end = SystemClock.uptimeMillis() + Math.max(1, timeoutMs);
+        while (SystemClock.uptimeMillis() < end) {
+            if (FRAME_SEQ.get() != prev) {
+                return true;
+            }
+            SystemClock.sleep(16);
+        }
+        return FRAME_SEQ.get() != prev;
+    }
+
     /**
      * Point the one MediaProjection VirtualDisplay at the encoder surface.
      * targetSdk 34 allows createVirtualDisplay only once per grant, so a live
@@ -470,8 +495,18 @@ public class CaptureService extends Service {
 
     public static PackedShot packShot() {
         if (surfaceLent) {
-            AppState.log("实时操控进行中，抓抓暂停");
-            return null;
+            // One MediaProjection grant, one virtual display. Live control has
+            // the surface, so the screenshot reader is starved. Borrow it back
+            // for a single frame, then return it to the encoder.
+            AppState.log("实时操控进行中，抓抓借用投影一帧");
+            if (!LiveStream.lendForShot()) {
+                if (secureBlocked()) {
+                    AppState.log("抓抓失败：画面受保护（FLAG_SECURE）");
+                } else {
+                    AppState.log("抓抓失败：实时画面没有新帧");
+                }
+                return null;
+            }
         }
         CaptureService captureService = instance;
         Bitmap bitmap = captureService == null ? null : captureService.copyLatest();

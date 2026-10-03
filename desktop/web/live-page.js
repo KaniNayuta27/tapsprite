@@ -325,7 +325,14 @@
       fps = Math.round(fpsN * 1000 / (now - fpsT));
       fpsN = 0;
       fpsT = now;
-      var parts = [fps + " fps", "解码 " + Math.max(0, Math.round(dec)) + "ms"];
+      // "到达" is frames actually decoded. "锁定" is the cap sent as {op:fps}.
+      // KEY_FRAME_RATE is only a hint, so the two can differ until the surface rate takes.
+      var want = fpsMax();
+      var applied = (meta && (meta.fps === 30 || meta.fps === 60)) ? meta.fps : want;
+      var parts = [];
+      if (want <= 30) parts.push("锁定 " + applied + " · 到达 " + fps + " fps");
+      else parts.push(fps + " fps");
+      parts.push("解码 " + Math.max(0, Math.round(dec)) + "ms");
       if (clock >= 0 && clock <= 1500) parts.push("估 " + Math.round(clock) + "ms");
       latText = parts.join(" · ");
       if (streaming) ind.textContent = latText;
@@ -599,6 +606,7 @@
   var pinEl = document.getElementById("livePin");
   var pinState = (typeof LivePin !== "undefined") ? LivePin.DEFAULT : { x: 0.15, y: 0.58, w: 0.6, h: 0.36 };
   var pinDrag = null;
+  var pinLocked = false;
 
   function setPinVisible(on) {
     if (!pinEl) return;
@@ -619,6 +627,21 @@
   function savePin() {
     if (typeof LivePin === "undefined") return;
     LivePin.save(window.localStorage, pinState);
+  }
+
+  function setPinLocked(on) {
+    pinLocked = !!on;
+    if (pinEl && pinEl.classList) {
+      if (pinLocked) pinEl.classList.add("locked");
+      else pinEl.classList.remove("locked");
+    }
+    var b = pinEl ? pinEl.querySelector(".live-pin-lock") : null;
+    if (b) {
+      b.setAttribute("aria-pressed", pinLocked ? "true" : "false");
+      b.textContent = pinLocked ? "解锁" : "锁定";
+      b.setAttribute("aria-label", pinLocked ? "解锁" : "锁定");
+    }
+    if (typeof LivePin !== "undefined") LivePin.saveLock(window.localStorage, pinLocked);
   }
 
   function flashPin(btn) {
@@ -649,7 +672,7 @@
   }
 
   function beginPinDrag(e, mode) {
-    if (!pinEl) return;
+    if (!pinEl || pinLocked) return;
     var pic = pinEl.parentElement.getBoundingClientRect();
     if (!(pic.width > 0) || !(pic.height > 0)) return;
     pinDrag = {
@@ -685,6 +708,16 @@
     applyPin(LivePin.load(window.localStorage) || LivePin.DEFAULT);
     var pinKeys = pinEl.querySelectorAll(".live-pin-key");
     for (var pk = 0; pk < pinKeys.length; pk++) pinKeys[pk].addEventListener("pointerdown", onPinKey);
+    var pinLock = pinEl.querySelector(".live-pin-lock");
+    if (pinLock) {
+      pinLock.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
+      pinLock.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        setPinLocked(!pinLocked);
+      });
+    }
+    setPinLocked(LivePin.loadLock(window.localStorage));
     var pinClose = pinEl.querySelector(".live-pin-x");
     if (pinClose) {
       pinClose.addEventListener("pointerdown", function (e) { e.stopPropagation(); });
@@ -706,7 +739,8 @@
     pinEl.addEventListener("pointerdown", function (e) {
       if (e.button != null && e.button !== 0) return;
       var t = e.target;
-      if (t && t.closest && (t.closest(".live-pin-key") || t.closest(".live-pin-x") || t.closest(".live-pin-resize"))) return;
+      if (t && t.closest && (t.closest(".live-pin-key") || t.closest(".live-pin-x") || t.closest(".live-pin-resize") || t.closest(".live-pin-lock"))) return;
+      if (pinLocked) return;
       e.preventDefault();
       beginPinDrag(e, "move");
     });
@@ -715,6 +749,41 @@
     pinEl.addEventListener("pointercancel", endPinDrag);
     pinEl.addEventListener("contextmenu", function (e) { e.preventDefault(); });
   }
+
+  function livePageOpen() {
+    var page = document.getElementById("page-live");
+    return !!(page && page.style && page.style.display && page.style.display !== "none");
+  }
+
+  function onLiveHotkey(e) {
+    if (!e || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (typeof LivePin !== "undefined" && LivePin.typingTarget(e.target)) return;
+    if (!livePageOpen()) return;
+    if (e.key === "Backspace") {
+      var back = document.querySelector('#liveKeys button[data-act="back"]');
+      if (!back || back.hidden || back.disabled) return;
+      if (!streaming || !ws || ws.readyState !== 1) return;
+      if (e.preventDefault) e.preventDefault();
+      send({ op: "global", action: "back" });
+      return;
+    }
+    if (!pinEl || pinEl.hidden || typeof LivePin === "undefined") return;
+    if (LivePin.digitIndex(e.key) < 0) return;
+    var nodes = pinEl.querySelectorAll(".live-pin-key");
+    for (var i = 0; i < nodes.length; i++) {
+      if (String(nodes[i].textContent || "").replace(/\s+/g, "") !== String(e.key)) continue;
+      if (e.preventDefault) e.preventDefault();
+      onPinKey({
+        button: 0,
+        currentTarget: nodes[i],
+        preventDefault: function () {},
+        stopPropagation: function () {}
+      });
+      return;
+    }
+  }
+
+  if (document.addEventListener) document.addEventListener("keydown", onLiveHotkey);
 
   window.liveOnShow = function () {
     fitPicture();

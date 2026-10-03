@@ -14,10 +14,11 @@ import android.view.WindowManager;
 
 /**
  * Transparent activity that turns the screen on over the lock screen.
- * Unlock wakes the screen, waits, then swipes up from the bottom center so the
- * PIN pad appears. {@code requestDismissKeyguard} is not used: on this phone it
- * returns cancel and can swallow the swipe. Some ROMs still require the vendor
- * 「后台弹出界面」 and 「锁屏显示」 switches.
+ * Unlock wakes the screen, waits until the keyguard is up, then swipes from
+ * near the bottom edge to about 20% height. The swipe is repeated once: the
+ * first is often eaten by the wake animation. {@code requestDismissKeyguard}
+ * is not used: on this phone it returns cancel and can swallow the swipe.
+ * Some ROMs still require the vendor 「后台弹出界面」 and 「锁屏显示」 switches.
  */
 public class WakeActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -166,7 +167,7 @@ public class WakeActivity extends Activity {
                     PowerManager.SCREEN_BRIGHT_WAKE_LOCK | PowerManager.ACQUIRE_CAUSES_WAKEUP,
                     "tapsprite:unlock");
             wl.setReferenceCounted(false);
-            wl.acquire(4000);
+            wl.acquire(8000);
         } catch (Exception ignored) {
         }
     }
@@ -175,22 +176,37 @@ public class WakeActivity extends Activity {
         LiveStream.Disp d = LiveStream.readDisp();
         final int[] s = LiveUnlock.swipePx(d.w, d.h);
         LiveStream.reportLive("实时操控解锁 上滑 " + s[0] + "," + s[1]
-                + " → " + s[0] + "," + s[2] + " " + s[3] + "ms");
+                + " → " + s[0] + "," + s[2] + " " + s[3] + "ms"
+                + " 屏 " + d.w + "x" + d.h
+                + " ×" + LiveUnlock.PASSES);
         if (!isFinishing()) {
             finish();
         }
         Thread t = new Thread(new Runnable() {
             @Override
             public void run() {
-                // Let the translucent activity leave so the swipe lands on the keyguard.
-                SystemClock.sleep(80);
+                // The translucent activity must be gone or the swipe hits it, not the keyguard.
+                SystemClock.sleep(LiveUnlock.AFTER_FINISH_MS);
                 AutoService auto = AppState.auto;
                 if (auto == null) {
                     LiveStream.reportLive("实时操控解锁 上滑失败 无障碍未连");
-                    return;
+                } else {
+                    for (int i = 0; i < LiveUnlock.PASSES; i++) {
+                        if (i > 0) {
+                            SystemClock.sleep(LiveUnlock.REPEAT_GAP_MS);
+                        }
+                        boolean ok = auto.swipe(s[0], s[1], s[0], s[2], s[3]);
+                        LiveStream.reportLive(ok
+                                ? "实时操控解锁 上滑完成 " + (i + 1) + "/" + LiveUnlock.PASSES
+                                : "实时操控解锁 上滑失败 " + (i + 1) + "/" + LiveUnlock.PASSES);
+                    }
                 }
-                boolean ok = auto.swipe(s[0], s[1], s[0], s[2], s[3]);
-                LiveStream.reportLive(ok ? "实时操控解锁 上滑完成" : "实时操控解锁 上滑失败");
+                // Accessibility strokes are ignored by some keyguards. A shell
+                // swipe is a real input event when the device allows it.
+                boolean shell = ShellInput.swipe(s[0], s[1], s[0], s[2], s[3]);
+                LiveStream.reportLive(shell
+                        ? "实时操控解锁 input swipe ok"
+                        : "实时操控解锁 input swipe 未执行");
             }
         }, "tapsprite-unlock");
         t.setDaemon(true);

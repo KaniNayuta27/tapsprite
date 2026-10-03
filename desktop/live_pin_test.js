@@ -40,6 +40,21 @@ assert.deepStrictEqual(Pin.load(mem), { x: 0.2, y: 0.3, w: 0.4, h: 0.4 });
 assert.strictEqual(Pin.load({ getItem() { return "{"; } }), null);
 assert.strictEqual(Pin.load({ getItem() { return "null"; } }), null);
 assert.strictEqual(Pin.load({ getItem() { throw new Error("blocked"); } }), null);
+assert.strictEqual(Pin.loadLock(mem), false);
+Pin.saveLock(mem, true);
+assert.strictEqual(mem.m[Pin.LOCK_KEY], "1");
+assert.strictEqual(Pin.loadLock(mem), true);
+Pin.saveLock(mem, false);
+assert.strictEqual(Pin.loadLock(mem), false);
+assert.strictEqual(Pin.digitIndex("0"), 0);
+assert.strictEqual(Pin.digitIndex("9"), 9);
+assert.strictEqual(Pin.digitIndex("Numpad5"), -1);
+assert.strictEqual(Pin.digitIndex("a"), -1);
+assert.strictEqual(Pin.typingTarget(null), false);
+assert.strictEqual(Pin.typingTarget({ tagName: "INPUT" }), true);
+assert.strictEqual(Pin.typingTarget({ tagName: "TEXTAREA" }), true);
+assert.strictEqual(Pin.typingTarget({ tagName: "DIV", isContentEditable: true }), true);
+assert.strictEqual(Pin.typingTarget({ tagName: "BUTTON" }), false);
 
 const taps = Pin.tapMessages(0.42, 0.73);
 assert.deepStrictEqual(taps, [
@@ -58,7 +73,7 @@ for (const s of [
   "密码<br>键盘",
   'id="livePin"',
   'class="live-pin"',
-  'title="拖动空白处移动，右下角调整大小"',
+  'title="拖动空白处移动，右下角调整大小。锁定后不可移动"',
   'aria-label="关闭"',
   'aria-label="调整大小"',
   'class="live-pin-key live-pin-zero"',
@@ -130,6 +145,7 @@ El.prototype.matches = function (sel) {
   if (sel === ".live-pin-key") return this.className.split(/\s+/).indexOf("live-pin-key") >= 0;
   if (sel === ".live-pin-x") return this.className.split(/\s+/).indexOf("live-pin-x") >= 0;
   if (sel === ".live-pin-resize") return this.className.split(/\s+/).indexOf("live-pin-resize") >= 0;
+  if (sel === ".live-pin-lock") return this.className.split(/\s+/).indexOf("live-pin-lock") >= 0;
   if (sel === "button[data-act]") return this.getAttribute("data-act") != null;
   return false;
 };
@@ -208,6 +224,8 @@ pin.hidden = true;
 const close = make("", "live-pin-x");
 close.textContent = "×";
 const resize = make("", "live-pin-resize");
+const pinLock = make("", "live-pin-lock");
+pinLock.textContent = "锁定";
 const keys = [];
 for (let d = 1; d <= 9; d++) {
   const k = make("", "live-pin-key");
@@ -217,9 +235,12 @@ for (let d = 1; d <= 9; d++) {
 const zero = make("", "live-pin-key live-pin-zero");
 zero.textContent = "0";
 keys.push(zero);
+pin.append(pinLock);
 pin.append(close);
 for (const k of keys) pin.append(k);
 pin.append(resize);
+const pageLive = make("page-live");
+pageLive.style.display = "none";
 pic.append(canvas);
 pic.append(map);
 pic.append(pin);
@@ -234,6 +255,7 @@ function barButton(act, label) {
   keysBar.append(b);
   return b;
 }
+const back = barButton("back", "返回");
 const unlock = barButton("unlock", "解锁");
 const pinpad = barButton("pinpad", "密码键盘");
 const toggle = make("liveToggle");
@@ -257,7 +279,17 @@ global.document = {
   querySelector(sel) {
     if (sel === "#page-live .live-pic") return pic;
     if (sel === '#liveKeys button[data-act="pinpad"]') return pinpad;
+    if (sel === '#liveKeys button[data-act="back"]') return back;
     return null;
+  },
+  listeners: {},
+  addEventListener(type, fn) {
+    (this.listeners[type] = this.listeners[type] || []).push(fn);
+  },
+  dispatch(type, ev) {
+    ev = ev || {};
+    const list = (this.listeners[type] || []).slice();
+    for (const fn of list) fn(ev);
   },
   querySelectorAll(sel) {
     if (sel === "#liveKeys button[data-act]") return keysBar.children.slice();
@@ -344,5 +376,66 @@ const sized = JSON.parse(store[Pin.KEY]);
 assert.ok(Math.abs(sized.w - 0.5) < 1e-9, sized.w);
 assert.ok(Math.abs(sized.h - 0.5) < 1e-9, sized.h);
 assert.ok(Math.abs(sized.x - moved.x) < 1e-9 && Math.abs(sized.y - moved.y) < 1e-9, "resize keeps the origin");
+
+assert.strictEqual(store[Pin.LOCK_KEY], "0");
+assert.strictEqual(pinLock.textContent, "锁定");
+assert.strictEqual(pinLock.getAttribute("aria-pressed"), "false");
+pinLock.dispatch("click", { target: pinLock, button: 0 });
+assert.strictEqual(pin.classList.contains("locked"), true);
+assert.strictEqual(pinLock.textContent, "解锁");
+assert.strictEqual(pinLock.getAttribute("aria-pressed"), "true");
+assert.strictEqual(store[Pin.LOCK_KEY], "1");
+const frozen = store[Pin.KEY];
+pin.dispatch("pointerdown", { target: pin, button: 0, pointerId: 9, clientX: 10, clientY: 20 });
+pin.dispatch("pointermove", { target: pin, pointerId: 9, clientX: 90, clientY: 120 });
+pin.dispatch("pointerup", { target: pin, pointerId: 9, clientX: 90, clientY: 120 });
+resize.dispatch("pointerdown", { target: resize, button: 0, pointerId: 10, clientX: 0, clientY: 0 });
+pin.dispatch("pointermove", { target: pin, pointerId: 10, clientX: 40, clientY: 40 });
+pin.dispatch("pointerup", { target: pin, pointerId: 10, clientX: 40, clientY: 40 });
+assert.strictEqual(store[Pin.KEY], frozen, "locked pad does not move or resize");
+pinLock.dispatch("click", { target: pinLock, button: 0 });
+assert.strictEqual(pin.classList.contains("locked"), false);
+assert.strictEqual(store[Pin.LOCK_KEY], "0");
+assert.strictEqual(pinLock.textContent, "锁定");
+
+pageLive.style.display = "flex";
+back.disabled = false;
+back.hidden = false;
+sent.length = 0;
+let prevented = false;
+document.dispatch("keydown", {
+  key: "Backspace",
+  target: { tagName: "DIV" },
+  preventDefault() { prevented = true; }
+});
+assert.ok(prevented, "backspace is handled");
+assert.ok(sent.some((s) => s.indexOf('"op":"global"') >= 0 && s.indexOf('"action":"back"') >= 0), sent.join(" | "));
+
+sent.length = 0;
+document.dispatch("keydown", { key: "Backspace", target: { tagName: "INPUT" }, preventDefault() {} });
+document.dispatch("keydown", { key: "Backspace", target: { tagName: "TEXTAREA" }, preventDefault() {} });
+document.dispatch("keydown", { key: "Backspace", repeat: true, target: { tagName: "DIV" }, preventDefault() {} });
+document.dispatch("keydown", { key: "Backspace", ctrlKey: true, target: { tagName: "DIV" }, preventDefault() {} });
+pageLive.style.display = "none";
+document.dispatch("keydown", { key: "Backspace", target: { tagName: "DIV" }, preventDefault() {} });
+assert.strictEqual(sent.length, 0, "shortcuts stay quiet while typing, repeating, or off the live page");
+pageLive.style.display = "flex";
+
+pin.hidden = false;
+keys[0].rect = { left: cx - 8, top: cy - 8, width: 16, height: 16 };
+sent.length = 0;
+document.dispatch("keydown", { key: "1", target: { tagName: "DIV" }, preventDefault() {} });
+assert.ok(sent.some((s) => { const o = JSON.parse(s); return o.op === "down"; }), "digit key taps the matching cell: " + sent.join(" | "));
+assert.ok(sent.every((s) => !/[0-9]/.test(s) || JSON.parse(s).op !== "pinlog"), "pinlog still has no digit");
+const pinlog = sent.map((s) => JSON.parse(s)).filter((o) => o.op === "pinlog");
+assert.strictEqual(pinlog.length, 1);
+assert.deepStrictEqual(pinlog[0], { op: "pinlog" });
+
+sent.length = 0;
+pin.hidden = true;
+document.dispatch("keydown", { key: "2", target: { tagName: "DIV" }, preventDefault() {} });
+assert.strictEqual(sent.length, 0, "digits do nothing while the pad is hidden");
+document.dispatch("keydown", { key: "Backspace", target: { tagName: "DIV" }, preventDefault() {} });
+assert.ok(sent.some((s) => s.indexOf('"action":"back"') >= 0), "back still works with the pad hidden");
 
 console.log("live_pin_test: ok");

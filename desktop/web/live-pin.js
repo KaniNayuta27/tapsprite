@@ -10,6 +10,7 @@
   // The 0 key is the bottom quarter, centered. x 0.15 + width 0.60 ends at 0.75.
   var DEFAULT = { x: 0.15, y: 0.58, w: 0.6, h: 0.36 };
   var KEY = "tapsprite.livePinpad";
+  var LOCK_KEY = "tapsprite.livePinLock";
   var LOG = "密码键盘: 按下";
   var MIN_W = 0.18;
   var MIN_H = 0.24;
@@ -73,6 +74,34 @@
     try { storage.setItem(KEY, JSON.stringify(clamp(rect))); } catch (e) {}
   }
 
+  function loadLock(storage) {
+    if (!storage || typeof storage.getItem !== "function") return false;
+    try { return storage.getItem(LOCK_KEY) === "1"; } catch (e) { return false; }
+  }
+
+  function saveLock(storage, on) {
+    if (!storage || typeof storage.setItem !== "function") return;
+    try { storage.setItem(LOCK_KEY, on ? "1" : "0"); } catch (e) {}
+  }
+
+  /** True while the user is typing, so live hotkeys must not fire. */
+  function typingTarget(el) {
+    if (!el || !el.tagName) return false;
+    var tag = String(el.tagName).toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select") return true;
+    return !!el.isContentEditable;
+  }
+
+  /** 0-9, or -1. Numpad keys report the same "0"-"9" as the digit row. */
+  function digitIndex(key) {
+    if (key == null) return -1;
+    var s = String(key);
+    if (s.length !== 1) return -1;
+    var c = s.charCodeAt(0);
+    if (c < 48 || c > 57) return -1;
+    return c - 48;
+  }
+
   /** Same nx/ny the canvas pointer path already sends. No key id. */
   function tapMessages(nx, ny) {
     return [
@@ -89,11 +118,16 @@
   return {
     DEFAULT: DEFAULT,
     KEY: KEY,
+    LOCK_KEY: LOCK_KEY,
     LOG: LOG,
     clamp: clamp,
     gridSpan: gridSpan,
     load: load,
     save: save,
+    loadLock: loadLock,
+    saveLock: saveLock,
+    typingTarget: typingTarget,
+    digitIndex: digitIndex,
     tapMessages: tapMessages,
     logMessage: logMessage
   };
