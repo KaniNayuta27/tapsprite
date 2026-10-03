@@ -136,6 +136,41 @@ public class AutoService extends AccessibilityService {
         });
     }
 
+    /**
+     * Live-control system key. Unknown names and actions this API cannot run
+     * return false and do not call {@link #performGlobalAction}.
+     */
+    public boolean performNamedGlobal(String name) {
+        final int code = LiveActions.codeFor(name, Build.VERSION.SDK_INT);
+        if (code < 0) {
+            return false;
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return performGlobalAction(code);
+        }
+        final CountDownLatch latch = new CountDownLatch(1);
+        final AtomicBoolean ok = new AtomicBoolean(false);
+        this.main.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    ok.set(AutoService.this.performGlobalAction(code));
+                } finally {
+                    latch.countDown();
+                }
+            }
+        });
+        try {
+            if (!latch.await(2L, TimeUnit.SECONDS)) {
+                return false;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+        return ok.get();
+    }
+
     public boolean tap(final float f, final float f2) {
         final CountDownLatch countDownLatch = new CountDownLatch(1);
         final AtomicBoolean atomicBoolean = new AtomicBoolean(false);

@@ -39,7 +39,7 @@ import org.json.JSONObject;
  * <pre>
  * 0x01 + utf-8 JSON meta {encW,encH,physW,physH,rot,ts}
  * 0x02 + u8 flags (bit0 = key) + u64be unix ms + Annex-B access unit
- * 0x03 + utf-8 JSON control (tap / swipe / sync / stop / mapped)
+ * 0x03 + utf-8 JSON control (tap / swipe / global / sync / stop / mapped)
  * </pre>
  */
 public final class LiveStream {
@@ -312,6 +312,22 @@ public final class LiveStream {
             syncWanted = true;
             return;
         }
+        if ("global".equals(op)) {
+            GESTURES.execute(new Runnable() {
+                @Override
+                public void run() {
+                    if (SESSION.get() != id) {
+                        return;
+                    }
+                    try {
+                        handleGlobal(json);
+                    } catch (Exception e) {
+                        AppState.log("实时操控按键失败 " + e.getMessage());
+                    }
+                }
+            });
+            return;
+        }
         if (!"tap".equals(op) && !"swipe".equals(op)) {
             return;
         }
@@ -339,6 +355,24 @@ public final class LiveStream {
             b.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0);
             codec.setParameters(b);
         } catch (Exception ignored) {
+        }
+    }
+
+    private static void handleGlobal(String json) throws Exception {
+        JSONObject o = new JSONObject(json);
+        String action = o.optString("action", "");
+        if (LiveActions.codeFor(action, Build.VERSION.SDK_INT) < 0) {
+            AppState.log("实时操控按键不支持 " + action + " api " + Build.VERSION.SDK_INT);
+            return;
+        }
+        synchronized (DeviceGate.LOCK) {
+            AutoService auto = AppState.auto;
+            if (auto == null) {
+                AppState.log("实时操控无障碍未连，按键未发送");
+                return;
+            }
+            boolean ok = auto.performNamedGlobal(action);
+            AppState.log("实时操控按键 " + action + (ok ? "" : " 失败"));
         }
     }
 
@@ -464,9 +498,13 @@ public final class LiveStream {
     }
 
     private static byte[] metaMessage(Disp d, int encW, int encH) {
+        int api = Build.VERSION.SDK_INT;
         String json = "{\"encW\":" + encW + ",\"encH\":" + encH
                 + ",\"physW\":" + d.w + ",\"physH\":" + d.h
-                + ",\"rot\":" + d.rotDeg + ",\"ts\":" + System.currentTimeMillis() + "}";
+                + ",\"rot\":" + d.rotDeg
+                + ",\"api\":" + api
+                + ",\"actions\":" + LiveActions.actionsJson(api)
+                + ",\"ts\":" + System.currentTimeMillis() + "}";
         byte[] body = json.getBytes(StandardCharsets.UTF_8);
         byte[] msg = new byte[1 + body.length];
         msg[0] = 1;

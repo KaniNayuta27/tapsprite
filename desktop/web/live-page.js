@@ -1,4 +1,5 @@
-/* 实时操控 page: WebSocket → WebCodecs canvas, normalized taps back to the phone. */
+/* 实时操控 page: WebSocket → WebCodecs canvas, normalized taps back to the phone.
+   Edge drags are classified by LiveGesture and sent as global actions. */
 (function () {
   var canvas = document.getElementById("liveCanvas");
   var toggle = document.getElementById("liveToggle");
@@ -108,6 +109,53 @@
   function send(obj) {
     if (!ws || ws.readyState !== 1) return;
     try { ws.send(JSON.stringify(obj)); } catch (e) {}
+  }
+
+  var BASE_KEYS = { back: 1, home: 1, recents: 1, notifications: 1, quicksettings: 1, power: 1 };
+
+  function capsFrom(m) {
+    if (m && Array.isArray(m.actions)) {
+      var listed = {};
+      for (var i = 0; i < m.actions.length; i++) listed[String(m.actions[i])] = true;
+      return listed;
+    }
+    if (m && typeof m.api === "number" && isFinite(m.api)) {
+      var set = {};
+      if (m.api >= 16) set.back = set.home = set.recents = set.notifications = true;
+      if (m.api >= 17) set.quicksettings = true;
+      if (m.api >= 21) set.power = true;
+      if (m.api >= 28) set.lock = set.screenshot = true;
+      return set;
+    }
+    return null;
+  }
+
+  function syncKeyEnabled() {
+    var on = !!(streaming && ws && ws.readyState === 1);
+    var nodes = document.querySelectorAll("#liveKeys button[data-act]");
+    for (var i = 0; i < nodes.length; i++) nodes[i].disabled = !on;
+  }
+
+  function applyCaps(m) {
+    var set = capsFrom(m);
+    var nodes = document.querySelectorAll("#liveKeys button[data-act]");
+    for (var i = 0; i < nodes.length; i++) {
+      var act = nodes[i].getAttribute("data-act");
+      nodes[i].hidden = !(set ? set[act] : BASE_KEYS[act]);
+    }
+    syncKeyEnabled();
+  }
+
+  var keysEl = document.getElementById("liveKeys");
+  if (keysEl) {
+    keysEl.addEventListener("click", function (e) {
+      var b = e.target.closest ? e.target.closest("button[data-act]") : null;
+      if (!b || b.disabled || b.hidden) return;
+      if (!streaming || !ws || ws.readyState !== 1) return;
+      var act = b.getAttribute("data-act");
+      if (!act) return;
+      send({ op: "global", action: act });
+    });
   }
 
   function bytesEq(a, b) {
@@ -255,10 +303,12 @@
         if (sock) {
           try { sock.close(); } catch (e) {}
         }
+        syncKeyEnabled();
       } else if (msg.on) {
         streaming = true;
         toggle.textContent = "结束";
         ind.textContent = "等待画面…";
+        syncKeyEnabled();
       } else if (!streaming) {
         ind.textContent = "已结束";
       }
@@ -281,6 +331,7 @@
     if (u[0] === 1) {
       try { meta = JSON.parse(new TextDecoder().decode(u.subarray(1))); } catch (e) { return; }
       ind.textContent = (meta.encW || "?") + "×" + (meta.encH || "?") + " · 屏 " + meta.physW + "×" + meta.physH + " rot " + meta.rot;
+      applyCaps(meta);
       renderMap();
       send({ op: "sync" });
       return;
@@ -342,6 +393,19 @@
     if (!streaming || !ws || ws.readyState !== 1) return;
     var ms = Math.max(40, Math.round(performance.now() - g.t0));
     if (ms > 10000) ms = 10000;
+    if (typeof LiveGesture !== "undefined") {
+      var cls = LiveGesture.classify(g.pts, ms);
+      if (cls && cls.kind === "global" && cls.action) {
+        send({ op: "global", action: cls.action });
+        return;
+      }
+      if (cls && cls.kind === "tap") {
+        send({ op: "tap", nx: end[0], ny: end[1] });
+        return;
+      }
+      send({ op: "swipe", pts: g.pts, ms: ms });
+      return;
+    }
     if (g.pts.length < 2 || travel(g.pts) < 0.01) send({ op: "tap", nx: end[0], ny: end[1] });
     else send({ op: "swipe", pts: g.pts, ms: ms });
   }
@@ -358,6 +422,7 @@
     }
     stopDecoder();
     ind.textContent = why || "已结束";
+    syncKeyEnabled();
   }
 
   toggle.addEventListener("click", function () {
@@ -371,7 +436,7 @@
     toggle.textContent = "结束";
     ind.textContent = "正在连接…";
     streaming = true;
-    ws.onopen = function () { send({ op: "start" }); };
+    ws.onopen = function () { send({ op: "start" }); syncKeyEnabled(); };
     ws.onmessage = function (ev) {
       if (typeof ev.data === "string") {
         try { onControl(JSON.parse(ev.data)); } catch (e) {}
@@ -388,6 +453,7 @@
       stopDecoder();
       if (ind.textContent.indexOf("失败") < 0 && ind.textContent.indexOf("没有") < 0) ind.textContent = "已结束";
       ws = null;
+      syncKeyEnabled();
     };
   });
 

@@ -1,9 +1,9 @@
 {
-  "versionCode": 110,
-  "versionName": "0.9.85",
-  "apk_ver": "0.9.85",
-  "exe_ver": "1.1.96",
-  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-85.apk",
-  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-96.exe",
-  "notes": "实时操控：同网画面镜像与点击/拖动（无 root）。PC 1.1.96 / App 0.9.85（versionCode 110）"
+  "versionCode": 111,
+  "versionName": "0.9.86",
+  "apk_ver": "0.9.86",
+  "exe_ver": "1.1.97",
+  "apk": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/android/dist/tapsprite0-9-86.apk",
+  "exe": "https://github.com/KaniNayuta27/tapsprite/raw/rebuild/source-from-binaries/desktop/dist/tapsprite1-1-97.exe",
+  "notes": "实时操控：系统按键条与边缘手势导航（返回/主页/多任务，无 root）。PC 1.1.97 / App 0.9.86（versionCode 111）"
 }

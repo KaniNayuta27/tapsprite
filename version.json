@@ -1,7 +1,7 @@
 {
-  "versionCode": 110,
-  "versionName": "0.9.85",
+  "versionCode": 111,
+  "versionName": "0.9.86",
   "apk": "https://tapsprite.pages.dev/tapsprite.apk",
   "exe": "https://tapsprite.pages.dev/tapsprite.exe",
-  "notes": "实时操控：同网画面镜像与点击/拖动。PC 1.1.96 / App 0.9.85（versionCode 110）。下载仍走 pages.dev，自动更新以 dist-channel.json 为准"
+  "notes": "实时操控：系统按键条与边缘手势导航（返回/主页/多任务）。PC 1.1.97 / App 0.9.86（versionCode 111）。下载仍走 pages.dev，自动更新以 dist-channel.json 为准"
 }

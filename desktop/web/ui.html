@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>触控精灵 v1.1.96</title>
+<title>触控精灵 v1.1.97</title>
 <link rel="stylesheet" href="/vs/editor/editor.main.css"/>
 <style>
 :root {
@@ -347,10 +347,32 @@ textarea {
 .live-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex: none; }
 .live-head h1 { margin: 0; }
 .live-ind { margin-left: auto; color: var(--muted); font: 12px/1.4 var(--mono); font-variant-numeric: tabular-nums; }
-.live-stage { position: relative; flex: 1; min-height: 0; background: #111018; border-radius: var(--radius-lg); overflow: hidden; }
-#liveCanvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+.live-stage {
+  position: relative; flex: 1; min-height: 0; background: #111018; border-radius: var(--radius-lg); overflow: hidden;
+  display: flex; flex-direction: row; align-items: stretch;
+}
+.live-keys {
+  flex: none; width: 44px; max-height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: safe center;
+  gap: 4px; padding: 8px 0; overflow-x: hidden; overflow-y: auto;
+  box-shadow: inset -1px 0 0 rgba(255,255,255,.08);
+}
+.live-keys::-webkit-scrollbar { width: 0; height: 0; }
+.live-key {
+  flex: none; width: 32px; height: 32px; border: 0; border-radius: 8px; padding: 0;
+  background: rgba(255,255,255,.08); color: #f3f0ff;
+  display: grid; place-items: center;
+}
+.live-key[hidden] { display: none; }
+.live-key:disabled { opacity: .38; }
+.live-key:active:not(:disabled) { transform: scale(0.96); }
+.live-key:focus-visible { outline: 2px solid #c4b8ff; outline-offset: 1px; }
+@media (hover: hover) and (pointer: fine) {
+  .live-key:hover:not(:disabled) { background: rgba(255,255,255,.18); }
+}
+#liveCanvas { flex: 1 1 auto; width: auto; min-width: 0; height: 100%; display: block; touch-action: none; cursor: crosshair; }
 .live-map {
-  position: absolute; left: 10px; bottom: 10px; max-width: calc(100% - 20px);
+  position: absolute; left: 54px; bottom: 10px; max-width: calc(100% - 64px);
   padding: 6px 10px; border-radius: 8px; background: rgba(17,16,24,.78); color: #fff;
   font: 12px/1.4 var(--mono); pointer-events: none; white-space: pre-wrap;
 }
@@ -438,7 +460,7 @@ textarea {
 </head>
 <body>
 <div id="caption">
-  <span class="caption-title" id="captionTitle">触控精灵 v1.1.96</span>
+  <span class="caption-title" id="captionTitle">触控精灵 v1.1.97</span>
   <div class="caption-btns">
     <button type="button" id="winMin" title="最小化" aria-label="最小化">
       <svg width="10" height="10" viewBox="0 0 10 10"><path fill="currentColor" d="M1 5.25h8v1H1z"/></svg>
@@ -453,7 +475,7 @@ textarea {
   </div>
 </div>
 <aside>
-  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.96</small></div>
+  <div class="brand"><h2>触控精灵</h2><small>TAPSPRITE PC · v1.1.97</small></div>
   <div class="nav">
     <button class="on" id="navHome">控制台</button>
     <button id="navGrab">抓抓</button>
@@ -602,6 +624,16 @@ textarea {
       <span class="live-ind" id="liveInd">未开始</span>
     </div>
     <div class="live-stage">
+      <div class="live-keys" id="liveKeys">
+        <button type="button" class="live-key" data-act="back" title="返回" aria-label="返回" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6 9 12l6 6"/></svg></button>
+        <button type="button" class="live-key" data-act="home" title="主页" aria-label="主页" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/></svg></button>
+        <button type="button" class="live-key" data-act="recents" title="多任务" aria-label="多任务" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>
+        <button type="button" class="live-key" data-act="notifications" title="通知栏" aria-label="通知栏" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 7 2 7 2 9H4c0-2 2-2 2-9"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></button>
+        <button type="button" class="live-key" data-act="quicksettings" title="快捷设置" aria-label="快捷设置" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="10" cy="17" r="1.6"/></svg></button>
+        <button type="button" class="live-key" data-act="lock" title="锁屏" aria-label="锁屏" hidden disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="11" width="12" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
+        <button type="button" class="live-key" data-act="power" title="电源菜单" aria-label="电源菜单" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v8"/><path d="M7.2 6.5a7 7 0 1 0 9.6 0"/></svg></button>
+        <button type="button" class="live-key" data-act="screenshot" title="截图" aria-label="截图" hidden disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H5a1 1 0 0 0-1 1v3M16 4h3a1 1 0 0 1 1 1v3M8 20H5a1 1 0 0 1-1-1v-3M16 20h3a1 1 0 0 0 1-1v-3"/></svg></button>
+      </div>
       <canvas id="liveCanvas"></canvas>
       <div class="live-map" id="liveMap" hidden>自测网格 · 假定 1080×2400（未连接）</div>
     </div>
@@ -2637,6 +2669,7 @@ async function runAkeyTest() {
 
 </script>
 <script src="/live-coord.js"></script>
+<script src="/live-gesture.js"></script>
 <script src="/live-page.js"></script>
 </body>
 </html>
